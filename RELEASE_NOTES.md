@@ -22,7 +22,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Switch transaction core with backup, atomic restore, and rollback
 - Transactional cache refresh for captured cache artifacts during profile restore
 - Desktop App switch coordinator with graceful quit and optional restart
-- Codex CLI switch coordinator with running-task detection and availability validation
+- Codex CLI switch coordinator with filtered running-task detection and availability validation
 - VS Code switch coordinator with manual reload or explicit restart behavior
 - UI-facing saved Profile switch command backed by one combined close, restore, restart, and rollback transaction
 - Switch dialog close confirmation for running Desktop/VS Code windows

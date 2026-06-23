@@ -82,7 +82,7 @@ impl CliRuntime for SystemCliRuntime {
             .lines()
             .map(str::trim)
             .filter(|line| !line.is_empty())
-            .filter(|line| !line.contains("codex_switch"))
+            .filter(|line| is_active_codex_cli_task(line))
             .map(ToOwned::to_owned)
             .collect())
     }
@@ -111,6 +111,36 @@ impl CliRuntime for SystemCliRuntime {
             }),
         }
     }
+}
+
+fn is_active_codex_cli_task(process_line: &str) -> bool {
+    let lower = process_line.to_ascii_lowercase();
+    if lower.contains("codex_switch") || lower.contains("codex switch.app") {
+        return false;
+    }
+    let tokens: Vec<&str> = process_line.split_whitespace().collect();
+    let Some(command_index) = tokens
+        .iter()
+        .position(|token| token.to_ascii_lowercase().contains("codex"))
+    else {
+        return false;
+    };
+    let command = tokens[command_index]
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if tokens[command_index].to_ascii_lowercase().contains(".app/") {
+        return false;
+    }
+    if command != "codex" && command != "codex.exe" {
+        return false;
+    }
+    let args = &tokens[command_index + 1..];
+    if args.is_empty() {
+        return true;
+    }
+    !matches!(args[0], "--version" | "-V" | "-v" | "version" | "help" | "--help" | "-h")
 }
 
 pub struct CliSwitchCoordinator<R: CliRuntime> {
@@ -239,6 +269,19 @@ mod tests {
                 content_base64: STANDARD.encode(content.as_bytes()),
             }],
         }
+    }
+
+    #[test]
+    fn cli_process_filter_keeps_active_cli_tasks_only() {
+        assert!(is_active_codex_cli_task("123 /opt/homebrew/bin/codex exec task"));
+        assert!(is_active_codex_cli_task("456 codex run --model gpt-5"));
+        assert!(!is_active_codex_cli_task("789 codex --version"));
+        assert!(!is_active_codex_cli_task("790 codex help"));
+        assert!(!is_active_codex_cli_task(
+            "791 /Applications/Codex Switch.app/Contents/MacOS/codex_switch"
+        ));
+        assert!(!is_active_codex_cli_task("792 /Applications/Codex.app/Contents/MacOS/Codex"));
+        assert!(!is_active_codex_cli_task("793 node /tmp/not-codex-cli.js"));
     }
 
     #[test]

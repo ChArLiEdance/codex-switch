@@ -128,6 +128,8 @@ The macOS process controller uses application-level quit and open commands. Test
 
 The current system validator runs `codex --version` or the detected executable path with `--version`. This proves the CLI responds after restore, but it does not prove account identity. The report therefore marks this as inconclusive until a real identity check is available.
 
+The system CLI runtime filters process lines so only CLI-shaped `codex` commands block switching. It ignores harmless version/help checks and excludes Codex Desktop or Codex Switch app bundle paths to avoid confusing GUI processes with active CLI work.
+
 ## VS Code Adapter
 
 `VscodeSwitchCoordinator` restores VS Code profile artifacts and then performs the configured post-switch action:
