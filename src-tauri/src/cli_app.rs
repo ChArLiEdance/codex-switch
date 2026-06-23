@@ -234,6 +234,7 @@ mod tests {
             target_profile_id: "profile-cli".to_string(),
             artifacts: vec![crate::switch_transaction::RestoreArtifact {
                 environment: "cli".to_string(),
+                kind: crate::switch_transaction::RestoreArtifactKind::Auth,
                 target_path: root.join(".codex/auth.json"),
                 content_base64: STANDARD.encode(content.as_bytes()),
             }],

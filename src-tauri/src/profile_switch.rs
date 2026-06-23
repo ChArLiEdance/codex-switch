@@ -4,12 +4,13 @@ use crate::{
     cli_app::{CliRuntime, SystemCliRuntime},
     desktop_app::{DesktopProcessController, MacDesktopProcessController},
     importer::EnvironmentSnapshot,
+    importer::SnapshotPathKind,
     profile::{ProfileAuthStatus, ProfileMetadata, TargetEnvironment},
     profile_store::{ProfileRepository, ProfileStoreError},
     secret_store::{SecretStore, SecretStoreError, SecretVault},
     switch_transaction::{
-        RestoreArtifact, RestorePlan, SwitchTransaction, TransactionError, TransactionPhase,
-        TransactionRunner,
+        RestoreArtifact, RestoreArtifactKind, RestorePlan, SwitchTransaction, TransactionError,
+        TransactionPhase, TransactionRunner,
     },
     vscode_app::{MacVscodeProcessController, VscodeProcessController},
 };
@@ -493,6 +494,7 @@ pub fn restore_plan_from_profile<S: SecretStore>(
             if let Some(content_base64) = artifact.content_base64 {
                 artifacts.push(RestoreArtifact {
                     environment: environment.key().to_string(),
+                    kind: restore_artifact_kind(artifact.kind),
                     target_path: PathBuf::from(artifact.source_path),
                     content_base64,
                 });
@@ -509,6 +511,14 @@ pub fn restore_plan_from_profile<S: SecretStore>(
         target_profile_id: profile.id.clone(),
         artifacts,
     })
+}
+
+fn restore_artifact_kind(kind: SnapshotPathKind) -> RestoreArtifactKind {
+    match kind {
+        SnapshotPathKind::Auth => RestoreArtifactKind::Auth,
+        SnapshotPathKind::Config => RestoreArtifactKind::Config,
+        SnapshotPathKind::Cache => RestoreArtifactKind::Cache,
+    }
 }
 
 fn latest_used_profile_name(

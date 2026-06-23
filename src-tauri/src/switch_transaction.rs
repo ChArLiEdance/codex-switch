@@ -61,8 +61,17 @@ impl SwitchTransaction {
 #[serde(rename_all = "camelCase")]
 pub struct RestoreArtifact {
     pub environment: String,
+    pub kind: RestoreArtifactKind,
     pub target_path: PathBuf,
     pub content_base64: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RestoreArtifactKind {
+    Auth,
+    Config,
+    Cache,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -173,6 +182,19 @@ impl TransactionRunner {
         }
 
         transaction.transition(TransactionPhase::RestoreComplete, "Restore complete");
+        if let Err(error) = self.refresh_cache(plan) {
+            transaction.transition(
+                TransactionPhase::RollingBack,
+                "Cache refresh failed; rolling back",
+            );
+            self.rollback(&manifest)?;
+            transaction.transition(TransactionPhase::RolledBack, "Rollback complete");
+            transaction.transition(
+                TransactionPhase::Failed,
+                format!("Cache refresh failed: {error:?}"),
+            );
+            return Ok(transaction);
+        }
         if let Some(post_restore) = post_restore.as_mut() {
             if let Err(error) = post_restore() {
                 transaction.transition(
@@ -251,6 +273,25 @@ impl TransactionRunner {
                 .map_err(|error| TransactionError::InvalidBase64(error.to_string()))?;
             atomic_write(&artifact.target_path, &content)?;
             writes += 1;
+        }
+        Ok(())
+    }
+
+    fn refresh_cache(&self, plan: &RestorePlan) -> Result<(), TransactionError> {
+        let mut cache_paths = Vec::new();
+        for artifact in plan
+            .artifacts
+            .iter()
+            .filter(|artifact| artifact.kind == RestoreArtifactKind::Cache)
+        {
+            if !cache_paths.contains(&artifact.target_path) {
+                cache_paths.push(artifact.target_path.clone());
+            }
+        }
+        for path in cache_paths {
+            if path.exists() {
+                remove_path(&path)?;
+            }
         }
         Ok(())
     }
@@ -334,6 +375,16 @@ mod tests {
     fn artifact(path: PathBuf, content: &str) -> RestoreArtifact {
         RestoreArtifact {
             environment: "cli".to_string(),
+            kind: RestoreArtifactKind::Auth,
+            target_path: path,
+            content_base64: STANDARD.encode(content.as_bytes()),
+        }
+    }
+
+    fn cache_artifact(path: PathBuf, content: &str) -> RestoreArtifact {
+        RestoreArtifact {
+            environment: "desktop".to_string(),
+            kind: RestoreArtifactKind::Cache,
             target_path: path,
             content_base64: STANDARD.encode(content.as_bytes()),
         }
@@ -409,6 +460,57 @@ mod tests {
         runner.rollback(&manifest).expect("rollback");
 
         assert!(!target.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn successful_transaction_refreshes_cache_artifacts() {
+        let root = temp_dir("cache-refresh");
+        let auth = root.join("auth.json");
+        let cache = root.join("Cache/session.bin");
+        fs::create_dir_all(cache.parent().expect("cache parent")).expect("create cache dir");
+        fs::write(&auth, "old-auth").expect("write auth");
+        fs::write(&cache, "old-cache").expect("write cache");
+        let plan = RestorePlan {
+            transaction_id: "tx-cache-refresh".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![
+                artifact(auth.clone(), "new-auth"),
+                cache_artifact(cache.clone(), "new-cache"),
+            ],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Completed);
+        assert_eq!(fs::read_to_string(auth).expect("read auth"), "new-auth");
+        assert!(!cache.exists());
+        assert!(root.join("backups/tx-cache-refresh/artifact-1.bak").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rollback_restores_cache_after_post_restore_failure() {
+        let root = temp_dir("cache-rollback");
+        let cache = root.join("Cache/session.bin");
+        fs::create_dir_all(cache.parent().expect("cache parent")).expect("create cache dir");
+        fs::write(&cache, "old-cache").expect("write old cache");
+        let plan = RestorePlan {
+            transaction_id: "tx-cache-rollback".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![cache_artifact(cache.clone(), "new-cache")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner
+            .run_with_post_restore(&plan, || {
+                Err(TransactionError::PostRestore("restart failed".to_string()))
+            })
+            .expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert_eq!(fs::read_to_string(cache).expect("read cache"), "old-cache");
         let _ = fs::remove_dir_all(root);
     }
 

@@ -20,6 +20,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Profile edit, delete, and set-default actions from the Profiles UI
 - Keychain payload cleanup when a saved Profile is deleted
 - Switch transaction core with backup, atomic restore, and rollback
+- Transactional cache refresh for captured cache artifacts during profile restore
 - Desktop App switch coordinator with graceful quit and optional restart
 - Codex CLI switch coordinator with running-task detection and availability validation
 - VS Code switch coordinator with manual reload or explicit restart behavior

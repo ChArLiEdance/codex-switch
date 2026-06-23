@@ -276,6 +276,7 @@ mod tests {
             target_profile_id: "profile-1".to_string(),
             artifacts: vec![crate::switch_transaction::RestoreArtifact {
                 environment: "desktop".to_string(),
+                kind: crate::switch_transaction::RestoreArtifactKind::Config,
                 target_path: root.join("Codex/config.json"),
                 content_base64: STANDARD.encode(content.as_bytes()),
             }],

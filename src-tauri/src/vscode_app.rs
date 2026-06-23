@@ -290,6 +290,7 @@ mod tests {
             target_profile_id: "profile-vscode".to_string(),
             artifacts: vec![crate::switch_transaction::RestoreArtifact {
                 environment: "vscode".to_string(),
+                kind: crate::switch_transaction::RestoreArtifactKind::Config,
                 target_path: root.join("Code/User/globalStorage/openai.codex/state.json"),
                 content_base64: STANDARD.encode(content.as_bytes()),
             }],
