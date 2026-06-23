@@ -203,6 +203,13 @@ fn check_recovery_status() -> Result<RecoveryStatus, String> {
 }
 
 #[tauri::command]
+fn resolve_recovery_status() -> Result<RecoveryStatus, String> {
+    app_state_repository()
+        .resolve_unfinished_transaction()
+        .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
 fn switch_to_profile(request: ProfileSwitchRequest) -> Result<ProfileSwitchResult, String> {
     let profile_repository = profile_repository();
     let app_state_repository = app_state_repository();
@@ -766,6 +773,7 @@ pub fn run() {
             list_switch_history,
             clear_switch_history,
             check_recovery_status,
+            resolve_recovery_status,
             switch_to_profile
         ])
         .run(tauri::generate_context!())

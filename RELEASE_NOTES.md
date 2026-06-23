@@ -26,7 +26,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Home actions for restoring the default Profile and switching back to the previous Profile
 - Local settings persistence
 - Local switch history persistence and clearing
-- Switch transaction journal persistence plus startup recovery inspection for unfinished journals
+- Switch transaction journal persistence plus startup recovery inspection and Mark reviewed handling
 - App-only macOS Tauri bundle
 
 ### Not Yet Verified As Complete Production Switching

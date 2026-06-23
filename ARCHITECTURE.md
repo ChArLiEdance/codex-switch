@@ -139,7 +139,7 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 - `history.json`: local switch history with previous/target profile names, environment list, status, and error category only.
 - `transactions/current.json`: current switch transaction journal written before restore starts, overwritten with the terminal transaction state after restore/restart completes, and inspected on startup for recovery.
 
-`check_recovery_status` reports whether a transaction journal is unfinished. It does not read auth payloads or secret snapshots. A non-terminal journal means the app exited while a restore transaction was in progress or before terminal status was persisted.
+`check_recovery_status` reports whether a transaction journal is unfinished. It does not read auth payloads or secret snapshots. A non-terminal journal means the app exited while a restore transaction was in progress or before terminal status was persisted. `resolve_recovery_status` lets the user mark a reviewed non-terminal journal as failed, then the Home view can launch a normal Restore default or Switch back operation to correct local account state through the regular switch path.
 
 ## Saved Profile Switch Command
 

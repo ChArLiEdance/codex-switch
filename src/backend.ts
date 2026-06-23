@@ -219,6 +219,10 @@ export async function checkRecoveryStatus(): Promise<RecoveryStatus> {
   }
 }
 
+export async function resolveRecoveryStatus(): Promise<RecoveryStatus> {
+  return await invoke<RecoveryStatus>("resolve_recovery_status");
+}
+
 export async function switchToProfile(request: ProfileSwitchRequest): Promise<ProfileSwitchResult> {
   return await invoke<ProfileSwitchResult>("switch_to_profile", { request });
 }

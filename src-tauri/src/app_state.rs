@@ -1,4 +1,7 @@
-use crate::{profile::TargetEnvironment, switch_transaction::SwitchTransaction};
+use crate::{
+    profile::TargetEnvironment,
+    switch_transaction::{SwitchTransaction, TransactionEvent, TransactionPhase},
+};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -141,6 +144,29 @@ impl AppStateRepository {
         transaction: &SwitchTransaction,
     ) -> Result<(), AppStateError> {
         write_json_atomic(&self.current_transaction_path(), transaction)
+    }
+
+    pub fn resolve_unfinished_transaction(&self) -> Result<RecoveryStatus, AppStateError> {
+        let path = self.current_transaction_path();
+        if !path.exists() {
+            return load_recovery_status(self);
+        }
+        let content = fs::read_to_string(&path).map_err(|error| AppStateError::Io(error.to_string()))?;
+        let mut transaction: SwitchTransaction =
+            serde_json::from_str(&content).map_err(|error| AppStateError::Json(error.to_string()))?;
+        let terminal = matches!(
+            transaction.phase,
+            TransactionPhase::Completed | TransactionPhase::RolledBack | TransactionPhase::Failed
+        );
+        if !terminal {
+            transaction.phase = TransactionPhase::Failed;
+            transaction.events.push(TransactionEvent {
+                phase: TransactionPhase::Failed,
+                message: "Recovery marked unresolved transaction as failed after user review".to_string(),
+            });
+            self.save_current_transaction(&transaction)?;
+        }
+        load_recovery_status(self)
     }
 
     fn load_history(&self) -> Result<HistoryDocument, AppStateError> {
@@ -290,7 +316,7 @@ mod tests {
         let root = temp_root("recovery-complete");
         let repository = AppStateRepository::new(root.clone());
         let mut transaction = SwitchTransaction::new("tx-2".to_string(), "profile-1".to_string());
-        transaction.phase = crate::switch_transaction::TransactionPhase::Completed;
+        transaction.phase = TransactionPhase::Completed;
         repository
             .save_current_transaction(&transaction)
             .expect("write transaction");
@@ -299,6 +325,30 @@ mod tests {
 
         assert!(!status.needs_recovery);
         assert_eq!(status.transaction_id, Some("tx-2".to_string()));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn resolve_unfinished_transaction_marks_journal_failed() {
+        let root = temp_root("recovery-resolve");
+        let repository = AppStateRepository::new(root.clone());
+        let transaction = SwitchTransaction::new("tx-3".to_string(), "profile-1".to_string());
+        repository
+            .save_current_transaction(&transaction)
+            .expect("write transaction");
+
+        let status = repository
+            .resolve_unfinished_transaction()
+            .expect("resolve transaction");
+
+        assert!(!status.needs_recovery);
+        let content = fs::read_to_string(repository.current_transaction_path()).expect("read journal");
+        let transaction: SwitchTransaction = serde_json::from_str(&content).expect("journal json");
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction
+            .events
+            .iter()
+            .any(|event| event.message.contains("user review")));
         let _ = fs::remove_dir_all(root);
     }
 }

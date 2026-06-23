@@ -37,6 +37,7 @@ import {
   listSwitchHistory,
   ProfileMetadata,
   RecoveryStatus,
+  resolveRecoveryStatus,
   saveSettings,
   SwitchHistoryEntry,
   switchToProfile,
@@ -121,6 +122,12 @@ export default function App() {
     setRecovery(await checkRecoveryStatus());
   }
 
+  async function resolveRecovery() {
+    const nextRecovery = await resolveRecoveryStatus();
+    setRecovery(nextRecovery);
+    setQuickSwitchMessage("Recovery journal marked reviewed. Use Restore default or Switch back if the local account state still needs correction.");
+  }
+
   async function updateSettings(next: AppSettings) {
     setSettings(await saveSettings(next));
   }
@@ -193,6 +200,7 @@ export default function App() {
             recovery={recovery}
             quickSwitchMessage={quickSwitchMessage}
             onSwitch={() => setSwitchOpen(true)}
+            onResolveRecovery={() => void resolveRecovery()}
             onRestoreDefault={() => {
               if (defaultProfile) {
                 void quickSwitchProfile(defaultProfile, "Restore default account");
@@ -262,6 +270,7 @@ function Home({
   recovery,
   quickSwitchMessage,
   onSwitch,
+  onResolveRecovery,
   onRestoreDefault,
   onSwitchPrevious
 }: {
@@ -273,6 +282,7 @@ function Home({
   recovery: RecoveryStatus;
   quickSwitchMessage: string | null;
   onSwitch: () => void;
+  onResolveRecovery: () => void;
   onRestoreDefault: () => void;
   onSwitchPrevious: () => void;
 }) {
@@ -310,6 +320,7 @@ function Home({
         <section className="recovery-banner">
           <AlertTriangle size={18} />
           <span>{recovery.message}</span>
+          <button className="secondary-button compact" onClick={onResolveRecovery}>Mark reviewed</button>
         </section>
       )}
 

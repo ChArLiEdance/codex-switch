@@ -181,6 +181,12 @@ h2 {
   color: #ffffff;
 }
 
+.secondary-button.compact {
+  min-height: 32px;
+  padding: 0 10px;
+  margin-left: auto;
+}
+
 .status-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
