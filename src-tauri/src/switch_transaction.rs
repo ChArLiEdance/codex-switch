@@ -125,7 +125,7 @@ impl TransactionRunner {
     }
 
     pub fn run(&self, plan: &RestorePlan) -> Result<SwitchTransaction, TransactionError> {
-        self.run_inner(plan, None, None, None, None)
+        self.run_inner(plan, None, None, None, None, None)
     }
 
     pub fn run_with_post_restore<F>(
@@ -136,7 +136,7 @@ impl TransactionRunner {
     where
         F: FnMut() -> Result<(), TransactionError>,
     {
-        self.run_inner(plan, None, None, None, Some(&mut post_restore))
+        self.run_inner(plan, None, None, None, None, Some(&mut post_restore))
     }
 
     #[cfg(test)]
@@ -145,7 +145,7 @@ impl TransactionRunner {
         plan: &RestorePlan,
         writes_before_failure: usize,
     ) -> Result<SwitchTransaction, TransactionError> {
-        self.run_inner(plan, Some(writes_before_failure), None, None, None)
+        self.run_inner(plan, Some(writes_before_failure), None, None, None, None)
     }
 
     #[cfg(test)]
@@ -157,7 +157,7 @@ impl TransactionRunner {
     where
         F: FnMut(&BackupManifest) -> Result<(), TransactionError>,
     {
-        self.run_inner(plan, None, Some(&mut tamper_after_backup), None, None)
+        self.run_inner(plan, None, Some(&mut tamper_after_backup), None, None, None)
     }
 
     #[cfg(test)]
@@ -169,7 +169,35 @@ impl TransactionRunner {
     where
         F: FnMut() -> Result<(), TransactionError>,
     {
-        self.run_inner(plan, None, None, Some(&mut tamper_after_restore), None)
+        self.run_inner(
+            plan,
+            None,
+            None,
+            Some(&mut tamper_after_restore),
+            None,
+            None,
+        )
+    }
+
+    #[cfg(test)]
+    fn run_with_tamper_after_restore_and_rollback<F, G>(
+        &self,
+        plan: &RestorePlan,
+        mut tamper_after_restore: F,
+        mut tamper_after_rollback: G,
+    ) -> Result<SwitchTransaction, TransactionError>
+    where
+        F: FnMut() -> Result<(), TransactionError>,
+        G: FnMut() -> Result<(), TransactionError>,
+    {
+        self.run_inner(
+            plan,
+            None,
+            None,
+            Some(&mut tamper_after_restore),
+            Some(&mut tamper_after_rollback),
+            None,
+        )
     }
 
     fn run_inner(
@@ -180,6 +208,7 @@ impl TransactionRunner {
             &mut dyn FnMut(&BackupManifest) -> Result<(), TransactionError>,
         >,
         mut tamper_after_restore: Option<&mut dyn FnMut() -> Result<(), TransactionError>>,
+        mut tamper_after_rollback: Option<&mut dyn FnMut() -> Result<(), TransactionError>>,
         mut post_restore: Option<&mut dyn FnMut() -> Result<(), TransactionError>>,
     ) -> Result<SwitchTransaction, TransactionError> {
         if plan.artifacts.is_empty() {
@@ -221,30 +250,24 @@ impl TransactionRunner {
 
         let restore_result = self.restore(plan, fail_after_writes);
         if let Err(error) = restore_result {
-            transaction.transition(
-                TransactionPhase::RollingBack,
+            self.transition_failed_with_rollback(
+                &mut transaction,
+                &manifest,
                 "Restore failed; rolling back",
-            );
-            self.rollback(&manifest)?;
-            transaction.transition(TransactionPhase::RolledBack, "Rollback complete");
-            transaction.transition(
-                TransactionPhase::Failed,
                 format!("Restore failed: {error:?}"),
+                rollback_callback(&mut tamper_after_rollback),
             );
             return Ok(transaction);
         }
 
         transaction.transition(TransactionPhase::RestoreComplete, "Restore complete");
         if let Err(error) = self.refresh_cache(plan) {
-            transaction.transition(
-                TransactionPhase::RollingBack,
+            self.transition_failed_with_rollback(
+                &mut transaction,
+                &manifest,
                 "Cache refresh failed; rolling back",
-            );
-            self.rollback(&manifest)?;
-            transaction.transition(TransactionPhase::RolledBack, "Rollback complete");
-            transaction.transition(
-                TransactionPhase::Failed,
                 format!("Cache refresh failed: {error:?}"),
+                rollback_callback(&mut tamper_after_rollback),
             );
             return Ok(transaction);
         }
@@ -256,35 +279,52 @@ impl TransactionRunner {
             "Verifying restored auth/config artifacts",
         );
         if let Err(error) = self.verify_restored_artifacts(plan) {
-            transaction.transition(
-                TransactionPhase::RollingBack,
+            self.transition_failed_with_rollback(
+                &mut transaction,
+                &manifest,
                 "File verification failed; rolling back",
-            );
-            self.rollback(&manifest)?;
-            transaction.transition(TransactionPhase::RolledBack, "Rollback complete");
-            transaction.transition(
-                TransactionPhase::Failed,
                 format!("File verification failed: {error:?}"),
+                rollback_callback(&mut tamper_after_rollback),
             );
             return Ok(transaction);
         }
         if let Some(post_restore) = post_restore.as_mut() {
             if let Err(error) = post_restore() {
-                transaction.transition(
-                    TransactionPhase::RollingBack,
+                self.transition_failed_with_rollback(
+                    &mut transaction,
+                    &manifest,
                     "Post-restore action failed; rolling back",
-                );
-                self.rollback(&manifest)?;
-                transaction.transition(TransactionPhase::RolledBack, "Rollback complete");
-                transaction.transition(
-                    TransactionPhase::Failed,
                     format!("Post-restore failed: {error:?}"),
+                    rollback_callback(&mut tamper_after_rollback),
                 );
                 return Ok(transaction);
             }
         }
         transaction.transition(TransactionPhase::Completed, "Transaction complete");
         Ok(transaction)
+    }
+
+    fn transition_failed_with_rollback(
+        &self,
+        transaction: &mut SwitchTransaction,
+        manifest: &BackupManifest,
+        rollback_message: &str,
+        failure_message: String,
+        tamper_after_rollback: Option<&mut dyn FnMut() -> Result<(), TransactionError>>,
+    ) {
+        transaction.transition(TransactionPhase::RollingBack, rollback_message);
+        match self.rollback_inner(manifest, tamper_after_rollback) {
+            Ok(()) => {
+                transaction.transition(TransactionPhase::RolledBack, "Rollback complete");
+                transaction.transition(TransactionPhase::Failed, failure_message);
+            }
+            Err(rollback_error) => {
+                transaction.transition(
+                    TransactionPhase::Failed,
+                    format!("{failure_message}; rollback failed: {rollback_error:?}"),
+                );
+            }
+        }
     }
 
     pub fn backup(&self, plan: &RestorePlan) -> Result<BackupManifest, TransactionError> {
@@ -450,6 +490,14 @@ impl TransactionRunner {
         }
         verify_rollback_manifest(manifest)
     }
+}
+
+fn rollback_callback<'a>(
+    callback: &'a mut Option<&mut dyn FnMut() -> Result<(), TransactionError>>,
+) -> Option<&'a mut dyn FnMut() -> Result<(), TransactionError>> {
+    callback
+        .as_mut()
+        .map(|callback| &mut **callback as &mut dyn FnMut() -> Result<(), TransactionError>)
 }
 
 fn validate_unique_restore_targets(plan: &RestorePlan) -> Result<(), TransactionError> {
@@ -1315,6 +1363,54 @@ mod tests {
                 && event.message.contains("File verification failed")
         }));
         assert_eq!(fs::read_to_string(target).expect("read target"), "old");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rollback_failure_is_recorded_as_terminal_transaction_failure() {
+        let root = temp_dir("rollback-failure-event");
+        let target = root.join("auth.json");
+        fs::write(&target, "old").expect("write old");
+        let plan = RestorePlan {
+            transaction_id: "tx-rollback-failure-event".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "expected")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner
+            .run_with_tamper_after_restore_and_rollback(
+                &plan,
+                || {
+                    fs::write(&target, "tampered-after-restore")
+                        .map_err(|error| TransactionError::Io(error.to_string()))
+                },
+                || {
+                    fs::write(&target, "tampered-after-rollback")
+                        .map_err(|error| TransactionError::Io(error.to_string()))
+                },
+            )
+            .expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction
+            .events
+            .iter()
+            .any(|event| event.phase == TransactionPhase::RollingBack));
+        assert!(!transaction
+            .events
+            .iter()
+            .any(|event| event.phase == TransactionPhase::RolledBack));
+        assert!(transaction.events.iter().any(|event| {
+            event.phase == TransactionPhase::Failed
+                && event.message.contains("File verification failed")
+                && event.message.contains("rollback failed")
+                && event.message.contains("rollback content mismatch")
+        }));
+        assert_eq!(
+            fs::read_to_string(target).expect("read target"),
+            "tampered-after-rollback"
+        );
         let _ = fs::remove_dir_all(root);
     }
 

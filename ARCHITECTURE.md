@@ -103,6 +103,7 @@ The current `TransactionRunner` implements the filesystem core of this model for
 - Rolls back completed writes from the backup manifest if a later restore step fails
 - Removes files created during a failed transaction when no previous file existed
 - Verifies rollback results by comparing restored files with backup bytes and confirming switch-created files were removed
+- Records rollback failures as terminal `Failed` transaction events instead of dropping the transaction timeline
 - Records transaction events without file contents
 
 The runner is currently covered by simulated filesystem tests. It is not yet connected to real Codex profile switching commands.

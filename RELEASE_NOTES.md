@@ -26,6 +26,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Transactional cache refresh for captured cache artifacts during profile restore
 - Readback verification for restored auth/config artifact bytes and Unix file modes before post-restore app restarts
 - Rollback result verification for restored backup bytes and removed switch-created files
+- Terminal transaction failure events when rollback verification itself fails
 - Desktop App switch coordinator with graceful quit and optional restart
 - Codex CLI switch coordinator with filtered running-task detection and availability validation
 - VS Code switch coordinator with manual reload or explicit restart behavior
