@@ -42,6 +42,7 @@ pub struct DesktopSwitchReport {
 pub enum DesktopAppError {
     Process(String),
     QuitTimedOut(Vec<String>),
+    RestartTimedOut,
     RestartUnavailable,
     Transaction(TransactionError),
 }
@@ -158,6 +159,7 @@ impl<C: DesktopProcessController> DesktopAppCoordinator<C> {
         if options.auto_restart {
             self.process_controller
                 .restart(options.app_path.as_deref())?;
+            self.wait_until_started(Duration::from_millis(options.quit_timeout_ms))?;
             restart_requested = true;
         }
 
@@ -183,6 +185,20 @@ impl<C: DesktopProcessController> DesktopAppCoordinator<C> {
             thread::sleep(Duration::from_millis(100));
         }
     }
+
+    fn wait_until_started(&self, timeout: Duration) -> Result<(), DesktopAppError> {
+        let start = Instant::now();
+        loop {
+            let running = self.process_controller.running_processes()?;
+            if !running.is_empty() {
+                return Ok(());
+            }
+            if start.elapsed() >= timeout {
+                return Err(DesktopAppError::RestartTimedOut);
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -197,6 +213,7 @@ mod tests {
         quit_requested: usize,
         restart_requested: usize,
         fail_restart: bool,
+        restart_does_not_start: bool,
         never_stops: bool,
     }
 
@@ -237,7 +254,7 @@ mod tests {
             if state.fail_restart {
                 Err(DesktopAppError::Process("restart failed".to_string()))
             } else {
-                state.running = true;
+                state.running = !state.restart_does_not_start;
                 Ok(())
             }
         }
@@ -344,6 +361,29 @@ mod tests {
             error,
             DesktopAppError::QuitTimedOut(vec!["Codex".to_string()])
         );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn restart_timeout_reports_unstarted_desktop() {
+        let root = temp_dir("restart-timeout");
+        let controller = MockController::default();
+        controller.state.borrow_mut().restart_does_not_start = true;
+        let coordinator =
+            DesktopAppCoordinator::new(controller, TransactionRunner::new(root.join("backups")));
+
+        let error = coordinator
+            .switch_desktop_profile(
+                &restore_plan(&root, "new"),
+                &DesktopSwitchOptions {
+                    app_path: Some("/Applications/Codex.app".to_string()),
+                    auto_restart: true,
+                    quit_timeout_ms: 1,
+                },
+            )
+            .expect_err("restart should time out");
+
+        assert_eq!(error, DesktopAppError::RestartTimedOut);
         let _ = fs::remove_dir_all(root);
     }
 

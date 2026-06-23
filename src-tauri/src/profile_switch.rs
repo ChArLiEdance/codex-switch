@@ -20,6 +20,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+const DEFAULT_RESTART_VERIFY_TIMEOUT_MS: u64 = 8_000;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProfileSwitchRequest {
@@ -343,10 +345,15 @@ pub fn retry_restart_desktop<R: ProfileSwitchRuntime>(
     app_path: Option<&str>,
 ) -> Result<RestartAppResult, ProfileSwitchError> {
     runtime.restart_desktop(app_path)?;
+    wait_until_started(
+        "desktop",
+        || runtime.desktop_running_processes(),
+        DEFAULT_RESTART_VERIFY_TIMEOUT_MS,
+    )?;
     Ok(RestartAppResult {
         target: "desktop".to_string(),
         restarted: true,
-        message: "Codex Desktop restart requested".to_string(),
+        message: "Codex Desktop restart verified".to_string(),
     })
 }
 
@@ -355,10 +362,15 @@ pub fn retry_restart_vscode<R: ProfileSwitchRuntime>(
     app_path: Option<&str>,
 ) -> Result<RestartAppResult, ProfileSwitchError> {
     runtime.restart_vscode(app_path)?;
+    wait_until_started(
+        "vscode",
+        || runtime.vscode_running_processes(),
+        DEFAULT_RESTART_VERIFY_TIMEOUT_MS,
+    )?;
     Ok(RestartAppResult {
         target: "vscode".to_string(),
         restarted: true,
-        message: "VS Code restart requested".to_string(),
+        message: "VS Code restart verified".to_string(),
     })
 }
 
@@ -667,12 +679,22 @@ fn restart_after_restore<R: ProfileSwitchRuntime>(
 ) -> Result<(), ProfileSwitchError> {
     if request.environments.contains(&TargetEnvironment::Desktop) && request.auto_restart_apps {
         runtime.restart_desktop(request.desktop_app_path.as_deref())?;
+        wait_until_started(
+            "desktop",
+            || runtime.desktop_running_processes(),
+            request.quit_timeout_ms,
+        )?;
         restarted_apps.push("Codex Desktop".to_string());
     }
     if request.environments.contains(&TargetEnvironment::Vscode)
         && request.vscode_reload_mode == VscodeReloadMode::RestartApp
     {
         runtime.restart_vscode(request.vscode_app_path.as_deref())?;
+        wait_until_started(
+            "vscode",
+            || runtime.vscode_running_processes(),
+            request.quit_timeout_ms,
+        )?;
         restarted_apps.push("VS Code".to_string());
     }
     Ok(())
@@ -703,6 +725,30 @@ where
     }
 }
 
+fn wait_until_started<F>(
+    label: &str,
+    mut running_processes: F,
+    timeout_ms: u64,
+) -> Result<(), ProfileSwitchError>
+where
+    F: FnMut() -> Result<Vec<String>, ProfileSwitchError>,
+{
+    let start = Instant::now();
+    let timeout = Duration::from_millis(timeout_ms.max(1));
+    loop {
+        let running = running_processes()?;
+        if !running.is_empty() {
+            return Ok(());
+        }
+        if start.elapsed() >= timeout {
+            return Err(ProfileSwitchError::Process(format!(
+                "{label} did not restart before timeout"
+            )));
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -724,6 +770,8 @@ mod tests {
         restarted: Vec<String>,
         fail_desktop_restart: bool,
         fail_vscode_restart: bool,
+        desktop_restart_does_not_start: bool,
+        vscode_restart_does_not_start: bool,
     }
 
     #[derive(Clone, Default)]
@@ -759,6 +807,7 @@ mod tests {
                 ));
             }
             state.restarted.push("desktop".to_string());
+            state.desktop_running = !state.desktop_restart_does_not_start;
             Ok(())
         }
 
@@ -785,6 +834,7 @@ mod tests {
                 ));
             }
             state.restarted.push("vscode".to_string());
+            state.vscode_running = !state.vscode_restart_does_not_start;
             Ok(())
         }
     }
@@ -1415,6 +1465,51 @@ mod tests {
             .expect("read transaction journal");
         let journal: SwitchTransaction = serde_json::from_str(&journal).expect("journal json");
         assert_eq!(journal.phase, TransactionPhase::Failed);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn unverified_restart_rolls_back_combined_switch() {
+        let root = temp_root("restart-not-running");
+        let target = root.join("desktop.json");
+        fs::write(&target, "old").expect("write old");
+        let profile = profile(TargetEnvironment::Desktop);
+        let vault = SecretVault::new(MemorySecretStore::default());
+        store_snapshot(&vault, &profile, TargetEnvironment::Desktop, &target, "new");
+        let profile_repository = ProfileRepository::new(root.join("profiles.json"));
+        profile_repository
+            .upsert_profile(profile.clone())
+            .expect("save profile");
+        let app_state_repository = AppStateRepository::new(root.join("state"));
+        let runtime = MockRuntime::default();
+        runtime.state.borrow_mut().desktop_restart_does_not_start = true;
+
+        let result = switch_saved_profile_with_runtime(
+            ProfileSwitchRequest {
+                profile_id: profile.id.clone(),
+                environments: vec![TargetEnvironment::Desktop],
+                auto_restart_apps: true,
+                vscode_reload_mode: VscodeReloadMode::None,
+                confirm_process_close: true,
+                desktop_app_path: Some("/Applications/Codex.app".to_string()),
+                vscode_app_path: None,
+                quit_timeout_ms: 1,
+            },
+            &profile_repository,
+            &app_state_repository,
+            &vault,
+            "3000".to_string(),
+            &runtime,
+        )
+        .expect("unverified restart returns failed transaction");
+
+        assert_eq!(result.transaction.phase, TransactionPhase::Failed);
+        assert_eq!(fs::read_to_string(target).expect("read target"), "old");
+        assert!(result
+            .transaction
+            .events
+            .iter()
+            .any(|event| event.message.contains("did not restart")));
         let _ = fs::remove_dir_all(root);
     }
 

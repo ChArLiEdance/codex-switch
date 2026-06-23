@@ -51,6 +51,7 @@ pub struct VscodeSwitchReport {
 pub enum VscodeAppError {
     Process(String),
     QuitTimedOut(Vec<String>),
+    RestartTimedOut,
     RestartUnavailable,
     Transaction(TransactionError),
 }
@@ -174,6 +175,7 @@ impl<C: VscodeProcessController> VscodeSwitchCoordinator<C> {
                 }
                 self.process_controller
                     .restart(options.app_path.as_deref())?;
+                self.wait_until_started(Duration::from_millis(options.quit_timeout_ms))?;
                 restart_requested = true;
             }
             VscodePostSwitchAction::None => {
@@ -204,6 +206,20 @@ impl<C: VscodeProcessController> VscodeSwitchCoordinator<C> {
             thread::sleep(Duration::from_millis(100));
         }
     }
+
+    fn wait_until_started(&self, timeout: Duration) -> Result<(), VscodeAppError> {
+        let start = Instant::now();
+        loop {
+            let running = self.process_controller.running_processes()?;
+            if !running.is_empty() {
+                return Ok(());
+            }
+            if start.elapsed() >= timeout {
+                return Err(VscodeAppError::RestartTimedOut);
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+    }
 }
 
 #[cfg(test)]
@@ -218,6 +234,7 @@ mod tests {
         quit_requested: usize,
         restart_requested: usize,
         never_stops: bool,
+        restart_does_not_start: bool,
     }
 
     #[derive(Clone, Default)]
@@ -254,7 +271,7 @@ mod tests {
         fn restart(&self, _app_path: Option<&str>) -> Result<(), VscodeAppError> {
             let mut state = self.state.borrow_mut();
             state.restart_requested += 1;
-            state.running = true;
+            state.running = !state.restart_does_not_start;
             Ok(())
         }
     }
@@ -357,6 +374,29 @@ mod tests {
             error,
             VscodeAppError::QuitTimedOut(vec!["Visual Studio Code".to_string()])
         );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn restart_timeout_reports_unstarted_vscode() {
+        let root = temp_dir("restart-timeout");
+        let controller = MockController::default();
+        controller.state.borrow_mut().restart_does_not_start = true;
+        let coordinator =
+            VscodeSwitchCoordinator::new(controller, TransactionRunner::new(root.join("backups")));
+
+        let error = coordinator
+            .switch_vscode_profile(
+                &restore_plan(&root, "new"),
+                &VscodeSwitchOptions {
+                    app_path: Some("/Applications/Visual Studio Code.app".to_string()),
+                    post_switch_action: VscodePostSwitchAction::RestartApp,
+                    quit_timeout_ms: 1,
+                },
+            )
+            .expect_err("restart should time out");
+
+        assert_eq!(error, VscodeAppError::RestartTimedOut);
         let _ = fs::remove_dir_all(root);
     }
 

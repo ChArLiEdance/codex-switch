@@ -111,6 +111,7 @@ The runner is currently covered by simulated filesystem tests. It is not yet con
 4. Restore Desktop profile artifacts through `TransactionRunner`.
 5. Skip restart when restore fails and rollback has run.
 6. Restart the app when `auto_restart` is enabled and an app path is available.
+7. Poll for the Desktop process after restart and report a restart timeout if launch is not observed.
 
 The macOS process controller uses application-level quit and open commands. Tests use a mock process controller, so simulated coverage does not kill or restart real apps.
 
@@ -131,14 +132,14 @@ The current system validator runs `codex --version` or the detected executable p
 `VscodeSwitchCoordinator` restores VS Code profile artifacts and then performs the configured post-switch action:
 
 - `manual_reload_window`: returns an explicit "Developer: Reload Window" instruction without closing VS Code.
-- `restart_app`: asks VS Code to quit, waits until it is stopped, then reopens the configured app path.
+- `restart_app`: asks VS Code to quit, waits until it is stopped, reopens the configured app path, then polls for the VS Code process.
 - `none`: records that reload/restart was skipped.
 
 Restore failures skip all reload or restart actions. Timeout errors include the still-running process names. Tests use a mock controller and do not operate on a real VS Code instance.
 
 ## Manual Restart Retry
 
-`restart_desktop_app` and `restart_vscode_app` expose narrow retry commands for cases where an app restart was skipped, failed, or needs to be repeated after the user has resolved a local issue. These commands call the same platform process controllers used by switch transactions, return a non-secret status message, and do not read or write Profile data. The switch dialog and Environment page pass the app paths discovered by read-only detection.
+`restart_desktop_app` and `restart_vscode_app` expose narrow retry commands for cases where an app restart was skipped, failed, or needs to be repeated after the user has resolved a local issue. These commands call the same platform process controllers used by switch transactions, verify that the target process appears again, return a non-secret status message, and do not read or write Profile data. The switch dialog and Environment page pass the app paths discovered by read-only detection.
 
 ## Settings, History, And Recovery
 
@@ -161,9 +162,9 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 5. Detects running Desktop and VS Code processes and requires explicit UI confirmation before asking them to quit.
 6. Persists a planned transaction journal before filesystem restore begins.
 7. Runs one `TransactionRunner` backup/restore/rollback transaction.
-8. Runs Desktop restart and VS Code restart, when enabled, inside a post-restore transaction hook.
+8. Runs Desktop restart and VS Code restart, when enabled, inside a post-restore transaction hook, then verifies that the restarted process is observed.
 9. Persists the terminal transaction journal returned by the runner.
-10. Rolls back restored files if either restore or post-restore restart fails.
+10. Rolls back restored files if restore, post-restore restart, or post-restart process verification fails.
 11. Marks the target Profile with `lastUsedAt` on success.
 12. Reads restored target files with the same bounded account-hint scanner used by read-only detection.
 13. Compares discovered redacted hints with the target Profile's redacted hint and marks identity as verified, incomplete, or mismatched.

@@ -38,6 +38,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Transaction-aware switch dialog progress rows and Home account verification badge
 - Profile-aware switch dialog scope selection with unavailable-environment reasons
 - Manual restart retry commands and UI buttons for Codex Desktop and VS Code
+- Post-restart process verification with rollback when Desktop or VS Code launch is not observed
 - App-only macOS Tauri bundle
 
 ### Not Yet Verified As Complete Production Switching
