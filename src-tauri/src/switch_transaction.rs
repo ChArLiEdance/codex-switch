@@ -102,6 +102,7 @@ pub struct BackupManifest {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransactionError {
+    BackupVerification(String),
     EmptyRestorePlan,
     ConflictingRestoreTarget(String),
     InvalidBase64(String),
@@ -123,7 +124,7 @@ impl TransactionRunner {
     }
 
     pub fn run(&self, plan: &RestorePlan) -> Result<SwitchTransaction, TransactionError> {
-        self.run_inner(plan, None, None, None)
+        self.run_inner(plan, None, None, None, None)
     }
 
     pub fn run_with_post_restore<F>(
@@ -134,7 +135,7 @@ impl TransactionRunner {
     where
         F: FnMut() -> Result<(), TransactionError>,
     {
-        self.run_inner(plan, None, None, Some(&mut post_restore))
+        self.run_inner(plan, None, None, None, Some(&mut post_restore))
     }
 
     #[cfg(test)]
@@ -143,7 +144,19 @@ impl TransactionRunner {
         plan: &RestorePlan,
         writes_before_failure: usize,
     ) -> Result<SwitchTransaction, TransactionError> {
-        self.run_inner(plan, Some(writes_before_failure), None, None)
+        self.run_inner(plan, Some(writes_before_failure), None, None, None)
+    }
+
+    #[cfg(test)]
+    fn run_with_tamper_after_backup<F>(
+        &self,
+        plan: &RestorePlan,
+        mut tamper_after_backup: F,
+    ) -> Result<SwitchTransaction, TransactionError>
+    where
+        F: FnMut(&BackupManifest) -> Result<(), TransactionError>,
+    {
+        self.run_inner(plan, None, Some(&mut tamper_after_backup), None, None)
     }
 
     #[cfg(test)]
@@ -155,13 +168,16 @@ impl TransactionRunner {
     where
         F: FnMut() -> Result<(), TransactionError>,
     {
-        self.run_inner(plan, None, Some(&mut tamper_after_restore), None)
+        self.run_inner(plan, None, None, Some(&mut tamper_after_restore), None)
     }
 
     fn run_inner(
         &self,
         plan: &RestorePlan,
         fail_after_writes: Option<usize>,
+        tamper_after_backup: Option<
+            &mut dyn FnMut(&BackupManifest) -> Result<(), TransactionError>,
+        >,
         mut tamper_after_restore: Option<&mut dyn FnMut() -> Result<(), TransactionError>>,
         mut post_restore: Option<&mut dyn FnMut() -> Result<(), TransactionError>>,
     ) -> Result<SwitchTransaction, TransactionError> {
@@ -186,7 +202,16 @@ impl TransactionRunner {
             return Ok(transaction);
         }
         transaction.transition(TransactionPhase::BackingUp, "Backing up current state");
-        let manifest = self.backup(plan)?;
+        let manifest = match self.backup_inner(plan, tamper_after_backup) {
+            Ok(manifest) => manifest,
+            Err(error) => {
+                transaction.transition(
+                    TransactionPhase::Failed,
+                    format!("Backup failed: {error:?}"),
+                );
+                return Ok(transaction);
+            }
+        };
         transaction.transition(TransactionPhase::BackupComplete, "Backup complete");
         transaction.transition(
             TransactionPhase::Restoring,
@@ -262,6 +287,17 @@ impl TransactionRunner {
     }
 
     pub fn backup(&self, plan: &RestorePlan) -> Result<BackupManifest, TransactionError> {
+        self.backup_inner(plan, None)
+    }
+
+    fn backup_inner(
+        &self,
+        plan: &RestorePlan,
+        mut tamper_after_backup: Option<
+            &mut dyn FnMut(&BackupManifest) -> Result<(), TransactionError>,
+        >,
+    ) -> Result<BackupManifest, TransactionError> {
+        validate_unique_restore_targets(plan)?;
         self.validate_backup_location(plan)?;
         let transaction_backup_root = self.backup_root.join(&plan.transaction_id);
         fs::create_dir_all(&transaction_backup_root)
@@ -296,10 +332,15 @@ impl TransactionRunner {
             }
         }
 
-        Ok(BackupManifest {
+        let manifest = BackupManifest {
             transaction_id: plan.transaction_id.clone(),
             entries,
-        })
+        };
+        if let Some(tamper_after_backup) = tamper_after_backup.as_mut() {
+            tamper_after_backup(&manifest)?;
+        }
+        verify_backup_manifest(&manifest)?;
+        Ok(manifest)
     }
 
     fn validate_backup_location(&self, plan: &RestorePlan) -> Result<(), TransactionError> {
@@ -413,6 +454,38 @@ fn validate_unique_restore_targets(plan: &RestorePlan) -> Result<(), Transaction
             return Err(TransactionError::ConflictingRestoreTarget(format!(
                 "duplicate restore target {}",
                 normalized.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn verify_backup_manifest(manifest: &BackupManifest) -> Result<(), TransactionError> {
+    for entry in manifest.entries.iter().filter(|entry| entry.existed) {
+        let backup_path = entry.backup_path.as_ref().ok_or_else(|| {
+            TransactionError::BackupVerification(format!(
+                "missing backup path for {}",
+                entry.original_path.display()
+            ))
+        })?;
+        let original_bytes = fs::read(&entry.original_path).map_err(|error| {
+            TransactionError::BackupVerification(format!(
+                "unable to read original {}: {}",
+                entry.original_path.display(),
+                error
+            ))
+        })?;
+        let backup_bytes = fs::read(backup_path).map_err(|error| {
+            TransactionError::BackupVerification(format!(
+                "unable to read backup {}: {}",
+                backup_path.display(),
+                error
+            ))
+        })?;
+        if backup_bytes != original_bytes {
+            return Err(TransactionError::BackupVerification(format!(
+                "backup content mismatch for {}",
+                entry.original_path.display()
             )));
         }
     }
@@ -669,6 +742,42 @@ mod tests {
         assert_eq!(transaction.phase, TransactionPhase::Completed);
         assert_eq!(fs::read_to_string(target).expect("read target"), "new");
         assert!(root.join("backups/tx-success/artifact-0.bak").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn backup_verification_failure_skips_restore() {
+        let root = temp_dir("backup-verify");
+        let target = root.join("auth.json");
+        fs::write(&target, "old").expect("write old file");
+        let plan = RestorePlan {
+            transaction_id: "tx-backup-verify".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "new")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner
+            .run_with_tamper_after_backup(&plan, |manifest| {
+                let backup_path = manifest.entries[0]
+                    .backup_path
+                    .as_ref()
+                    .expect("backup path");
+                fs::write(backup_path, "tampered")
+                    .map_err(|error| TransactionError::Io(error.to_string()))
+            })
+            .expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction.events.iter().any(|event| {
+            event.phase == TransactionPhase::Failed
+                && event.message.contains("backup content mismatch")
+        }));
+        assert!(!transaction
+            .events
+            .iter()
+            .any(|event| event.phase == TransactionPhase::Restoring));
+        assert_eq!(fs::read_to_string(target).expect("read target"), "old");
         let _ = fs::remove_dir_all(root);
     }
 
@@ -934,7 +1043,9 @@ mod tests {
         assert_eq!(transaction.phase, TransactionPhase::Failed);
         assert!(transaction.events.iter().any(|event| {
             event.phase == TransactionPhase::Failed
-                && event.message.contains("transaction id is not a safe path segment")
+                && event
+                    .message
+                    .contains("transaction id is not a safe path segment")
         }));
         assert!(!transaction
             .events
