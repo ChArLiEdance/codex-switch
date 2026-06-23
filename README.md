@@ -4,7 +4,7 @@ Codex Switch is a local desktop app for managing multiple already-authorized Cod
 
 ## Current Status
 
-Milestone 1 created the project structure, Tauri + React shell, documentation, and privacy-focused repository hygiene. Milestone 2 adds the read-only detector contract and UI wiring for Codex CLI, VS Code, and Codex Desktop App evidence.
+Milestone 1 created the project structure, Tauri + React shell, documentation, and privacy-focused repository hygiene. Milestone 2 adds the read-only detector contract and UI wiring for Codex CLI, VS Code, and Codex Desktop App evidence. Milestone 4 can import selected current-environment state into a saved local Profile.
 
 The React frontend builds successfully on this machine. The Tauri backend compiles, Rust detector tests pass, and an app-only macOS bundle is produced at `src-tauri/target/release/bundle/macos/Codex Switch.app`.
 
@@ -60,6 +60,8 @@ npm run tauri:build
 
 Sensitive auth material must never be stored in Git, logs, localStorage, crash reports, ordinary JSON metadata, or frontend state stores. Metadata may contain only redacted account hints, support status, timestamps, labels, and notes. Secret payloads belong in the OS secure credential store or encrypted local storage with keys protected by that store.
 
+Profile metadata is stored at `~/.codex-switch/profiles.json`. Captured auth/config/cache artifacts are serialized through the backend and stored behind opaque keychain references; React receives only metadata, counts, warnings, and secret reference IDs.
+
 ## Repository Layout
 
 ```text
@@ -74,6 +76,7 @@ codex_switch/
 ## Known Limits
 
 - Read-only environment detection code is present in the Tauri backend and is wired into the UI.
+- Current environment import is implemented for selected CLI, VS Code, and Desktop detector results. Multi-environment import requires explicit same-account confirmation.
 - Account identity verification is not implemented yet; detector account hints are `Unknown`.
-- No profile import, backup, restore, process control, or rollback is implemented yet.
+- Backup, restore, process control, switching, and rollback are not implemented yet.
 - `npm run tauri:build -- --bundles app` succeeds. Full default bundling currently fails at the DMG packaging step on this machine.

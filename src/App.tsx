@@ -21,49 +21,14 @@ import {
   emptyEnvironmentScan,
   EnvironmentId,
   EnvironmentScan,
-  EnvironmentState
+  EnvironmentState,
+  importCurrentProfile,
+  listProfiles,
+  ProfileMetadata,
+  TargetEnvironment
 } from "./backend";
 
 type Tab = "home" | "profiles" | "environment" | "settings";
-
-type Profile = {
-  name: string;
-  accountHint: string;
-  tags: string[];
-  lastUsed: string;
-  defaultProfile: boolean;
-  note: string;
-  environments: Record<EnvironmentId, "available" | "missing" | "unknown">;
-};
-
-const profiles: Profile[] = [
-  {
-    name: "Work profile",
-    accountHint: "c***@example.com",
-    tags: ["default", "desktop"],
-    lastUsed: "Never switched",
-    defaultProfile: true,
-    note: "Mock profile for UI layout only. No auth material is stored.",
-    environments: {
-      CLI: "unknown",
-      "VS Code": "unknown",
-      Desktop: "unknown"
-    }
-  },
-  {
-    name: "Research profile",
-    accountHint: "r***@example.com",
-    tags: ["cli"],
-    lastUsed: "Never switched",
-    defaultProfile: false,
-    note: "Partial profile placeholder.",
-    environments: {
-      CLI: "unknown",
-      "VS Code": "missing",
-      Desktop: "missing"
-    }
-  }
-];
 
 const recentHistory = [
   {
@@ -79,16 +44,18 @@ export default function App() {
   const [switchOpen, setSwitchOpen] = useState(false);
   const [scan, setScan] = useState<EnvironmentScan>(emptyEnvironmentScan);
   const [scanBusy, setScanBusy] = useState(false);
+  const [profiles, setProfiles] = useState<ProfileMetadata[]>([]);
   const [scope, setScope] = useState<Record<EnvironmentId, boolean>>({
     CLI: true,
     "VS Code": true,
     Desktop: true
   });
 
-  const activeProfile = useMemo(() => profiles.find((profile) => profile.defaultProfile), []);
+  const activeProfile = useMemo(() => profiles.find((profile) => profile.defaultProfile), [profiles]);
 
   useEffect(() => {
     void runScan();
+    void refreshProfiles();
   }, []);
 
   async function runScan() {
@@ -98,6 +65,10 @@ export default function App() {
     } finally {
       setScanBusy(false);
     }
+  }
+
+  async function refreshProfiles() {
+    setProfiles(await listProfiles());
   }
 
   return (
@@ -120,7 +91,7 @@ export default function App() {
 
       <main className="content">
         {tab === "home" && <Home activeProfile={activeProfile} scan={scan} onSwitch={() => setSwitchOpen(true)} />}
-        {tab === "profiles" && <Profiles />}
+        {tab === "profiles" && <Profiles profiles={profiles} onImported={refreshProfiles} />}
         {tab === "environment" && <Environment scan={scan} busy={scanBusy} onScan={runScan} />}
         {tab === "settings" && <SettingsView />}
       </main>
@@ -155,7 +126,7 @@ function NavButton({
   );
 }
 
-function Home({ activeProfile, scan, onSwitch }: { activeProfile?: Profile; scan: EnvironmentScan; onSwitch: () => void }) {
+function Home({ activeProfile, scan, onSwitch }: { activeProfile?: ProfileMetadata; scan: EnvironmentScan; onSwitch: () => void }) {
   return (
     <section className="view">
       <header className="view-header">
@@ -194,7 +165,46 @@ function Home({ activeProfile, scan, onSwitch }: { activeProfile?: Profile; scan
   );
 }
 
-function Profiles() {
+function Profiles({ profiles, onImported }: { profiles: ProfileMetadata[]; onImported: () => Promise<void> }) {
+  const [name, setName] = useState("Imported Profile");
+  const [tags, setTags] = useState("current");
+  const [note, setNote] = useState("Imported from current local Codex state.");
+  const [selected, setSelected] = useState<Record<TargetEnvironment, boolean>>({
+    cli: true,
+    vscode: true,
+    desktop: true
+  });
+  const [confirmSameAccount, setConfirmSameAccount] = useState(false);
+  const [makeDefault, setMakeDefault] = useState(profiles.length === 0);
+  const [importing, setImporting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function saveCurrentLogin() {
+    setImporting(true);
+    setMessage(null);
+    try {
+      const environments = (Object.entries(selected) as Array<[TargetEnvironment, boolean]>)
+        .filter(([, enabled]) => enabled)
+        .map(([environment]) => environment);
+      const result = await importCurrentProfile({
+        name,
+        tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+        note,
+        environments,
+        confirmSameAccount,
+        defaultProfile: makeDefault
+      });
+      await onImported();
+      const importedCount = result.importedEnvironments
+        .reduce((sum, item) => sum + item.artifactCount, 0);
+      setMessage(`Saved ${result.profile.name}; captured ${importedCount} local artifacts into the secret vault.`);
+    } catch (error) {
+      setMessage(`Import failed: ${String(error)}`);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <section className="view">
       <header className="view-header">
@@ -202,15 +212,69 @@ function Profiles() {
           <p className="eyebrow">Profile management</p>
           <h1>Authorized local profiles</h1>
         </div>
-        <button className="secondary-button">
+        <button className="secondary-button" onClick={saveCurrentLogin} disabled={importing}>
           <UserPlus size={18} />
-          Save current login
+          {importing ? "Saving" : "Save current login"}
         </button>
       </header>
 
+      <section className="import-panel">
+        <div className="import-fields">
+          <label>
+            <span>Profile name</span>
+            <input value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label>
+            <span>Tags</span>
+            <input value={tags} onChange={(event) => setTags(event.target.value)} />
+          </label>
+          <label>
+            <span>Note</span>
+            <input value={note} onChange={(event) => setNote(event.target.value)} />
+          </label>
+        </div>
+        <div className="scope-picker inline">
+          {(["cli", "vscode", "desktop"] as TargetEnvironment[]).map((environment) => (
+            <label key={environment}>
+              <input
+                type="checkbox"
+                checked={selected[environment]}
+                onChange={(event) => setSelected((current) => ({ ...current, [environment]: event.target.checked }))}
+              />
+              <span>{environmentLabel(environment)}</span>
+            </label>
+          ))}
+        </div>
+        <div className="import-options">
+          <label>
+            <input
+              type="checkbox"
+              checked={confirmSameAccount}
+              onChange={(event) => setConfirmSameAccount(event.target.checked)}
+            />
+            <span>Selected environments belong to the same authorized account</span>
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={makeDefault}
+              onChange={(event) => setMakeDefault(event.target.checked)}
+            />
+            <span>Set as default profile</span>
+          </label>
+        </div>
+        {message && <p className="import-message">{message}</p>}
+      </section>
+
       <div className="profile-grid">
+        {profiles.length === 0 && (
+          <article className="empty-state">
+            <h2>No saved profiles</h2>
+            <p>Run read-only detection, confirm the selected environments belong to the same account, then save the current login.</p>
+          </article>
+        )}
         {profiles.map((profile) => (
-          <article className="profile-card" key={profile.name}>
+          <article className="profile-card" key={profile.id}>
             <div className="profile-topline">
               <div>
                 <h2>{profile.name}</h2>
@@ -219,13 +283,15 @@ function Profiles() {
               {profile.defaultProfile && <strong className="pill">Default</strong>}
             </div>
             <p>{profile.note}</p>
-            <div className="tag-list">
-              {profile.tags.map((tag) => <span key={tag}>{tag}</span>)}
-            </div>
+            {profile.tags.length > 0 && (
+              <div className="tag-list">
+                {profile.tags.map((tag) => <span key={tag}>{tag}</span>)}
+              </div>
+            )}
             <div className="env-strip">
-              {Object.entries(profile.environments).map(([name, status]) => (
-                <span className={`env-chip ${status}`} key={name}>
-                  {name}: {status}
+              {profile.environments.map((environment) => (
+                <span className={`env-chip ${environment.status}`} key={environment.environment}>
+                  {environmentLabel(environment.environment)}: {environment.status}
                 </span>
               ))}
             </div>
@@ -239,6 +305,16 @@ function Profiles() {
       </div>
     </section>
   );
+}
+
+function environmentLabel(environment: TargetEnvironment) {
+  if (environment === "cli") {
+    return "CLI";
+  }
+  if (environment === "vscode") {
+    return "VS Code";
+  }
+  return "Desktop";
 }
 
 function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: boolean; onScan: () => void }) {
@@ -429,4 +505,3 @@ function SwitchDialog({
     </div>
   );
 }
-

@@ -1,6 +1,12 @@
+pub mod importer;
 pub mod profile;
+pub mod profile_store;
 pub mod secret_store;
 
+use importer::{import_profile_from_scan, ProfileImportRequest, ProfileImportResult};
+use profile::ProfileMetadata;
+use profile_store::{ProfileRepository, ProfileStoreError};
+use secret_store::{KeychainSecretStore, SecretVault};
 use serde::Serialize;
 use std::{
     env,
@@ -12,40 +18,40 @@ use std::{
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct EnvironmentScan {
-    os: &'static str,
-    scanned_at: String,
-    read_only: bool,
-    environments: Vec<EnvironmentState>,
+pub(crate) struct EnvironmentScan {
+    pub(crate) os: &'static str,
+    pub(crate) scanned_at: String,
+    pub(crate) read_only: bool,
+    pub(crate) environments: Vec<EnvironmentState>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct EnvironmentState {
-    id: &'static str,
-    installed: bool,
-    executable_path: Option<String>,
-    discovered_paths: Vec<DiscoveredPath>,
-    running: bool,
-    running_processes: Vec<String>,
-    permission: PermissionState,
-    account_hint: &'static str,
-    support: SupportState,
-    status_message: String,
+pub(crate) struct EnvironmentState {
+    pub(crate) id: &'static str,
+    pub(crate) installed: bool,
+    pub(crate) executable_path: Option<String>,
+    pub(crate) discovered_paths: Vec<DiscoveredPath>,
+    pub(crate) running: bool,
+    pub(crate) running_processes: Vec<String>,
+    pub(crate) permission: PermissionState,
+    pub(crate) account_hint: String,
+    pub(crate) support: SupportState,
+    pub(crate) status_message: String,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-struct DiscoveredPath {
-    kind: PathKind,
-    path: String,
-    exists: bool,
-    permission: PermissionState,
+pub(crate) struct DiscoveredPath {
+    pub(crate) kind: PathKind,
+    pub(crate) path: String,
+    pub(crate) exists: bool,
+    pub(crate) permission: PermissionState,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-enum PermissionState {
+pub(crate) enum PermissionState {
     ReadWrite,
     ReadOnly,
     Missing,
@@ -54,7 +60,7 @@ enum PermissionState {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "kebab-case")]
-enum SupportState {
+pub(crate) enum SupportState {
     Detected,
     Partial,
     NotDetected,
@@ -62,7 +68,7 @@ enum SupportState {
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "kebab-case")]
-enum PathKind {
+pub(crate) enum PathKind {
     App,
     Auth,
     Config,
@@ -89,6 +95,26 @@ fn detect_environments() -> EnvironmentScan {
         read_only: true,
         environments,
     }
+}
+
+#[tauri::command]
+fn list_profiles() -> Result<Vec<ProfileMetadata>, String> {
+    profile_repository()
+        .list_profiles()
+        .map_err(profile_store_error_message)
+}
+
+#[tauri::command]
+fn import_current_profile(request: ProfileImportRequest) -> Result<ProfileImportResult, String> {
+    let scan = detect_environments();
+    let captured_at = scan.scanned_at.clone();
+    let vault = SecretVault::new(KeychainSecretStore::new());
+    let result = import_profile_from_scan(request, &scan.environments, captured_at, &vault)
+        .map_err(|error| format!("{error:?}"))?;
+    profile_repository()
+        .upsert_profile(result.profile.clone())
+        .map_err(profile_store_error_message)?;
+    Ok(result)
 }
 
 fn detect_cli(processes: &[String]) -> EnvironmentState {
@@ -195,7 +221,7 @@ fn environment_state(
         running: !running_processes.is_empty(),
         running_processes,
         permission,
-        account_hint: "Unknown",
+        account_hint: "Unknown".to_string(),
         support,
         status_message,
     }
@@ -377,6 +403,21 @@ fn unix_timestamp_string() -> String {
     }
 }
 
+fn profile_repository() -> ProfileRepository {
+    ProfileRepository::new(profile_metadata_path())
+}
+
+fn profile_metadata_path() -> PathBuf {
+    home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".codex-switch")
+        .join("profiles.json")
+}
+
+fn profile_store_error_message(error: ProfileStoreError) -> String {
+    format!("{error:?}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -430,7 +471,12 @@ mod tests {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![backend_health, detect_environments])
+        .invoke_handler(tauri::generate_handler![
+            backend_health,
+            detect_environments,
+            list_profiles,
+            import_current_profile
+        ])
         .run(tauri::generate_context!())
         .expect("failed to run Codex Switch");
 }

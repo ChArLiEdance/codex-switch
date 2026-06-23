@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 export type EnvironmentId = "CLI" | "VS Code" | "Desktop";
+export type TargetEnvironment = "cli" | "vscode" | "desktop";
 
 export type DiscoveredPath = {
   kind: "app" | "auth" | "config" | "cache" | "other";
@@ -29,6 +30,50 @@ export type EnvironmentScan = {
   environments: EnvironmentState[];
 };
 
+export type ProfileAuthStatus = "available" | "possibly_expired" | "expired" | "not_detected";
+
+export type EnvironmentProfileState = {
+  environment: TargetEnvironment;
+  status: ProfileAuthStatus;
+  secretRef: string | null;
+  completenessReason: string;
+  capturedAt: string | null;
+};
+
+export type ProfileMetadata = {
+  id: string;
+  name: string;
+  accountHint: string;
+  tags: string[];
+  note: string;
+  defaultProfile: boolean;
+  lastUsedAt: string | null;
+  environments: EnvironmentProfileState[];
+};
+
+export type ProfileImportRequest = {
+  name: string;
+  tags: string[];
+  note: string;
+  environments: TargetEnvironment[];
+  confirmSameAccount: boolean;
+  defaultProfile: boolean;
+};
+
+export type ImportedEnvironmentSummary = {
+  environment: TargetEnvironment;
+  artifactCount: number;
+  capturedBytes: number;
+  skippedCount: number;
+  secretRef: string | null;
+};
+
+export type ProfileImportResult = {
+  profile: ProfileMetadata;
+  importedEnvironments: ImportedEnvironmentSummary[];
+  warnings: string[];
+};
+
 export const emptyEnvironmentScan: EnvironmentScan = {
   os: "unknown",
   scannedAt: "Not scanned",
@@ -55,6 +100,18 @@ export async function detectEnvironments(): Promise<EnvironmentScan> {
   }
 }
 
+export async function listProfiles(): Promise<ProfileMetadata[]> {
+  try {
+    return await invoke<ProfileMetadata[]>("list_profiles");
+  } catch {
+    return [];
+  }
+}
+
+export async function importCurrentProfile(request: ProfileImportRequest): Promise<ProfileImportResult> {
+  return await invoke<ProfileImportResult>("import_current_profile", { request });
+}
+
 function emptyEnvironment(id: EnvironmentId): EnvironmentState {
   return {
     id,
@@ -69,4 +126,3 @@ function emptyEnvironment(id: EnvironmentId): EnvironmentState {
     statusMessage: "Read-only detector has not run"
   };
 }
-

@@ -179,7 +179,9 @@ h2 {
 .profile-card,
 .environment-row,
 .settings-grid,
-.dialog {
+.dialog,
+.import-panel,
+.empty-state {
   background: #ffffff;
   border: 1px solid #dde2da;
   border-radius: 8px;
@@ -280,6 +282,65 @@ h2 {
   gap: 16px;
 }
 
+.import-panel {
+  padding: 18px;
+  margin-bottom: 18px;
+  display: grid;
+  gap: 14px;
+}
+
+.import-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.import-fields label,
+.import-options label {
+  display: grid;
+  gap: 6px;
+  color: #3b463f;
+  font-weight: 700;
+}
+
+.import-fields input {
+  min-height: 38px;
+  border-radius: 6px;
+  border: 1px solid #cbd3cc;
+  padding: 0 10px;
+  color: #19201d;
+  background: #ffffff;
+}
+
+.scope-picker.inline {
+  margin: 0;
+}
+
+.import-options {
+  display: grid;
+  gap: 10px;
+}
+
+.import-options label {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  font-weight: 600;
+}
+
+.import-message {
+  margin: 0;
+  color: #395344;
+}
+
+.empty-state {
+  padding: 22px;
+}
+
+.empty-state p {
+  margin: 8px 0 0;
+  color: #647067;
+}
+
 .profile-card {
   padding: 18px;
   display: grid;
@@ -334,8 +395,14 @@ h2 {
   background: #dff3e4;
 }
 
-.env-chip.missing {
+.env-chip.missing,
+.env-chip.not_detected {
   background: #f3dfdc;
+}
+
+.env-chip.possibly_expired,
+.env-chip.expired {
+  background: #fff2d8;
 }
 
 .card-actions button {
@@ -528,6 +595,7 @@ dd {
   .nav-list,
   .status-grid,
   .profile-grid,
+  .import-fields,
   .environment-row,
   .history-row {
     grid-template-columns: 1fr;

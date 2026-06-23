@@ -36,6 +36,21 @@ Secret payload:
 
 The backend models this split with `ProfileMetadata`, `EnvironmentProfileState`, and `SecretVault`. Metadata stores only `secret_ref` identifiers. Secret payloads are written through the `SecretStore` trait, whose production implementation uses the OS keychain through the Rust `keyring` crate.
 
+Profile metadata is persisted by `ProfileRepository` as `~/.codex-switch/profiles.json`. The repository validates metadata before saving and clears older default flags when a newly imported profile is marked default.
+
+## Import Flow
+
+The current import flow:
+
+1. Runs read-only environment detection.
+2. Requires explicit same-account confirmation when importing more than one target environment into a single profile.
+3. Recursively captures readable detector artifacts for selected auth, config, and cache paths with per-environment file and byte limits.
+4. Skips symlinks and unreadable paths with non-secret skipped reasons.
+5. Stores the serialized snapshot through `SecretVault`.
+6. Saves only profile metadata and opaque `secret_ref` values to the metadata file.
+
+Raw captured file contents are not returned to React.
+
 ## Environment Adapter Contract
 
 Each adapter is expected to support:

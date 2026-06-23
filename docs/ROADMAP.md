@@ -24,6 +24,7 @@
 
 - Import current environment state into a profile
 - Support partial environment profiles and explicit merge confirmation
+- Persist metadata locally while storing captured state through the secret vault
 
 ## Milestone 5
 
