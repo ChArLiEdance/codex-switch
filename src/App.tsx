@@ -20,7 +20,8 @@ import {
   X,
   UserPlus
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AppSettings,
   checkRecoveryStatus,
@@ -38,6 +39,7 @@ import {
   ProfileMetadata,
   RecoveryStatus,
   resolveRecoveryStatus,
+  restoreDefaultOnExit,
   saveSettings,
   SwitchHistoryEntry,
   switchToProfile,
@@ -72,6 +74,7 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [recovery, setRecovery] = useState<RecoveryStatus>(defaultRecoveryStatus);
   const [quickSwitchMessage, setQuickSwitchMessage] = useState<string | null>(null);
+  const closeAfterExitRestore = useRef(false);
 
   const defaultProfile = useMemo(() => profiles.find((profile) => profile.defaultProfile), [profiles]);
   const currentProfile = useMemo(() => {
@@ -92,6 +95,38 @@ export default function App() {
     void refreshSettings();
     void refreshRecovery();
   }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    try {
+      void getCurrentWindow().onCloseRequested(async (event) => {
+        if (closeAfterExitRestore.current || !settings.restoreDefaultOnExit) {
+          return;
+        }
+        event.preventDefault();
+        setQuickSwitchMessage("Restoring default account before exit.");
+        try {
+          const result = await restoreDefaultOnExit();
+          setQuickSwitchMessage(
+            result.attempted
+              ? `Exit restore finished: ${result.switchResult?.transaction.phase ?? "not attempted"}.`
+              : `Exit restore skipped: ${result.reason}.`
+          );
+          closeAfterExitRestore.current = true;
+          await getCurrentWindow().close();
+        } catch (error) {
+          setQuickSwitchMessage(`Exit restore failed: ${String(error)}`);
+        }
+      }).then((handler) => {
+        unlisten = handler;
+      });
+    } catch {
+      // Browser-only development sessions do not expose a Tauri window.
+    }
+    return () => {
+      unlisten?.();
+    };
+  }, [settings.restoreDefaultOnExit]);
 
   async function runScan() {
     setScanBusy(true);
@@ -718,7 +753,7 @@ function SettingsView({
           <p className="eyebrow">Switch policy</p>
           <h1>Settings</h1>
         </div>
-        <button className="secondary-button">
+        <button className="secondary-button" onClick={() => void onChange(defaultSettings)}>
           <RotateCcw size={18} />
           Restore defaults
         </button>

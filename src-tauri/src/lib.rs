@@ -18,7 +18,10 @@ use app_state::{
 use importer::{import_profile_from_scan, ProfileImportRequest, ProfileImportResult};
 use profile::{ProfileMetadata, TargetEnvironment};
 use profile_store::{ProfileRepository, ProfileStoreError, ProfileUpdateRequest};
-use profile_switch::{switch_saved_profile, ProfileSwitchRequest, ProfileSwitchResult};
+use profile_switch::{
+    restore_default_on_exit_with_runtime, switch_saved_profile, ProfileSwitchRequest,
+    ProfileSwitchResult, RestoreDefaultOnExitResult,
+};
 use secret_store::{KeychainSecretStore, SecretVault};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -222,6 +225,22 @@ fn switch_to_profile(request: ProfileSwitchRequest) -> Result<ProfileSwitchResul
         &app_state_repository,
         &vault,
         unix_timestamp_string(),
+    )
+    .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
+fn restore_default_on_exit() -> Result<RestoreDefaultOnExitResult, String> {
+    let profile_repository = profile_repository();
+    let app_state_repository = app_state_repository();
+    let vault = SecretVault::new(KeychainSecretStore::new());
+    let runtime = profile_switch::SystemProfileSwitchRuntime::default();
+    restore_default_on_exit_with_runtime(
+        &profile_repository,
+        &app_state_repository,
+        &vault,
+        unix_timestamp_string(),
+        &runtime,
     )
     .map_err(|error| format!("{error:?}"))
 }
@@ -673,7 +692,8 @@ pub fn run() {
             clear_switch_history,
             check_recovery_status,
             resolve_recovery_status,
-            switch_to_profile
+            switch_to_profile,
+            restore_default_on_exit
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Codex Switch");

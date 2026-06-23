@@ -15,7 +15,7 @@ The script checks:
 Current expected results:
 
 - `npm run build` succeeds.
-- `cargo test` succeeds with tests covering profile metadata, profile update/delete/last-used behavior, secret-store abstraction, redacted account-hint parsing, import, transaction backup/rollback/journaling, Desktop coordinator, CLI coordinator, VS Code coordinator, switch identity verification, settings, history, and recovery detection/resolution state.
+- `cargo test` succeeds with tests covering profile metadata, profile update/delete/last-used behavior, secret-store abstraction, redacted account-hint parsing, import, transaction backup/rollback/journaling, Desktop coordinator, CLI coordinator, VS Code coordinator, switch identity verification, settings, history, restore-default-on-exit, and recovery detection/resolution state.
 - `npm run tauri:build -- --bundles app` succeeds and produces `src-tauri/target/release/bundle/macos/Codex Switch.app`.
 
 Known packaging limitation:

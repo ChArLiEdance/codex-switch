@@ -165,6 +165,12 @@ This command now makes saved Profiles switchable from the UI and coordinates pro
 
 The Home view derives the current Profile from the latest `lastUsedAt` value, then offers quick actions to restore the default Profile or switch back to the previous Profile recorded in history. These actions reuse `switch_to_profile` and the configured default switch scope.
 
+## Restore Default On Exit
+
+The frontend registers a Tauri window close handler. When `restoreDefaultOnExit` is enabled, the handler prevents immediate close, calls `restore_default_on_exit`, and closes the window only after the backend returns successfully. If the backend reports an error, the window remains open and the Home status message shows the failure.
+
+`restore_default_on_exit` reads persisted settings and Profiles, then skips safely when the setting is disabled, no default Profile exists, the default Profile is already the latest used Profile, or the default Profile has no available environments inside the default scope. When a restore is needed, it reuses `switch_to_profile` semantics with app restart disabled and VS Code reload disabled because the app itself is exiting. If close confirmation is still enabled in settings, running Desktop or VS Code processes can still block the exit restore instead of being closed silently.
+
 ## Atomic Restore Strategy
 
 Restores should write into temporary staging paths, verify permissions and checksums, then atomically rename into place where the platform supports it. If any target fails, completed targets are restored from the timestamped backup.
@@ -180,6 +186,7 @@ Adapters must distinguish:
 - Failed process shutdown
 - Restart unavailable
 - Verification inconclusive
+- Restore-default-on-exit skipped or failed
 - Secret-store failure
 - Backup failure
 - Restore failure

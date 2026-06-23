@@ -46,6 +46,14 @@ pub struct ProfileSwitchResult {
     pub restarted_apps: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreDefaultOnExitResult {
+    pub attempted: bool,
+    pub reason: String,
+    pub switch_result: Option<ProfileSwitchResult>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SwitchIdentityStatus {
@@ -228,6 +236,91 @@ pub fn switch_saved_profile_with_runtime<S: SecretStore, R: ProfileSwitchRuntime
         warnings,
         closed_processes: std::mem::take(&mut closed_processes),
         restarted_apps,
+    })
+}
+
+pub fn restore_default_on_exit_with_runtime<S: SecretStore, R: ProfileSwitchRuntime>(
+    profile_repository: &ProfileRepository,
+    app_state_repository: &AppStateRepository,
+    vault: &SecretVault<S>,
+    timestamp: String,
+    runtime: &R,
+) -> Result<RestoreDefaultOnExitResult, ProfileSwitchError> {
+    let settings = app_state_repository
+        .load_settings()
+        .map_err(|error| ProfileSwitchError::AppState(format!("{error:?}")))?;
+    if !settings.restore_default_on_exit {
+        return Ok(RestoreDefaultOnExitResult {
+            attempted: false,
+            reason: "Restore default on exit is disabled".to_string(),
+            switch_result: None,
+        });
+    }
+
+    let profiles = profile_repository.list_profiles()?;
+    let Some(default_profile) = profiles.iter().find(|profile| profile.default_profile) else {
+        return Ok(RestoreDefaultOnExitResult {
+            attempted: false,
+            reason: "No default profile is configured".to_string(),
+            switch_result: None,
+        });
+    };
+
+    let current_profile_id = profiles
+        .iter()
+        .filter_map(|profile| {
+            profile
+                .last_used_at
+                .as_ref()
+                .map(|used_at| (used_at.parse::<u64>().unwrap_or(0), profile.id.as_str()))
+        })
+        .max_by_key(|(used_at, _)| *used_at)
+        .map(|(_, id)| id);
+    if current_profile_id == Some(default_profile.id.as_str()) {
+        return Ok(RestoreDefaultOnExitResult {
+            attempted: false,
+            reason: "Default profile is already the latest used profile".to_string(),
+            switch_result: None,
+        });
+    }
+
+    let environments: Vec<TargetEnvironment> = settings
+        .default_scope
+        .iter()
+        .copied()
+        .filter(|environment| default_profile.supports(*environment))
+        .collect();
+    if environments.is_empty() {
+        return Ok(RestoreDefaultOnExitResult {
+            attempted: false,
+            reason: "Default profile has no available environments in the default switch scope"
+                .to_string(),
+            switch_result: None,
+        });
+    }
+
+    let switch_result = switch_saved_profile_with_runtime(
+        ProfileSwitchRequest {
+            profile_id: default_profile.id.clone(),
+            environments,
+            auto_restart_apps: false,
+            vscode_reload_mode: VscodeReloadMode::None,
+            confirm_process_close: !settings.confirm_before_closing_apps,
+            desktop_app_path: None,
+            vscode_app_path: None,
+            quit_timeout_ms: 8000,
+        },
+        profile_repository,
+        app_state_repository,
+        vault,
+        timestamp,
+        runtime,
+    )?;
+
+    Ok(RestoreDefaultOnExitResult {
+        attempted: true,
+        reason: "Default profile restore transaction completed for app exit".to_string(),
+        switch_result: Some(switch_result),
     })
 }
 
@@ -968,6 +1061,126 @@ mod tests {
 
         let history = app_state_repository.list_history().expect("history");
         assert_eq!(history[0].from_profile, Some("Previous".to_string()));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn restore_default_on_exit_skips_when_setting_is_disabled() {
+        let root = temp_root("exit-disabled");
+        let profile_repository = ProfileRepository::new(root.join("profiles.json"));
+        let app_state_repository = AppStateRepository::new(root.join("state"));
+        let vault = SecretVault::new(MemorySecretStore::default());
+
+        let result = restore_default_on_exit_with_runtime(
+            &profile_repository,
+            &app_state_repository,
+            &vault,
+            "3000".to_string(),
+            &MockRuntime::default(),
+        )
+        .expect("restore default on exit");
+
+        assert!(!result.attempted);
+        assert_eq!(result.reason, "Restore default on exit is disabled");
+        assert!(result.switch_result.is_none());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn restore_default_on_exit_skips_when_default_is_current() {
+        let root = temp_root("exit-default-current");
+        let mut default_profile = profile(TargetEnvironment::Cli);
+        default_profile.last_used_at = Some("2000".to_string());
+        let profile_repository = ProfileRepository::new(root.join("profiles.json"));
+        profile_repository
+            .upsert_profile(default_profile)
+            .expect("save default");
+        let app_state_repository = AppStateRepository::new(root.join("state"));
+        let mut settings = crate::app_state::AppSettings::default();
+        settings.restore_default_on_exit = true;
+        app_state_repository
+            .save_settings(&settings)
+            .expect("save settings");
+        let vault = SecretVault::new(MemorySecretStore::default());
+
+        let result = restore_default_on_exit_with_runtime(
+            &profile_repository,
+            &app_state_repository,
+            &vault,
+            "3000".to_string(),
+            &MockRuntime::default(),
+        )
+        .expect("restore default on exit");
+
+        assert!(!result.attempted);
+        assert_eq!(
+            result.reason,
+            "Default profile is already the latest used profile"
+        );
+        assert!(result.switch_result.is_none());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn restore_default_on_exit_runs_default_profile_switch_transaction() {
+        let root = temp_root("exit-restore-default");
+        let target = root.join("auth.json");
+        fs::write(&target, "other-auth").expect("write old");
+        let mut default_profile = profile(TargetEnvironment::Cli);
+        default_profile.last_used_at = Some("1000".to_string());
+        let mut other_profile = profile(TargetEnvironment::Cli);
+        other_profile.id = "profile-other".to_string();
+        other_profile.name = "Other".to_string();
+        other_profile.default_profile = false;
+        other_profile.last_used_at = Some("2000".to_string());
+        other_profile.environments[0].secret_ref =
+            Some("profile:profile-other:environment:cli".to_string());
+        let profile_repository = ProfileRepository::new(root.join("profiles.json"));
+        profile_repository
+            .upsert_profile(default_profile.clone())
+            .expect("save default");
+        profile_repository
+            .upsert_profile(other_profile)
+            .expect("save other");
+        let app_state_repository = AppStateRepository::new(root.join("state"));
+        let mut settings = crate::app_state::AppSettings::default();
+        settings.restore_default_on_exit = true;
+        settings.default_scope = vec![TargetEnvironment::Cli];
+        app_state_repository
+            .save_settings(&settings)
+            .expect("save settings");
+        let vault = SecretVault::new(MemorySecretStore::default());
+        store_snapshot(
+            &vault,
+            &default_profile,
+            TargetEnvironment::Cli,
+            &target,
+            r#"{"email":"work@example.com"}"#,
+        );
+
+        let result = restore_default_on_exit_with_runtime(
+            &profile_repository,
+            &app_state_repository,
+            &vault,
+            "3000".to_string(),
+            &MockRuntime::default(),
+        )
+        .expect("restore default on exit");
+
+        assert!(result.attempted);
+        let switch_result = result.switch_result.expect("switch result");
+        assert_eq!(switch_result.profile.id, default_profile.id);
+        assert_eq!(
+            switch_result.identity_verification.status,
+            SwitchIdentityStatus::Verified
+        );
+        assert_eq!(
+            fs::read_to_string(target).expect("read target"),
+            r#"{"email":"work@example.com"}"#
+        );
+        let history = app_state_repository.list_history().expect("history");
+        assert_eq!(history[0].from_profile, Some("Other".to_string()));
+        assert_eq!(history[0].to_profile, "Work");
         let _ = fs::remove_dir_all(root);
     }
 

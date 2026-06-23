@@ -151,6 +151,12 @@ export type ProfileSwitchResult = {
   restartedApps: string[];
 };
 
+export type RestoreDefaultOnExitResult = {
+  attempted: boolean;
+  reason: string;
+  switchResult: ProfileSwitchResult | null;
+};
+
 export const emptyEnvironmentScan: EnvironmentScan = {
   os: "unknown",
   scannedAt: "Not scanned",
@@ -236,6 +242,10 @@ export async function resolveRecoveryStatus(): Promise<RecoveryStatus> {
 
 export async function switchToProfile(request: ProfileSwitchRequest): Promise<ProfileSwitchResult> {
   return await invoke<ProfileSwitchResult>("switch_to_profile", { request });
+}
+
+export async function restoreDefaultOnExit(): Promise<RestoreDefaultOnExitResult> {
+  return await invoke<RestoreDefaultOnExitResult>("restore_default_on_exit");
 }
 
 function emptyEnvironment(id: EnvironmentId): EnvironmentState {
