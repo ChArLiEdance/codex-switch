@@ -109,6 +109,7 @@ pub enum TransactionError {
     Io(String),
     InjectedFailure,
     InvalidRestoreTarget(String),
+    RollbackVerification(String),
     UnsafeRestoreTarget(String),
     Verification(String),
     PostRestore(String),
@@ -414,6 +415,14 @@ impl TransactionRunner {
     }
 
     pub fn rollback(&self, manifest: &BackupManifest) -> Result<(), TransactionError> {
+        self.rollback_inner(manifest, None)
+    }
+
+    fn rollback_inner(
+        &self,
+        manifest: &BackupManifest,
+        mut tamper_after_rollback: Option<&mut dyn FnMut() -> Result<(), TransactionError>>,
+    ) -> Result<(), TransactionError> {
         for entry in manifest.entries.iter().rev() {
             if entry.existed {
                 let Some(backup_path) = &entry.backup_path else {
@@ -436,7 +445,10 @@ impl TransactionRunner {
                 remove_path(&entry.original_path)?;
             }
         }
-        Ok(())
+        if let Some(tamper_after_rollback) = tamper_after_rollback.as_mut() {
+            tamper_after_rollback()?;
+        }
+        verify_rollback_manifest(manifest)
     }
 }
 
@@ -488,6 +500,88 @@ fn verify_backup_manifest(manifest: &BackupManifest) -> Result<(), TransactionEr
                 entry.original_path.display()
             )));
         }
+    }
+    Ok(())
+}
+
+fn verify_rollback_manifest(manifest: &BackupManifest) -> Result<(), TransactionError> {
+    for entry in &manifest.entries {
+        if entry.existed {
+            let backup_path = entry.backup_path.as_ref().ok_or_else(|| {
+                TransactionError::RollbackVerification(format!(
+                    "missing backup path for {}",
+                    entry.original_path.display()
+                ))
+            })?;
+            verify_restored_backup_entry(&entry.original_path, backup_path)?;
+        } else if entry.original_path.exists() {
+            return Err(TransactionError::RollbackVerification(format!(
+                "rollback-created path still exists {}",
+                entry.original_path.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn verify_restored_backup_entry(
+    original_path: &Path,
+    backup_path: &Path,
+) -> Result<(), TransactionError> {
+    if backup_path.is_dir() {
+        if !original_path.is_dir() {
+            return Err(TransactionError::RollbackVerification(format!(
+                "rollback target is not a directory {}",
+                original_path.display()
+            )));
+        }
+        verify_directory_contents_equal(original_path, backup_path)
+    } else {
+        let original_bytes = fs::read(original_path).map_err(|error| {
+            TransactionError::RollbackVerification(format!(
+                "unable to read rollback target {}: {}",
+                original_path.display(),
+                error
+            ))
+        })?;
+        let backup_bytes = fs::read(backup_path).map_err(|error| {
+            TransactionError::RollbackVerification(format!(
+                "unable to read rollback backup {}: {}",
+                backup_path.display(),
+                error
+            ))
+        })?;
+        if original_bytes != backup_bytes {
+            return Err(TransactionError::RollbackVerification(format!(
+                "rollback content mismatch for {}",
+                original_path.display()
+            )));
+        }
+        Ok(())
+    }
+}
+
+fn verify_directory_contents_equal(
+    original_path: &Path,
+    backup_path: &Path,
+) -> Result<(), TransactionError> {
+    for entry in fs::read_dir(backup_path).map_err(|error| {
+        TransactionError::RollbackVerification(format!(
+            "unable to read rollback backup directory {}: {}",
+            backup_path.display(),
+            error
+        ))
+    })? {
+        let entry = entry.map_err(|error| {
+            TransactionError::RollbackVerification(format!(
+                "unable to read rollback backup directory entry {}: {}",
+                backup_path.display(),
+                error
+            ))
+        })?;
+        let backup_child = entry.path();
+        let original_child = original_path.join(entry.file_name());
+        verify_restored_backup_entry(&original_child, &backup_child)?;
     }
     Ok(())
 }
@@ -831,6 +925,56 @@ mod tests {
         runner.rollback(&manifest).expect("rollback");
 
         assert!(!target.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rollback_verifies_restored_file_contents() {
+        let root = temp_dir("rollback-verify");
+        let target = root.join("auth.json");
+        fs::write(&target, "old").expect("write old");
+        let plan = RestorePlan {
+            transaction_id: "tx-rollback-verify".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "new")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+        let manifest = runner.backup(&plan).expect("backup");
+        fs::write(&target, "new").expect("write new");
+
+        runner.rollback(&manifest).expect("rollback");
+
+        assert_eq!(fs::read_to_string(target).expect("read target"), "old");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rollback_verification_reports_tampered_restored_file() {
+        let root = temp_dir("rollback-verify-failure");
+        let target = root.join("auth.json");
+        fs::write(&target, "old").expect("write old");
+        let plan = RestorePlan {
+            transaction_id: "tx-rollback-verify-failure".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "new")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+        let manifest = runner.backup(&plan).expect("backup");
+        fs::write(&target, "new").expect("write new");
+
+        let result = runner.rollback_inner(
+            &manifest,
+            Some(&mut || {
+                fs::write(&target, "tampered")
+                    .map_err(|error| TransactionError::Io(error.to_string()))
+            }),
+        );
+
+        assert!(matches!(
+            result,
+            Err(TransactionError::RollbackVerification(message))
+                if message.contains("rollback content mismatch")
+        ));
         let _ = fs::remove_dir_all(root);
     }
 

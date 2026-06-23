@@ -102,6 +102,7 @@ The current `TransactionRunner` implements the filesystem core of this model for
 - Reads restored non-cache auth/config artifacts back from disk and compares their bytes and captured Unix file modes with the target Profile snapshot before post-restore actions run
 - Rolls back completed writes from the backup manifest if a later restore step fails
 - Removes files created during a failed transaction when no previous file existed
+- Verifies rollback results by comparing restored files with backup bytes and confirming switch-created files were removed
 - Records transaction events without file contents
 
 The runner is currently covered by simulated filesystem tests. It is not yet connected to real Codex profile switching commands.
