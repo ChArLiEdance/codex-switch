@@ -1,3 +1,4 @@
+pub mod account_hint;
 pub mod app_state;
 pub mod cli_app;
 pub mod desktop_app;
@@ -9,20 +10,19 @@ pub mod secret_store;
 pub mod switch_transaction;
 pub mod vscode_app;
 
+use account_hint::redacted_account_hint_from_path;
 use app_state::{
     default_app_state_dir, load_recovery_status, AppSettings, AppStateRepository, RecoveryStatus,
     SwitchHistoryEntry,
 };
 use importer::{import_profile_from_scan, ProfileImportRequest, ProfileImportResult};
 use profile::{ProfileMetadata, TargetEnvironment};
-use profile_switch::{switch_saved_profile, ProfileSwitchRequest, ProfileSwitchResult};
 use profile_store::{ProfileRepository, ProfileStoreError, ProfileUpdateRequest};
+use profile_switch::{switch_saved_profile, ProfileSwitchRequest, ProfileSwitchResult};
 use secret_store::{KeychainSecretStore, SecretVault};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::{
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
@@ -150,7 +150,9 @@ fn delete_profile(request: ProfileDeleteRequest) -> Result<(), String> {
         .map_err(profile_store_error_message)?
         .into_iter()
         .find(|profile| profile.id == request.profile_id)
-        .ok_or_else(|| profile_store_error_message(ProfileStoreError::NotFound(request.profile_id.clone())))?;
+        .ok_or_else(|| {
+            profile_store_error_message(ProfileStoreError::NotFound(request.profile_id.clone()))
+        })?;
     let vault = SecretVault::new(KeychainSecretStore::new());
     for environment in [
         TargetEnvironment::Cli,
@@ -233,8 +235,14 @@ fn detect_cli(processes: &[String]) -> EnvironmentState {
     }
     if let Some(home) = home_dir() {
         discovered_paths.push(discovered_path(PathKind::Config, home.join(".codex")));
-        discovered_paths.push(discovered_path(PathKind::Auth, home.join(".codex").join("auth.json")));
-        discovered_paths.push(discovered_path(PathKind::Cache, home.join(".codex").join("cache")));
+        discovered_paths.push(discovered_path(
+            PathKind::Auth,
+            home.join(".codex").join("auth.json"),
+        ));
+        discovered_paths.push(discovered_path(
+            PathKind::Cache,
+            home.join(".codex").join("cache"),
+        ));
     }
 
     let running_processes = matching_processes(processes, &["codex"]);
@@ -336,137 +344,15 @@ fn environment_state(
 }
 
 fn account_hint_from_paths(paths: &[DiscoveredPath]) -> String {
-    let mut budget = AccountHintBudget {
-        files_remaining: 20,
-        bytes_remaining: 512 * 1024,
-        max_depth: 3,
-    };
     for path in paths
         .iter()
         .filter(|path| path.exists && matches!(path.kind, PathKind::Auth | PathKind::Config))
     {
-        if let Some(hint) = account_hint_from_path(&PathBuf::from(&path.path), 0, &mut budget) {
+        if let Some(hint) = redacted_account_hint_from_path(&PathBuf::from(&path.path)) {
             return hint;
         }
     }
     "Unknown".to_string()
-}
-
-fn account_hint_from_path(path: &Path, depth: usize, budget: &mut AccountHintBudget) -> Option<String> {
-    if budget.files_remaining == 0 || budget.bytes_remaining == 0 || depth > budget.max_depth {
-        return None;
-    }
-    let metadata = fs::symlink_metadata(path).ok()?;
-    if metadata.file_type().is_symlink() {
-        return None;
-    }
-    if metadata.is_dir() {
-        let entries = fs::read_dir(path).ok()?;
-        for entry in entries.filter_map(Result::ok) {
-            if let Some(hint) = account_hint_from_path(&entry.path(), depth + 1, budget) {
-                return Some(hint);
-            }
-        }
-        return None;
-    }
-    if !metadata.is_file() {
-        return None;
-    }
-    let size = metadata.len() as usize;
-    if size == 0 || size > budget.bytes_remaining || size > 128 * 1024 {
-        return None;
-    }
-    budget.files_remaining = budget.files_remaining.saturating_sub(1);
-    budget.bytes_remaining = budget.bytes_remaining.saturating_sub(size);
-    let content = fs::read_to_string(path).ok()?;
-    account_hint_from_content(&content)
-}
-
-fn account_hint_from_content(content: &str) -> Option<String> {
-    if let Ok(value) = serde_json::from_str::<Value>(content) {
-        if let Some(email) = email_from_json_value(&value) {
-            return Some(redact_email(&email));
-        }
-    }
-    first_email_like(content).map(|email| redact_email(&email))
-}
-
-fn email_from_json_value(value: &Value) -> Option<String> {
-    match value {
-        Value::Object(map) => {
-            for (key, value) in map {
-                let key = key.to_ascii_lowercase();
-                if matches!(
-                    key.as_str(),
-                    "email" | "account" | "account_email" | "user" | "username" | "login"
-                        | "profile"
-                ) {
-                    if let Value::String(text) = value {
-                        if let Some(email) = first_email_like(text) {
-                            return Some(email);
-                        }
-                    }
-                }
-            }
-            for value in map.values() {
-                if let Some(email) = email_from_json_value(value) {
-                    return Some(email);
-                }
-            }
-            None
-        }
-        Value::Array(values) => values.iter().find_map(email_from_json_value),
-        Value::String(text) => first_email_like(text),
-        _ => None,
-    }
-}
-
-fn first_email_like(content: &str) -> Option<String> {
-    for token in content.split(|character: char| {
-        character.is_whitespace()
-            || matches!(
-                character,
-                '"' | '\'' | '<' | '>' | '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';'
-            )
-    }) {
-        let candidate = token.trim_matches(|character: char| {
-            !character.is_ascii_alphanumeric() && !matches!(character, '@' | '.' | '_' | '-' | '+')
-        });
-        if is_email_like(candidate) {
-            return Some(candidate.to_string());
-        }
-    }
-    None
-}
-
-fn is_email_like(value: &str) -> bool {
-    let Some((local, domain)) = value.split_once('@') else {
-        return false;
-    };
-    !local.is_empty()
-        && local.len() <= 128
-        && domain.contains('.')
-        && domain.len() <= 255
-        && local
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-' | '+'))
-        && domain
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '-'))
-}
-
-fn redact_email(email: &str) -> String {
-    let Some((local, domain)) = email.split_once('@') else {
-        return "Unknown".to_string();
-    };
-    let first = local.chars().next().unwrap_or('*');
-    format!("{first}***@{domain}")
-}
-
-struct AccountHintBudget {
-    files_remaining: usize,
-    bytes_remaining: usize,
-    max_depth: usize,
 }
 
 fn discovered_path(kind: PathKind, path: PathBuf) -> DiscoveredPath {
@@ -489,7 +375,9 @@ fn permission_for_path(path: &Path) -> PermissionState {
             }
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => PermissionState::Missing,
-        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => PermissionState::ReadOnly,
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+            PermissionState::ReadOnly
+        }
         Err(_) => PermissionState::Unknown,
     }
 }
@@ -499,9 +387,15 @@ fn summarize_permissions(paths: &[DiscoveredPath]) -> PermissionState {
     if existing.is_empty() {
         return PermissionState::Unknown;
     }
-    if existing.iter().all(|path| path.permission == PermissionState::ReadWrite) {
+    if existing
+        .iter()
+        .all(|path| path.permission == PermissionState::ReadWrite)
+    {
         PermissionState::ReadWrite
-    } else if existing.iter().any(|path| path.permission == PermissionState::ReadOnly) {
+    } else if existing
+        .iter()
+        .any(|path| path.permission == PermissionState::ReadOnly)
+    {
         PermissionState::ReadOnly
     } else {
         PermissionState::Unknown
@@ -650,7 +544,9 @@ fn profile_repository() -> ProfileRepository {
 }
 
 fn app_state_repository() -> AppStateRepository {
-    AppStateRepository::new(default_app_state_dir(home_dir().unwrap_or_else(|| PathBuf::from("."))))
+    AppStateRepository::new(default_app_state_dir(
+        home_dir().unwrap_or_else(|| PathBuf::from(".")),
+    ))
 }
 
 fn profile_metadata_path() -> PathBuf {
@@ -679,7 +575,9 @@ mod tests {
         let matches = matching_processes(&processes, &["visual studio code", "codex"]);
 
         assert_eq!(matches.len(), 2);
-        assert!(matches.iter().any(|process| process.contains("Visual Studio Code")));
+        assert!(matches
+            .iter()
+            .any(|process| process.contains("Visual Studio Code")));
         assert!(matches.iter().any(|process| process.contains("codex")));
     }
 
@@ -695,7 +593,10 @@ mod tests {
         let path = env::temp_dir();
         let discovered = vec![discovered_path(PathKind::Config, path)];
 
-        assert_eq!(summarize_permissions(&discovered), PermissionState::ReadWrite);
+        assert_eq!(
+            summarize_permissions(&discovered),
+            PermissionState::ReadWrite
+        );
     }
 
     #[test]
@@ -718,7 +619,7 @@ mod tests {
         let content = r#"{"auth":{"email":"charlie@example.com","access_token":"secret"}}"#;
 
         assert_eq!(
-            account_hint_from_content(content),
+            account_hint::redacted_account_hint_from_content(content),
             Some("c***@example.com".to_string())
         );
     }
@@ -728,17 +629,15 @@ mod tests {
         let content = "signed in as user.name+codex@example.org";
 
         assert_eq!(
-            account_hint_from_content(content),
+            account_hint::redacted_account_hint_from_content(content),
             Some("u***@example.org".to_string())
         );
     }
 
     #[test]
     fn environment_state_reports_redacted_account_hint_from_auth_path() {
-        let root = env::temp_dir().join(format!(
-            "codex-switch-account-hint-{}",
-            std::process::id()
-        ));
+        let root =
+            env::temp_dir().join(format!("codex-switch-account-hint-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).expect("create hint dir");
         let auth_path = root.join("auth.json");

@@ -38,7 +38,11 @@ pub struct EnvironmentProfileState {
 }
 
 impl EnvironmentProfileState {
-    pub fn available(environment: TargetEnvironment, secret_ref: String, captured_at: String) -> Self {
+    pub fn available(
+        environment: TargetEnvironment,
+        secret_ref: String,
+        captured_at: String,
+    ) -> Self {
         Self {
             environment,
             status: ProfileAuthStatus::Available,
@@ -84,10 +88,14 @@ impl ProfileMetadata {
             return Err(ProfileValidationError::UnredactedAccountHint);
         }
         for environment in &self.environments {
-            if environment.status == ProfileAuthStatus::Available && environment.secret_ref.is_none() {
-                return Err(ProfileValidationError::AvailableEnvironmentMissingSecretRef(
-                    environment.environment,
-                ));
+            if environment.status == ProfileAuthStatus::Available
+                && environment.secret_ref.is_none()
+            {
+                return Err(
+                    ProfileValidationError::AvailableEnvironmentMissingSecretRef(
+                        environment.environment,
+                    ),
+                );
             }
         }
         Ok(())
@@ -158,7 +166,10 @@ mod tests {
         let mut profile = sample_profile();
         profile.account_hint = "charlie@example.com".to_string();
 
-        assert_eq!(profile.validate(), Err(ProfileValidationError::UnredactedAccountHint));
+        assert_eq!(
+            profile.validate(),
+            Err(ProfileValidationError::UnredactedAccountHint)
+        );
     }
 
     #[test]
@@ -168,10 +179,11 @@ mod tests {
 
         assert_eq!(
             profile.validate(),
-            Err(ProfileValidationError::AvailableEnvironmentMissingSecretRef(
-                TargetEnvironment::Cli
-            ))
+            Err(
+                ProfileValidationError::AvailableEnvironmentMissingSecretRef(
+                    TargetEnvironment::Cli
+                )
+            )
         );
     }
 }
-

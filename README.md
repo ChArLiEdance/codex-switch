@@ -90,9 +90,9 @@ codex_switch/
 - Read-only environment detection code is present in the Tauri backend and is wired into the UI.
 - Current environment import is implemented for selected CLI, VS Code, and Desktop detector results. Multi-environment import requires explicit same-account confirmation.
 - Profile management supports editing names, tags, notes, setting a default Profile, and deleting Profile metadata with associated keychain payload cleanup.
-- Successful switches update Profile `lastUsedAt`, record the previous Profile in local history, and expose Home actions for restoring the default Profile or switching back to the previous Profile.
+- Successful restore transactions update Profile `lastUsedAt`, record the previous Profile in local history, and expose Home actions for restoring the default Profile or switching back to the previous Profile.
 - Recovery detection surfaces unfinished transaction journals and lets the user mark a reviewed journal failed before using Restore default or Switch back for an explicit corrective switch.
-- Detector account hints use bounded read-only scanning and redaction when an email-like local identifier is safely discoverable; account identity verification after switching is not implemented yet.
+- Detector account hints use bounded read-only scanning and redaction when an email-like local identifier is safely discoverable. Post-switch verification now compares post-restore redacted hints with the target Profile and records verified, incomplete, or mismatched identity status without logging full emails.
 - Backup, restore, rollback, and per-environment switch coordinators are implemented in the backend and covered by simulated tests.
 - Saved Profile switching is wired from the UI to a combined backend transaction. With explicit user confirmation it closes running Desktop/VS Code processes, restores selected environments, restarts supported apps, records history, and rolls back if restore or restart fails.
 - Automatic Desktop/VS Code close and restart are covered by mock process-controller tests. Real Codex Desktop and VS Code extension authentication path semantics are not yet verified.

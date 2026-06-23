@@ -106,7 +106,8 @@ impl<S: SecretStore> SecretVault<S> {
         profile_id: &str,
         environment: TargetEnvironment,
     ) -> Result<(), SecretStoreError> {
-        self.store.delete_secret(&secret_key(profile_id, environment))
+        self.store
+            .delete_secret(&secret_key(profile_id, environment))
     }
 }
 
@@ -121,18 +122,27 @@ pub struct MemorySecretStore {
 
 impl SecretStore for MemorySecretStore {
     fn put_secret(&self, key: &str, value: &str) -> Result<(), SecretStoreError> {
-        let mut values = self.values.lock().map_err(|_| SecretStoreError::LockPoisoned)?;
+        let mut values = self
+            .values
+            .lock()
+            .map_err(|_| SecretStoreError::LockPoisoned)?;
         values.insert(key.to_string(), value.to_string());
         Ok(())
     }
 
     fn get_secret(&self, key: &str) -> Result<Option<String>, SecretStoreError> {
-        let values = self.values.lock().map_err(|_| SecretStoreError::LockPoisoned)?;
+        let values = self
+            .values
+            .lock()
+            .map_err(|_| SecretStoreError::LockPoisoned)?;
         Ok(values.get(key).cloned())
     }
 
     fn delete_secret(&self, key: &str) -> Result<(), SecretStoreError> {
-        let mut values = self.values.lock().map_err(|_| SecretStoreError::LockPoisoned)?;
+        let mut values = self
+            .values
+            .lock()
+            .map_err(|_| SecretStoreError::LockPoisoned)?;
         values.remove(key);
         Ok(())
     }
@@ -178,4 +188,3 @@ mod tests {
         );
     }
 }
-

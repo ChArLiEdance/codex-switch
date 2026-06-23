@@ -27,13 +27,14 @@ This developer preview implements the project foundation and the backend pieces 
 - Local settings persistence
 - Local switch history persistence and clearing
 - Switch transaction journal persistence plus startup recovery inspection and Mark reviewed handling
+- Post-switch redacted account-hint comparison with verified, incomplete, or mismatched identity status
 - App-only macOS Tauri bundle
 
 ### Not Yet Verified As Complete Production Switching
 
 - Real Codex Desktop authentication path semantics
 - Real VS Code Codex/OpenAI extension authentication path semantics
-- Account identity verification after switching
+- Strong account identity verification when no redacted local account hint is discoverable
 - Automatic Desktop/VS Code close and restart against real running apps on this machine
 - DMG packaging on this machine; default Tauri bundling fails during `bundle_dmg.sh`
 

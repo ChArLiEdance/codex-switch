@@ -156,8 +156,10 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 9. Persists the terminal transaction journal returned by the runner.
 10. Rolls back restored files if either restore or post-restore restart fails.
 11. Marks the target Profile with `lastUsedAt` on success.
-12. Appends local switch history, including the previously most recently used Profile when known.
-13. Returns closed-process, restarted-app, warning, and manual-verification details to the dialog.
+12. Reads restored target files with the same bounded account-hint scanner used by read-only detection.
+13. Compares discovered redacted hints with the target Profile's redacted hint and marks identity as verified, incomplete, or mismatched.
+14. Appends local switch history, including the previously most recently used Profile when known. Completed restore transactions are recorded as `success` only when the redacted identity hint matches; otherwise they are recorded as `incomplete` with an identity error category.
+15. Returns closed-process, restarted-app, identity-verification, warning, and manual-verification details to the dialog.
 
 This command now makes saved Profiles switchable from the UI and coordinates process close/restart for Desktop and VS Code after explicit confirmation. The process behavior is covered by mock process-controller tests; real Codex Desktop and VS Code extension auth-path semantics still require machine-specific validation.
 
@@ -182,4 +184,4 @@ Adapters must distinguish:
 - Backup failure
 - Restore failure
 
-Unknown or inconclusive account identity must be reported as "configuration switched, identity verification incomplete" rather than as verified support.
+Unknown or inconclusive account identity must be reported as "configuration switched, identity verification incomplete" rather than as verified support. A mismatched redacted hint is reported separately and the history entry is not marked successful.

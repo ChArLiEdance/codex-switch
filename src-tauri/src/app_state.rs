@@ -112,7 +112,8 @@ impl AppStateRepository {
         if !path.exists() {
             return Ok(AppSettings::default());
         }
-        let content = fs::read_to_string(path).map_err(|error| AppStateError::Io(error.to_string()))?;
+        let content =
+            fs::read_to_string(path).map_err(|error| AppStateError::Io(error.to_string()))?;
         serde_json::from_str(&content).map_err(|error| AppStateError::Json(error.to_string()))
     }
 
@@ -151,9 +152,10 @@ impl AppStateRepository {
         if !path.exists() {
             return load_recovery_status(self);
         }
-        let content = fs::read_to_string(&path).map_err(|error| AppStateError::Io(error.to_string()))?;
-        let mut transaction: SwitchTransaction =
-            serde_json::from_str(&content).map_err(|error| AppStateError::Json(error.to_string()))?;
+        let content =
+            fs::read_to_string(&path).map_err(|error| AppStateError::Io(error.to_string()))?;
+        let mut transaction: SwitchTransaction = serde_json::from_str(&content)
+            .map_err(|error| AppStateError::Json(error.to_string()))?;
         let terminal = matches!(
             transaction.phase,
             TransactionPhase::Completed | TransactionPhase::RolledBack | TransactionPhase::Failed
@@ -162,7 +164,8 @@ impl AppStateRepository {
             transaction.phase = TransactionPhase::Failed;
             transaction.events.push(TransactionEvent {
                 phase: TransactionPhase::Failed,
-                message: "Recovery marked unresolved transaction as failed after user review".to_string(),
+                message: "Recovery marked unresolved transaction as failed after user review"
+                    .to_string(),
             });
             self.save_current_transaction(&transaction)?;
         }
@@ -174,7 +177,8 @@ impl AppStateRepository {
         if !path.exists() {
             return Ok(HistoryDocument::default());
         }
-        let content = fs::read_to_string(path).map_err(|error| AppStateError::Io(error.to_string()))?;
+        let content =
+            fs::read_to_string(path).map_err(|error| AppStateError::Io(error.to_string()))?;
         serde_json::from_str(&content).map_err(|error| AppStateError::Json(error.to_string()))
     }
 
@@ -191,7 +195,9 @@ pub fn default_app_state_dir(home: PathBuf) -> PathBuf {
     home.join(".codex-switch")
 }
 
-pub fn load_recovery_status(repository: &AppStateRepository) -> Result<RecoveryStatus, AppStateError> {
+pub fn load_recovery_status(
+    repository: &AppStateRepository,
+) -> Result<RecoveryStatus, AppStateError> {
     let path = repository.current_transaction_path();
     if !path.exists() {
         return Ok(RecoveryStatus {
@@ -256,7 +262,10 @@ mod tests {
         let root = temp_root("settings");
         let repository = AppStateRepository::new(root.clone());
 
-        assert_eq!(repository.load_settings().expect("default settings"), AppSettings::default());
+        assert_eq!(
+            repository.load_settings().expect("default settings"),
+            AppSettings::default()
+        );
         let settings = AppSettings {
             auto_restart_apps: false,
             restore_default_on_exit: true,
@@ -342,7 +351,8 @@ mod tests {
             .expect("resolve transaction");
 
         assert!(!status.needs_recovery);
-        let content = fs::read_to_string(repository.current_transaction_path()).expect("read journal");
+        let content =
+            fs::read_to_string(repository.current_transaction_path()).expect("read journal");
         let transaction: SwitchTransaction = serde_json::from_str(&content).expect("journal json");
         assert_eq!(transaction.phase, TransactionPhase::Failed);
         assert!(transaction

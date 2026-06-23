@@ -130,9 +130,20 @@ export type SwitchTransaction = {
   events: SwitchTransactionEvent[];
 };
 
+export type SwitchIdentityVerification = {
+  status: "verified" | "incomplete" | "mismatch" | "not_checked";
+  targetAccountHint: string;
+  observed: Array<{
+    environment: TargetEnvironment;
+    accountHint: string | null;
+  }>;
+  message: string;
+};
+
 export type ProfileSwitchResult = {
   profile: ProfileMetadata;
   transaction: SwitchTransaction;
+  identityVerification: SwitchIdentityVerification;
   switchedEnvironments: TargetEnvironment[];
   manualActions: string[];
   warnings: string[];

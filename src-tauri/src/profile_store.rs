@@ -70,7 +70,8 @@ impl ProfileRepository {
         let content = serde_json::to_string_pretty(document)
             .map_err(|error| ProfileStoreError::Json(error.to_string()))?;
         let temporary_path = self.path.with_extension("json.tmp");
-        fs::write(&temporary_path, content).map_err(|error| ProfileStoreError::Io(error.to_string()))?;
+        fs::write(&temporary_path, content)
+            .map_err(|error| ProfileStoreError::Io(error.to_string()))?;
         fs::rename(&temporary_path, &self.path)
             .map_err(|error| ProfileStoreError::Io(error.to_string()))
     }
@@ -84,14 +85,18 @@ impl ProfileRepository {
             .validate()
             .map_err(|error| ProfileStoreError::Validation(format!("{error:?}")))?;
         let mut document = self.load()?;
-        document.profiles.retain(|existing| existing.id != profile.id);
+        document
+            .profiles
+            .retain(|existing| existing.id != profile.id);
         if profile.default_profile {
             for existing in &mut document.profiles {
                 existing.default_profile = false;
             }
         }
         document.profiles.push(profile);
-        document.profiles.sort_by(|left, right| left.name.cmp(&right.name));
+        document
+            .profiles
+            .sort_by(|left, right| left.name.cmp(&right.name));
         self.save(&document)
     }
 
@@ -125,8 +130,8 @@ impl ProfileRepository {
             }
         }
 
-        let updated_profile = updated_profile
-            .ok_or_else(|| ProfileStoreError::NotFound(profile_id.clone()))?;
+        let updated_profile =
+            updated_profile.ok_or_else(|| ProfileStoreError::NotFound(profile_id.clone()))?;
         if updated_profile.default_profile {
             for profile in &mut document.profiles {
                 if profile.id != updated_profile.id {
@@ -134,7 +139,9 @@ impl ProfileRepository {
                 }
             }
         }
-        document.profiles.sort_by(|left, right| left.name.cmp(&right.name));
+        document
+            .profiles
+            .sort_by(|left, right| left.name.cmp(&right.name));
         self.save(&document)?;
         Ok(updated_profile)
     }
@@ -152,7 +159,9 @@ impl ProfileRepository {
                 next_default.default_profile = true;
             }
         }
-        document.profiles.sort_by(|left, right| left.name.cmp(&right.name));
+        document
+            .profiles
+            .sort_by(|left, right| left.name.cmp(&right.name));
         self.save(&document)?;
         Ok(removed)
     }
@@ -171,8 +180,8 @@ impl ProfileRepository {
                 break;
             }
         }
-        let updated_profile = updated_profile
-            .ok_or_else(|| ProfileStoreError::NotFound(profile_id.to_string()))?;
+        let updated_profile =
+            updated_profile.ok_or_else(|| ProfileStoreError::NotFound(profile_id.to_string()))?;
         self.save(&document)?;
         Ok(updated_profile)
     }
@@ -213,7 +222,10 @@ mod tests {
         let _ = fs::remove_file(&path);
         let repository = ProfileRepository::new(path);
 
-        assert!(repository.list_profiles().expect("list profiles").is_empty());
+        assert!(repository
+            .list_profiles()
+            .expect("list profiles")
+            .is_empty());
     }
 
     #[test]
@@ -247,7 +259,13 @@ mod tests {
             .expect("save second");
 
         let profiles = repository.list_profiles().expect("list profiles");
-        assert_eq!(profiles.iter().filter(|profile| profile.default_profile).count(), 1);
+        assert_eq!(
+            profiles
+                .iter()
+                .filter(|profile| profile.default_profile)
+                .count(),
+            1
+        );
         assert!(profiles
             .iter()
             .any(|profile| profile.id == "profile-2" && profile.default_profile));
@@ -280,7 +298,13 @@ mod tests {
         assert_eq!(updated.name, "Personal");
         assert_eq!(updated.tags, vec!["current"]);
         assert_eq!(updated.note, "Local account");
-        assert_eq!(profiles.iter().filter(|profile| profile.default_profile).count(), 1);
+        assert_eq!(
+            profiles
+                .iter()
+                .filter(|profile| profile.default_profile)
+                .count(),
+            1
+        );
         assert!(profiles
             .iter()
             .any(|profile| profile.id == "profile-2" && profile.default_profile));
@@ -331,10 +355,7 @@ mod tests {
 
         assert_eq!(updated.last_used_at, Some("2000".to_string()));
         assert_eq!(
-            repository
-                .list_profiles()
-                .expect("list profiles")[0]
-                .last_used_at,
+            repository.list_profiles().expect("list profiles")[0].last_used_at,
             Some("2000".to_string())
         );
         let _ = fs::remove_file(path);

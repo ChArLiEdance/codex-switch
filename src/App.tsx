@@ -856,6 +856,7 @@ function SwitchDialog({
       });
       setResult([
         `Transaction ${response.transaction.id}: ${response.transaction.phase}`,
+        `Identity ${response.identityVerification.status}: ${response.identityVerification.message}`,
         response.closedProcesses.length > 0 ? `Closed: ${response.closedProcesses.join(", ")}` : "No running GUI apps closed",
         response.restartedApps.length > 0 ? `Restarted: ${response.restartedApps.join(", ")}` : "No app restart performed",
         ...response.warnings,

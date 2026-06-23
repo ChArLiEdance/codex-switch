@@ -1,4 +1,5 @@
 use crate::{
+    account_hint::redacted_account_hint_from_path,
     app_state::{AppStateRepository, SwitchHistoryEntry, SwitchHistoryStatus, VscodeReloadMode},
     cli_app::{CliRuntime, SystemCliRuntime},
     desktop_app::{DesktopProcessController, MacDesktopProcessController},
@@ -37,11 +38,37 @@ pub struct ProfileSwitchRequest {
 pub struct ProfileSwitchResult {
     pub profile: ProfileMetadata,
     pub transaction: SwitchTransaction,
+    pub identity_verification: SwitchIdentityVerification,
     pub switched_environments: Vec<TargetEnvironment>,
     pub manual_actions: Vec<String>,
     pub warnings: Vec<String>,
     pub closed_processes: Vec<String>,
     pub restarted_apps: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SwitchIdentityStatus {
+    Verified,
+    Incomplete,
+    Mismatch,
+    NotChecked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvironmentIdentityObservation {
+    pub environment: TargetEnvironment,
+    pub account_hint: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SwitchIdentityVerification {
+    pub status: SwitchIdentityStatus,
+    pub target_account_hint: String,
+    pub observed: Vec<EnvironmentIdentityObservation>,
+    pub message: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -130,8 +157,13 @@ pub fn switch_saved_profile_with_runtime<S: SecretStore, R: ProfileSwitchRuntime
     app_state_repository
         .save_current_transaction(&transaction)
         .map_err(|error| ProfileSwitchError::AppState(format!("{error:?}")))?;
+    let identity_verification = verify_switched_identity(&profile, &plan, &transaction);
     let status = if transaction.phase == TransactionPhase::Completed {
-        SwitchHistoryStatus::Success
+        if identity_verification.status == SwitchIdentityStatus::Verified {
+            SwitchHistoryStatus::Success
+        } else {
+            SwitchHistoryStatus::Incomplete
+        }
     } else if transaction
         .events
         .iter()
@@ -156,7 +188,12 @@ pub fn switch_saved_profile_with_runtime<S: SecretStore, R: ProfileSwitchRuntime
             environments: request.environments.clone(),
             status,
             error_type: if transaction.phase == TransactionPhase::Completed {
-                None
+                match identity_verification.status {
+                    SwitchIdentityStatus::Verified => None,
+                    SwitchIdentityStatus::Incomplete => Some("IdentityIncomplete".to_string()),
+                    SwitchIdentityStatus::Mismatch => Some("IdentityMismatch".to_string()),
+                    SwitchIdentityStatus::NotChecked => Some("IdentityNotChecked".to_string()),
+                }
             } else {
                 Some(format!("{:?}", transaction.phase))
             },
@@ -170,21 +207,122 @@ pub fn switch_saved_profile_with_runtime<S: SecretStore, R: ProfileSwitchRuntime
             "Switch restore failed; rollback was attempted and post-switch actions were skipped"
                 .to_string(),
         );
-    } else {
-        warnings.push(
-            "Configuration switched, but account identity verification is not complete".to_string(),
-        );
+    } else if identity_verification.status == SwitchIdentityStatus::Incomplete {
+        warnings.push(format!(
+            "Configuration switched, but account identity verification is incomplete: {}",
+            identity_verification.message
+        ));
+    } else if identity_verification.status == SwitchIdentityStatus::Mismatch {
+        warnings.push(format!(
+            "Configuration switched, but the detected account hint did not match the target profile: {}",
+            identity_verification.message
+        ));
     }
 
     Ok(ProfileSwitchResult {
         profile,
         transaction,
+        identity_verification,
         switched_environments: request.environments,
         manual_actions,
         warnings,
         closed_processes: std::mem::take(&mut closed_processes),
         restarted_apps,
     })
+}
+
+fn verify_switched_identity(
+    profile: &ProfileMetadata,
+    plan: &RestorePlan,
+    transaction: &SwitchTransaction,
+) -> SwitchIdentityVerification {
+    let target_account_hint = profile.account_hint.trim().to_string();
+    if transaction.phase != TransactionPhase::Completed {
+        return SwitchIdentityVerification {
+            status: SwitchIdentityStatus::NotChecked,
+            target_account_hint,
+            observed: Vec::new(),
+            message: "Restore transaction did not complete, so account identity was not checked"
+                .to_string(),
+        };
+    }
+
+    let mut observed = Vec::new();
+    for artifact in &plan.artifacts {
+        let Some(environment) = target_environment_from_key(&artifact.environment) else {
+            continue;
+        };
+        let account_hint = redacted_account_hint_from_path(&artifact.target_path);
+        let duplicate = observed
+            .iter()
+            .any(|entry: &EnvironmentIdentityObservation| {
+                entry.environment == environment && entry.account_hint == account_hint
+            });
+        if !duplicate {
+            observed.push(EnvironmentIdentityObservation {
+                environment,
+                account_hint,
+            });
+        }
+    }
+
+    let observed_hints: Vec<String> = observed
+        .iter()
+        .filter_map(|entry| entry.account_hint.as_deref())
+        .filter(|hint| !hint.trim().is_empty() && *hint != "Unknown")
+        .map(ToOwned::to_owned)
+        .collect();
+
+    if target_account_hint.is_empty() || target_account_hint == "Unknown" {
+        return SwitchIdentityVerification {
+            status: SwitchIdentityStatus::Incomplete,
+            target_account_hint,
+            observed,
+            message: "Target profile has no redacted account hint to compare".to_string(),
+        };
+    }
+
+    if observed_hints.is_empty() {
+        return SwitchIdentityVerification {
+            status: SwitchIdentityStatus::Incomplete,
+            target_account_hint,
+            observed,
+            message: "No redacted account hint was discoverable after restore".to_string(),
+        };
+    }
+
+    let mismatches: Vec<&str> = observed_hints
+        .iter()
+        .filter(|hint| hint.as_str() != target_account_hint)
+        .map(|hint| hint.as_str())
+        .collect();
+    if !mismatches.is_empty() {
+        return SwitchIdentityVerification {
+            status: SwitchIdentityStatus::Mismatch,
+            target_account_hint: target_account_hint.clone(),
+            observed,
+            message: format!(
+                "expected {target_account_hint}, observed {}",
+                mismatches.join(", ")
+            ),
+        };
+    }
+
+    SwitchIdentityVerification {
+        status: SwitchIdentityStatus::Verified,
+        target_account_hint: target_account_hint.clone(),
+        observed,
+        message: format!("Observed redacted account hint matched {target_account_hint}"),
+    }
+}
+
+fn target_environment_from_key(key: &str) -> Option<TargetEnvironment> {
+    match key {
+        "cli" => Some(TargetEnvironment::Cli),
+        "vscode" => Some(TargetEnvironment::Vscode),
+        "desktop" => Some(TargetEnvironment::Desktop),
+        _ => None,
+    }
 }
 
 pub fn restore_plan_from_profile<S: SecretStore>(
@@ -230,7 +368,10 @@ pub fn restore_plan_from_profile<S: SecretStore>(
     })
 }
 
-fn latest_used_profile_name(profiles: &[ProfileMetadata], target_profile_id: &str) -> Option<String> {
+fn latest_used_profile_name(
+    profiles: &[ProfileMetadata],
+    target_profile_id: &str,
+) -> Option<String> {
     profiles
         .iter()
         .filter(|profile| profile.id != target_profile_id)
@@ -649,16 +790,131 @@ mod tests {
         .expect("switch profile");
 
         assert_eq!(result.transaction.phase, TransactionPhase::Completed);
+        assert_eq!(
+            result.identity_verification.status,
+            SwitchIdentityStatus::Incomplete
+        );
         assert_eq!(result.profile.last_used_at, Some("3000".to_string()));
         assert_eq!(fs::read_to_string(target).expect("read target"), "new-auth");
         let history = app_state_repository.list_history().expect("history");
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].from_profile, None);
+        assert_eq!(history[0].status, SwitchHistoryStatus::Incomplete);
+        assert_eq!(
+            history[0].error_type,
+            Some("IdentityIncomplete".to_string())
+        );
         let journal = fs::read_to_string(app_state_repository.current_transaction_path())
             .expect("read transaction journal");
-        let journal: SwitchTransaction =
-            serde_json::from_str(&journal).expect("journal json");
+        let journal: SwitchTransaction = serde_json::from_str(&journal).expect("journal json");
         assert_eq!(journal.phase, TransactionPhase::Completed);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn switch_history_success_requires_matching_redacted_account_hint() {
+        let root = temp_root("verified-identity");
+        let target = root.join("auth.json");
+        fs::write(&target, "old-auth").expect("write old");
+        let profile = profile(TargetEnvironment::Cli);
+        let vault = SecretVault::new(MemorySecretStore::default());
+        store_snapshot(
+            &vault,
+            &profile,
+            TargetEnvironment::Cli,
+            &target,
+            r#"{"email":"work@example.com"}"#,
+        );
+        let profile_repository = ProfileRepository::new(root.join("profiles.json"));
+        profile_repository
+            .upsert_profile(profile.clone())
+            .expect("save profile");
+        let app_state_repository = AppStateRepository::new(root.join("state"));
+
+        let result = switch_saved_profile_with_runtime(
+            ProfileSwitchRequest {
+                profile_id: profile.id.clone(),
+                environments: vec![TargetEnvironment::Cli],
+                auto_restart_apps: false,
+                vscode_reload_mode: VscodeReloadMode::None,
+                confirm_process_close: true,
+                desktop_app_path: None,
+                vscode_app_path: None,
+                quit_timeout_ms: 50,
+            },
+            &profile_repository,
+            &app_state_repository,
+            &vault,
+            "3000".to_string(),
+            &MockRuntime::default(),
+        )
+        .expect("switch profile");
+
+        assert_eq!(
+            result.identity_verification.status,
+            SwitchIdentityStatus::Verified
+        );
+        assert!(result.warnings.is_empty());
+        let history = app_state_repository.list_history().expect("history");
+        assert_eq!(history[0].status, SwitchHistoryStatus::Success);
+        assert_eq!(history[0].error_type, None);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn switch_history_records_identity_mismatch_without_logging_full_email() {
+        let root = temp_root("mismatched-identity");
+        let target = root.join("auth.json");
+        fs::write(&target, "old-auth").expect("write old");
+        let profile = profile(TargetEnvironment::Cli);
+        let vault = SecretVault::new(MemorySecretStore::default());
+        store_snapshot(
+            &vault,
+            &profile,
+            TargetEnvironment::Cli,
+            &target,
+            r#"{"email":"other@example.com"}"#,
+        );
+        let profile_repository = ProfileRepository::new(root.join("profiles.json"));
+        profile_repository
+            .upsert_profile(profile.clone())
+            .expect("save profile");
+        let app_state_repository = AppStateRepository::new(root.join("state"));
+
+        let result = switch_saved_profile_with_runtime(
+            ProfileSwitchRequest {
+                profile_id: profile.id.clone(),
+                environments: vec![TargetEnvironment::Cli],
+                auto_restart_apps: false,
+                vscode_reload_mode: VscodeReloadMode::None,
+                confirm_process_close: true,
+                desktop_app_path: None,
+                vscode_app_path: None,
+                quit_timeout_ms: 50,
+            },
+            &profile_repository,
+            &app_state_repository,
+            &vault,
+            "3000".to_string(),
+            &MockRuntime::default(),
+        )
+        .expect("switch profile");
+
+        assert_eq!(
+            result.identity_verification.status,
+            SwitchIdentityStatus::Mismatch
+        );
+        assert!(result
+            .identity_verification
+            .message
+            .contains("o***@example.com"));
+        assert!(!result
+            .identity_verification
+            .message
+            .contains("other@example.com"));
+        let history = app_state_repository.list_history().expect("history");
+        assert_eq!(history[0].status, SwitchHistoryStatus::Incomplete);
+        assert_eq!(history[0].error_type, Some("IdentityMismatch".to_string()));
         let _ = fs::remove_dir_all(root);
     }
 
@@ -873,8 +1129,7 @@ mod tests {
             .any(|event| event.phase == TransactionPhase::RolledBack));
         let journal = fs::read_to_string(app_state_repository.current_transaction_path())
             .expect("read transaction journal");
-        let journal: SwitchTransaction =
-            serde_json::from_str(&journal).expect("journal json");
+        let journal: SwitchTransaction = serde_json::from_str(&journal).expect("journal json");
         assert_eq!(journal.phase, TransactionPhase::Failed);
         let _ = fs::remove_dir_all(root);
     }

@@ -84,7 +84,9 @@ impl DesktopProcessController for MacDesktopProcessController {
                 .map_err(|error| DesktopAppError::Process(error.to_string()))?;
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                if !stderr.contains("Can’t get application") && !stderr.contains("Application isn’t running") {
+                if !stderr.contains("Can’t get application")
+                    && !stderr.contains("Application isn’t running")
+                {
                     return Err(DesktopAppError::Process(stderr));
                 }
             }
@@ -135,7 +137,8 @@ impl<C: DesktopProcessController> DesktopAppCoordinator<C> {
         let mut restart_requested = false;
 
         if was_running {
-            self.process_controller.request_quit(DESKTOP_PROCESS_NAMES)?;
+            self.process_controller
+                .request_quit(DESKTOP_PROCESS_NAMES)?;
             quit_requested = true;
             self.wait_until_stopped(Duration::from_millis(options.quit_timeout_ms))?;
         }
@@ -153,7 +156,8 @@ impl<C: DesktopProcessController> DesktopAppCoordinator<C> {
         }
 
         if options.auto_restart {
-            self.process_controller.restart(options.app_path.as_deref())?;
+            self.process_controller
+                .restart(options.app_path.as_deref())?;
             restart_requested = true;
         }
 
@@ -185,12 +189,7 @@ impl<C: DesktopProcessController> DesktopAppCoordinator<C> {
 mod tests {
     use super::*;
     use base64::{engine::general_purpose::STANDARD, Engine};
-    use std::{
-        cell::RefCell,
-        fs,
-        path::PathBuf,
-        rc::Rc,
-    };
+    use std::{cell::RefCell, fs, path::PathBuf, rc::Rc};
 
     #[derive(Default)]
     struct MockState {
@@ -274,10 +273,8 @@ mod tests {
         fs::write(&target, "old").expect("write old");
         let controller = MockController::running();
         let state = controller.state.clone();
-        let coordinator = DesktopAppCoordinator::new(
-            controller,
-            TransactionRunner::new(root.join("backups")),
-        );
+        let coordinator =
+            DesktopAppCoordinator::new(controller, TransactionRunner::new(root.join("backups")));
 
         let report = coordinator
             .switch_desktop_profile(
@@ -305,10 +302,8 @@ mod tests {
         let root = temp_dir("no-restart");
         let controller = MockController::default();
         let state = controller.state.clone();
-        let coordinator = DesktopAppCoordinator::new(
-            controller,
-            TransactionRunner::new(root.join("backups")),
-        );
+        let coordinator =
+            DesktopAppCoordinator::new(controller, TransactionRunner::new(root.join("backups")));
 
         let report = coordinator
             .switch_desktop_profile(
@@ -331,10 +326,8 @@ mod tests {
         let root = temp_dir("timeout");
         let controller = MockController::running();
         controller.state.borrow_mut().never_stops = true;
-        let coordinator = DesktopAppCoordinator::new(
-            controller,
-            TransactionRunner::new(root.join("backups")),
-        );
+        let coordinator =
+            DesktopAppCoordinator::new(controller, TransactionRunner::new(root.join("backups")));
 
         let error = coordinator
             .switch_desktop_profile(
@@ -347,7 +340,10 @@ mod tests {
             )
             .expect_err("quit should time out");
 
-        assert_eq!(error, DesktopAppError::QuitTimedOut(vec!["Codex".to_string()]));
+        assert_eq!(
+            error,
+            DesktopAppError::QuitTimedOut(vec!["Codex".to_string()])
+        );
         let _ = fs::remove_dir_all(root);
     }
 
@@ -361,10 +357,8 @@ mod tests {
         let state = controller.state.clone();
         let mut plan = restore_plan(&root, "new");
         plan.artifacts[0].content_base64 = "not-base64".to_string();
-        let coordinator = DesktopAppCoordinator::new(
-            controller,
-            TransactionRunner::new(root.join("backups")),
-        );
+        let coordinator =
+            DesktopAppCoordinator::new(controller, TransactionRunner::new(root.join("backups")));
 
         let report = coordinator
             .switch_desktop_profile(
@@ -384,4 +378,3 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 }
-

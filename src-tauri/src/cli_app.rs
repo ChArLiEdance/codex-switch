@@ -89,15 +89,15 @@ impl CliRuntime for SystemCliRuntime {
 
     fn validate(&self) -> Result<CliValidation, CliSwitchError> {
         let command = format!("{} --version", self.command_label());
-        let output = Command::new(self.command_label())
-            .arg("--version")
-            .output();
+        let output = Command::new(self.command_label()).arg("--version").output();
 
         match output {
             Ok(output) if output.status.success() => Ok(CliValidation {
                 status: CliValidationStatus::Inconclusive,
                 command,
-                message: "Codex CLI responded, but account identity verification is not implemented yet".to_string(),
+                message:
+                    "Codex CLI responded, but account identity verification is not implemented yet"
+                        .to_string(),
             }),
             Ok(output) => Ok(CliValidation {
                 status: CliValidationStatus::Failed,
@@ -126,7 +126,10 @@ impl<R: CliRuntime> CliSwitchCoordinator<R> {
         }
     }
 
-    pub fn switch_cli_profile(&self, plan: &RestorePlan) -> Result<CliSwitchReport, CliSwitchError> {
+    pub fn switch_cli_profile(
+        &self,
+        plan: &RestorePlan,
+    ) -> Result<CliSwitchReport, CliSwitchError> {
         let running_tasks = self.runtime.running_tasks()?;
         if !running_tasks.is_empty() {
             return Err(CliSwitchError::CliTaskRunning(running_tasks));
@@ -149,7 +152,9 @@ impl<R: CliRuntime> CliSwitchCoordinator<R> {
 
         let validation = self.runtime.validate()?;
         if validation.status == CliValidationStatus::Inconclusive {
-            warnings.push("Configuration restored, but CLI account identity is not confirmed".to_string());
+            warnings.push(
+                "Configuration restored, but CLI account identity is not confirmed".to_string(),
+            );
         }
 
         Ok(CliSwitchReport {
@@ -164,12 +169,7 @@ impl<R: CliRuntime> CliSwitchCoordinator<R> {
 mod tests {
     use super::*;
     use base64::{engine::general_purpose::STANDARD, Engine};
-    use std::{
-        cell::RefCell,
-        fs,
-        path::PathBuf,
-        rc::Rc,
-    };
+    use std::{cell::RefCell, fs, path::PathBuf, rc::Rc};
 
     #[derive(Clone)]
     struct MockCliRuntime {
@@ -199,7 +199,11 @@ mod tests {
 
         fn with_running_task(task: &str) -> Self {
             let runtime = Self::new(CliValidationStatus::Verified);
-            runtime.state.borrow_mut().running_tasks.push(task.to_string());
+            runtime
+                .state
+                .borrow_mut()
+                .running_tasks
+                .push(task.to_string());
             runtime
         }
     }
@@ -217,10 +221,8 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "codex-switch-cli-{name}-{}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("codex-switch-cli-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).expect("create temp dir");
         path
@@ -271,7 +273,10 @@ mod tests {
             .switch_cli_profile(&restore_plan(&root, "new"))
             .expect_err("running task should block switch");
 
-        assert_eq!(error, CliSwitchError::CliTaskRunning(vec!["123 codex exec task".to_string()]));
+        assert_eq!(
+            error,
+            CliSwitchError::CliTaskRunning(vec!["123 codex exec task".to_string()])
+        );
         let _ = fs::remove_dir_all(root);
     }
 
@@ -311,4 +316,3 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 }
-

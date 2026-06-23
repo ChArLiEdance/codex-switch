@@ -15,7 +15,7 @@ The script checks:
 Current expected results:
 
 - `npm run build` succeeds.
-- `cargo test` succeeds with tests covering profile metadata, profile update/delete/last-used behavior, secret-store abstraction, import, transaction backup/rollback/journaling, Desktop coordinator, CLI coordinator, VS Code coordinator, settings, history, and recovery detection/resolution state.
+- `cargo test` succeeds with tests covering profile metadata, profile update/delete/last-used behavior, secret-store abstraction, redacted account-hint parsing, import, transaction backup/rollback/journaling, Desktop coordinator, CLI coordinator, VS Code coordinator, switch identity verification, settings, history, and recovery detection/resolution state.
 - `npm run tauri:build -- --bundles app` succeeds and produces `src-tauri/target/release/bundle/macos/Codex Switch.app`.
 
 Known packaging limitation:
@@ -27,5 +27,5 @@ Known packaging limitation:
 Real-environment limitations:
 
 - Read-only detection is implemented, including bounded redacted account-hint extraction, but real Codex Desktop and VS Code extension auth paths remain detector candidates until validated on machines with those apps and accounts.
-- CLI validation currently proves CLI availability, not account identity.
+- Post-switch identity verification compares redacted local account hints when they are discoverable. If no hint is available, status remains incomplete; CLI command validation still proves CLI availability only.
 - Tests use mock/simulated environments and do not require real tokens.

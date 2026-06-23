@@ -93,7 +93,9 @@ impl VscodeProcessController for MacVscodeProcessController {
                 .map_err(|error| VscodeAppError::Process(error.to_string()))?;
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                if !stderr.contains("Can’t get application") && !stderr.contains("Application isn’t running") {
+                if !stderr.contains("Can’t get application")
+                    && !stderr.contains("Application isn’t running")
+                {
                     return Err(VscodeAppError::Process(stderr));
                 }
             }
@@ -145,7 +147,8 @@ impl<C: VscodeProcessController> VscodeSwitchCoordinator<C> {
         let mut manual_action = None;
 
         if transaction.phase != TransactionPhase::Completed {
-            warnings.push("Restore did not complete; VS Code reload or restart skipped".to_string());
+            warnings
+                .push("Restore did not complete; VS Code reload or restart skipped".to_string());
             return Ok(VscodeSwitchReport {
                 was_running,
                 quit_requested,
@@ -159,7 +162,8 @@ impl<C: VscodeProcessController> VscodeSwitchCoordinator<C> {
         match options.post_switch_action {
             VscodePostSwitchAction::ManualReloadWindow => {
                 manual_action = Some(
-                    "In VS Code, run Developer: Reload Window after saving any unsaved work".to_string(),
+                    "In VS Code, run Developer: Reload Window after saving any unsaved work"
+                        .to_string(),
                 );
             }
             VscodePostSwitchAction::RestartApp => {
@@ -168,7 +172,8 @@ impl<C: VscodeProcessController> VscodeSwitchCoordinator<C> {
                     quit_requested = true;
                     self.wait_until_stopped(Duration::from_millis(options.quit_timeout_ms))?;
                 }
-                self.process_controller.restart(options.app_path.as_deref())?;
+                self.process_controller
+                    .restart(options.app_path.as_deref())?;
                 restart_requested = true;
             }
             VscodePostSwitchAction::None => {
@@ -205,12 +210,7 @@ impl<C: VscodeProcessController> VscodeSwitchCoordinator<C> {
 mod tests {
     use super::*;
     use base64::{engine::general_purpose::STANDARD, Engine};
-    use std::{
-        cell::RefCell,
-        fs,
-        path::PathBuf,
-        rc::Rc,
-    };
+    use std::{cell::RefCell, fs, path::PathBuf, rc::Rc};
 
     #[derive(Default)]
     struct MockState {
@@ -260,10 +260,8 @@ mod tests {
     }
 
     fn temp_dir(name: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "codex-switch-vscode-{name}-{}",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("codex-switch-vscode-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&path);
         fs::create_dir_all(&path).expect("create temp dir");
         path
@@ -301,7 +299,10 @@ mod tests {
             .expect("switch vscode");
 
         assert_eq!(report.transaction.phase, TransactionPhase::Completed);
-        assert!(report.manual_action.expect("manual action").contains("Reload Window"));
+        assert!(report
+            .manual_action
+            .expect("manual action")
+            .contains("Reload Window"));
         assert_eq!(state.borrow().quit_requested, 0);
         assert_eq!(state.borrow().restart_requested, 0);
         let _ = fs::remove_dir_all(root);
@@ -387,4 +388,3 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 }
-

@@ -128,12 +128,19 @@ pub(crate) fn import_profile_from_scan<S: SecretStore>(
                 environment,
                 "Environment scan result was unavailable",
             ));
-            warnings.push(format!("No scan result available for {}", environment.key()));
+            warnings.push(format!(
+                "No scan result available for {}",
+                environment.key()
+            ));
             continue;
         };
 
         let snapshot = capture_environment_snapshot(environment, scan_environment, &captured_at);
-        if snapshot.artifacts.iter().all(|artifact| artifact.content_base64.is_none()) {
+        if snapshot
+            .artifacts
+            .iter()
+            .all(|artifact| artifact.content_base64.is_none())
+        {
             environment_states.push(EnvironmentProfileState::missing(
                 environment,
                 "No readable auth, config, or cache artifacts were discovered",
@@ -258,7 +265,12 @@ fn capture_path(
         return;
     };
     let Ok(metadata) = fs::symlink_metadata(current) else {
-        artifacts.push(skipped_artifact(kind, current, root, "Unable to read metadata"));
+        artifacts.push(skipped_artifact(
+            kind,
+            current,
+            root,
+            "Unable to read metadata",
+        ));
         return;
     };
     if metadata.file_type().is_symlink() {
@@ -267,7 +279,12 @@ fn capture_path(
     }
     if metadata.is_dir() {
         let Ok(entries) = fs::read_dir(current) else {
-            artifacts.push(skipped_artifact(kind, current, root, "Unable to read directory"));
+            artifacts.push(skipped_artifact(
+                kind,
+                current,
+                root,
+                "Unable to read directory",
+            ));
             return;
         };
         for entry in entries.filter_map(Result::ok) {
@@ -276,7 +293,12 @@ fn capture_path(
         return;
     }
     if !metadata.is_file() {
-        artifacts.push(skipped_artifact(kind, current, root, "Unsupported filesystem entry"));
+        artifacts.push(skipped_artifact(
+            kind,
+            current,
+            root,
+            "Unsupported filesystem entry",
+        ));
         return;
     }
     if budget.files_remaining == 0 {
@@ -309,7 +331,12 @@ fn capture_path(
     }
 }
 
-fn skipped_artifact(kind: SnapshotPathKind, path: &Path, root: &Path, reason: &str) -> CapturedArtifact {
+fn skipped_artifact(
+    kind: SnapshotPathKind,
+    path: &Path,
+    root: &Path,
+    reason: &str,
+) -> CapturedArtifact {
     CapturedArtifact {
         kind,
         source_path: path.to_string_lossy().to_string(),
@@ -448,8 +475,9 @@ mod tests {
             default_profile: true,
         };
 
-        let result = import_profile_from_scan(request, &[scan_state(&root)], "1000".to_string(), &vault)
-            .expect("import profile");
+        let result =
+            import_profile_from_scan(request, &[scan_state(&root)], "1000".to_string(), &vault)
+                .expect("import profile");
 
         assert_eq!(result.imported_environments[0].artifact_count, 1);
         assert!(!format!("{:?}", result.profile).contains("access_token"));
@@ -458,13 +486,17 @@ mod tests {
             .expect("load secret")
             .expect("secret payload");
         assert!(!payload.contains("access_token"));
-        let snapshot: EnvironmentSnapshot = serde_json::from_str(&payload).expect("decode snapshot");
+        let snapshot: EnvironmentSnapshot =
+            serde_json::from_str(&payload).expect("decode snapshot");
         let content = snapshot.artifacts[0]
             .content_base64
             .as_ref()
             .expect("captured content");
         let decoded = STANDARD.decode(content).expect("decode content");
-        assert_eq!(String::from_utf8(decoded).expect("utf8"), "{\"access_token\":\"secret\"}");
+        assert_eq!(
+            String::from_utf8(decoded).expect("utf8"),
+            "{\"access_token\":\"secret\"}"
+        );
         let _ = fs::remove_dir_all(root);
     }
 }
