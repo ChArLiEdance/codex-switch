@@ -96,6 +96,19 @@ The current `TransactionRunner` implements the filesystem core of this model for
 
 The runner is currently covered by simulated filesystem tests. It is not yet connected to real Codex profile switching commands.
 
+## Desktop App Adapter
+
+`DesktopAppCoordinator` wraps the transaction runner for Codex Desktop App switching:
+
+1. Detect matching Desktop process names.
+2. Request a graceful quit through the platform process controller.
+3. Wait until the process has stopped, returning the still-running process list on timeout.
+4. Restore Desktop profile artifacts through `TransactionRunner`.
+5. Skip restart when restore fails and rollback has run.
+6. Restart the app when `auto_restart` is enabled and an app path is available.
+
+The macOS process controller uses application-level quit and open commands. Tests use a mock process controller, so simulated coverage does not kill or restart real apps.
+
 ## Atomic Restore Strategy
 
 Restores should write into temporary staging paths, verify permissions and checksums, then atomically rename into place where the platform supports it. If any target fails, completed targets are restored from the timestamped backup.

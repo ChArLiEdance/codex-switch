@@ -39,3 +39,11 @@
 - Add VS Code restart or reload flow
 - Complete UI, logs, settings, abnormal-exit recovery
 - Finalize tests, docs, build checks, and release notes
+
+## Milestone 6
+
+- Add Codex Desktop App coordinator
+- Gracefully quit detected Desktop process names before restoring profile state
+- Restore Desktop artifacts through the transaction runner
+- Restart the Desktop app when configured
+- Cover close, restore, rollback, timeout, and restart behavior with mock process tests
