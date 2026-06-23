@@ -10,6 +10,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Privacy-focused `.gitignore`
 - Read-only detection for Codex CLI, VS Code, and Codex Desktop App candidates
 - Typed VS Code and Codex Desktop auth/cache/config path candidates for known OpenAI/Codex support locations
+- Settings-managed custom detector path overrides for machine-specific auth/config/cache/app locations
 - Redacted account-hint extraction from bounded read-only auth/config scans
 - Profile metadata model
 - OS keychain-backed secret-store abstraction
@@ -27,6 +28,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Last-used Profile tracking and previous-Profile switch history
 - Home actions for restoring the default Profile and switching back to the previous Profile
 - Local settings persistence
+- Settings UI for adding and removing custom detector paths
 - Local switch history persistence and clearing
 - Switch transaction journal persistence plus startup recovery inspection and Mark reviewed handling
 - Post-switch redacted account-hint comparison with verified, incomplete, or mismatched identity status

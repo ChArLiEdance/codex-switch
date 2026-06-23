@@ -1,5 +1,6 @@
 use crate::{
     profile::TargetEnvironment,
+    PathKind,
     switch_transaction::{SwitchTransaction, TransactionEvent, TransactionPhase},
 };
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,8 @@ pub struct AppSettings {
     pub auto_restart_apps: bool,
     pub restore_default_on_exit: bool,
     pub vscode_reload_mode: VscodeReloadMode,
+    #[serde(default)]
+    pub custom_paths: Vec<EnvironmentPathOverride>,
 }
 
 impl Default for AppSettings {
@@ -30,8 +33,17 @@ impl Default for AppSettings {
             auto_restart_apps: true,
             restore_default_on_exit: false,
             vscode_reload_mode: VscodeReloadMode::ManualReloadWindow,
+            custom_paths: Vec::new(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EnvironmentPathOverride {
+    pub environment: TargetEnvironment,
+    pub kind: PathKind,
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -270,11 +282,39 @@ mod tests {
             auto_restart_apps: false,
             restore_default_on_exit: true,
             vscode_reload_mode: VscodeReloadMode::RestartApp,
+            custom_paths: vec![EnvironmentPathOverride {
+                environment: TargetEnvironment::Vscode,
+                kind: PathKind::Auth,
+                path: "~/Library/Application Support/Code/User/globalStorage/openai.chatgpt"
+                    .to_string(),
+            }],
             ..AppSettings::default()
         };
         repository.save_settings(&settings).expect("save settings");
 
         assert_eq!(repository.load_settings().expect("load settings"), settings);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn legacy_settings_without_custom_paths_load_with_empty_overrides() {
+        let root = temp_root("legacy-settings");
+        fs::write(
+            root.join("settings.json"),
+            r#"{
+              "defaultScope": ["cli", "vscode", "desktop"],
+              "confirmBeforeClosingApps": true,
+              "autoRestartApps": true,
+              "restoreDefaultOnExit": false,
+              "vscodeReloadMode": "manual_reload_window"
+            }"#,
+        )
+        .expect("write legacy settings");
+        let repository = AppStateRepository::new(root.clone());
+
+        let settings = repository.load_settings().expect("load legacy settings");
+
+        assert!(settings.custom_paths.is_empty());
         let _ = fs::remove_dir_all(root);
     }
 

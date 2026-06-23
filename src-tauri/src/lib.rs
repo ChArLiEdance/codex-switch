@@ -12,8 +12,8 @@ pub mod vscode_app;
 
 use account_hint::redacted_account_hint_from_path;
 use app_state::{
-    default_app_state_dir, load_recovery_status, AppSettings, AppStateRepository, RecoveryStatus,
-    SwitchHistoryEntry,
+    default_app_state_dir, load_recovery_status, AppSettings, AppStateRepository,
+    EnvironmentPathOverride, RecoveryStatus, SwitchHistoryEntry,
 };
 use importer::{import_profile_from_scan, ProfileImportRequest, ProfileImportResult};
 use profile::{ProfileMetadata, TargetEnvironment};
@@ -82,9 +82,9 @@ pub(crate) enum SupportState {
     NotDetected,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub(crate) enum PathKind {
+pub enum PathKind {
     App,
     Auth,
     Config,
@@ -105,10 +105,11 @@ fn backend_health() -> &'static str {
 #[tauri::command]
 fn detect_environments() -> EnvironmentScan {
     let processes = running_processes();
+    let settings = app_state_repository().load_settings().unwrap_or_default();
     let environments = vec![
-        detect_cli(&processes),
-        detect_vscode(&processes),
-        detect_desktop(&processes),
+        detect_cli(&processes, &settings.custom_paths),
+        detect_vscode(&processes, &settings.custom_paths),
+        detect_desktop(&processes, &settings.custom_paths),
     ];
 
     EnvironmentScan {
@@ -260,7 +261,7 @@ fn restart_vscode_app(request: RestartAppRequest) -> Result<RestartAppResult, St
         .map_err(|error| format!("{error:?}"))
 }
 
-fn detect_cli(processes: &[String]) -> EnvironmentState {
+fn detect_cli(processes: &[String], custom_paths: &[EnvironmentPathOverride]) -> EnvironmentState {
     let executable_path = find_executable("codex");
     let mut discovered_paths = Vec::new();
 
@@ -278,6 +279,11 @@ fn detect_cli(processes: &[String]) -> EnvironmentState {
             home.join(".codex").join("cache"),
         ));
     }
+    append_custom_paths(
+        &mut discovered_paths,
+        custom_paths,
+        TargetEnvironment::Cli,
+    );
 
     let running_processes = matching_processes(processes, &["codex"]);
     environment_state(
@@ -289,7 +295,10 @@ fn detect_cli(processes: &[String]) -> EnvironmentState {
     )
 }
 
-fn detect_vscode(processes: &[String]) -> EnvironmentState {
+fn detect_vscode(
+    processes: &[String],
+    custom_paths: &[EnvironmentPathOverride],
+) -> EnvironmentState {
     let executable_path = find_executable("code").or_else(find_vscode_app);
     let mut discovered_paths = Vec::new();
 
@@ -301,6 +310,11 @@ fn detect_vscode(processes: &[String]) -> EnvironmentState {
             }
         }
     }
+    append_custom_paths(
+        &mut discovered_paths,
+        custom_paths,
+        TargetEnvironment::Vscode,
+    );
 
     let running_processes = matching_processes(processes, &["code", "visual studio code"]);
     environment_state(
@@ -312,7 +326,10 @@ fn detect_vscode(processes: &[String]) -> EnvironmentState {
     )
 }
 
-fn detect_desktop(processes: &[String]) -> EnvironmentState {
+fn detect_desktop(
+    processes: &[String],
+    custom_paths: &[EnvironmentPathOverride],
+) -> EnvironmentState {
     let executable_path = find_desktop_app();
     let mut discovered_paths = Vec::new();
 
@@ -324,6 +341,11 @@ fn detect_desktop(processes: &[String]) -> EnvironmentState {
             }
         }
     }
+    append_custom_paths(
+        &mut discovered_paths,
+        custom_paths,
+        TargetEnvironment::Desktop,
+    );
 
     let running_processes = matching_processes(processes, &["codex", "codex desktop"]);
     environment_state(
@@ -408,6 +430,36 @@ fn push_discovered_path(paths: &mut Vec<DiscoveredPath>, kind: PathKind, path: P
         return;
     }
     paths.push(discovered_path(kind, path));
+}
+
+fn append_custom_paths(
+    paths: &mut Vec<DiscoveredPath>,
+    custom_paths: &[EnvironmentPathOverride],
+    environment: TargetEnvironment,
+) {
+    for custom_path in custom_paths
+        .iter()
+        .filter(|custom_path| custom_path.environment == environment)
+    {
+        let path = custom_path.path.trim();
+        if path.is_empty() {
+            continue;
+        }
+        push_discovered_path(paths, custom_path.kind, expand_user_path(path));
+    }
+}
+
+fn expand_user_path(path: &str) -> PathBuf {
+    if path == "~" {
+        if let Some(home) = home_dir() {
+            return home;
+        }
+    } else if let Some(rest) = path.strip_prefix("~/") {
+        if let Some(home) = home_dir() {
+            return home.join(rest);
+        }
+    }
+    PathBuf::from(path)
 }
 
 fn permission_for_path(path: &Path) -> PermissionState {
@@ -746,6 +798,34 @@ mod tests {
 
         assert_eq!(state.account_hint, "p***@example.com");
         assert!(!state.account_hint.contains("person@example.com"));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn custom_paths_are_added_to_matching_environment_detection() {
+        let root = env::temp_dir().join(format!(
+            "codex-switch-custom-path-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("create custom path");
+        let custom_paths = vec![EnvironmentPathOverride {
+            environment: TargetEnvironment::Vscode,
+            kind: PathKind::Auth,
+            path: root.to_string_lossy().to_string(),
+        }];
+
+        let vscode = detect_vscode(&[], &custom_paths);
+        let cli = detect_cli(&[], &custom_paths);
+
+        assert!(vscode
+            .discovered_paths
+            .iter()
+            .any(|path| path.kind == PathKind::Auth && path.path == root.to_string_lossy()));
+        assert!(!cli
+            .discovered_paths
+            .iter()
+            .any(|path| path.path == root.to_string_lossy()));
         let _ = fs::remove_dir_all(root);
     }
 

@@ -9,6 +9,7 @@ import {
   Laptop,
   ListChecks,
   Pencil,
+  Plus,
   RefreshCw,
   RotateCcw,
   Save,
@@ -30,6 +31,7 @@ import {
   detectEnvironments,
   emptyEnvironmentScan,
   EnvironmentId,
+  EnvironmentPathKind,
   EnvironmentScan,
   EnvironmentState,
   getSettings,
@@ -57,7 +59,8 @@ const defaultSettings: AppSettings = {
   confirmBeforeClosingApps: true,
   autoRestartApps: true,
   restoreDefaultOnExit: false,
-  vscodeReloadMode: "manual_reload_window"
+  vscodeReloadMode: "manual_reload_window",
+  customPaths: []
 };
 
 const defaultRecoveryStatus: RecoveryStatus = {
@@ -897,11 +900,45 @@ function SettingsView({
   onChange: (settings: AppSettings) => Promise<void>;
   onClearHistory: () => Promise<void>;
 }) {
+  const customPaths = settings.customPaths ?? [];
+
   function toggleScope(environment: TargetEnvironment, enabled: boolean) {
     const nextScope = enabled
       ? Array.from(new Set([...settings.defaultScope, environment]))
       : settings.defaultScope.filter((item) => item !== environment);
     void onChange({ ...settings, defaultScope: nextScope });
+  }
+
+  function updateCustomPath(
+    index: number,
+    field: "environment" | "kind" | "path",
+    value: TargetEnvironment | EnvironmentPathKind | string
+  ) {
+    const nextCustomPaths = customPaths.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, [field]: value } : item
+    ));
+    void onChange({ ...settings, customPaths: nextCustomPaths });
+  }
+
+  function addCustomPath() {
+    void onChange({
+      ...settings,
+      customPaths: [
+        ...customPaths,
+        {
+          environment: "vscode",
+          kind: "auth",
+          path: "~/Library/Application Support/Code/User/globalStorage/openai.chatgpt"
+        }
+      ]
+    });
+  }
+
+  function removeCustomPath(index: number) {
+    void onChange({
+      ...settings,
+      customPaths: customPaths.filter((_, itemIndex) => itemIndex !== index)
+    });
   }
 
   return (
@@ -968,6 +1005,52 @@ function SettingsView({
             onChange={(event) => void onChange({ ...settings, restoreDefaultOnExit: event.target.checked })}
           />
         </label>
+        <div className="setting-row stacked path-overrides">
+          <div className="setting-section-title">
+            <span>Custom detector paths</span>
+            <button className="secondary-button compact" onClick={addCustomPath}>
+              <Plus size={14} />
+              Add path
+            </button>
+          </div>
+          <div className="path-override-list">
+            {customPaths.length === 0 ? (
+              <p>No custom paths configured.</p>
+            ) : customPaths.map((override, index) => (
+              <div className="path-override-row" key={`${override.environment}-${override.kind}-${index}`}>
+                <select
+                  value={override.environment}
+                  onChange={(event) => updateCustomPath(index, "environment", event.target.value as TargetEnvironment)}
+                >
+                  <option value="cli">CLI</option>
+                  <option value="vscode">VS Code</option>
+                  <option value="desktop">Desktop</option>
+                </select>
+                <select
+                  value={override.kind}
+                  onChange={(event) => updateCustomPath(index, "kind", event.target.value as EnvironmentPathKind)}
+                >
+                  <option value="auth">Auth</option>
+                  <option value="config">Config</option>
+                  <option value="cache">Cache</option>
+                  <option value="app">App</option>
+                </select>
+                <input
+                  value={override.path}
+                  onChange={(event) => updateCustomPath(index, "path", event.target.value)}
+                  placeholder="~/Library/Application Support/..."
+                />
+                <button
+                  className="secondary-button compact icon-only"
+                  onClick={() => removeCustomPath(index)}
+                  aria-label="Remove custom detector path"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
         <button className="danger-button" onClick={() => void onClearHistory()}>Clear local history</button>
       </section>
     </section>

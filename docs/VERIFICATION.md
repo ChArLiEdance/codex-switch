@@ -15,10 +15,11 @@ The script checks:
 Current expected results:
 
 - `npm run build` succeeds.
-- `cargo test` succeeds with tests covering profile metadata, profile update/delete/last-used behavior, secret-store abstraction, typed VS Code/Desktop detector candidates, redacted account-hint parsing, import, transaction backup/rollback/journaling, Desktop coordinator, CLI coordinator, VS Code coordinator, switch identity verification, manual restart retry, settings, history, restore-default-on-exit, and recovery detection/resolution state.
+- `cargo test` succeeds with tests covering profile metadata, profile update/delete/last-used behavior, secret-store abstraction, typed VS Code/Desktop detector candidates, settings-managed custom detector paths, redacted account-hint parsing, import, transaction backup/rollback/journaling, Desktop coordinator, CLI coordinator, VS Code coordinator, switch identity verification, manual restart retry, settings, history, restore-default-on-exit, and recovery detection/resolution state.
 - `npm run build` type-checks the switch dialog contract for transaction events, identity verification, and Home account verification status rendering.
 - `npm run build` type-checks that switch scope controls read selected Profile environment state and cannot submit unsupported targets.
 - `npm run build` type-checks the guided official-login import controls, current-state evidence display, and frontend same-account import preflight.
+- `npm run build` type-checks Settings controls for custom detector path overrides.
 - `npm run tauri:build -- --bundles app` succeeds and produces `src-tauri/target/release/bundle/macos/Codex Switch.app`.
 
 Known packaging limitation:

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type EnvironmentId = "CLI" | "VS Code" | "Desktop";
 export type TargetEnvironment = "cli" | "vscode" | "desktop";
+export type EnvironmentPathKind = "app" | "auth" | "config" | "cache";
 
 export type DiscoveredPath = {
   kind: "app" | "auth" | "config" | "cache" | "other";
@@ -88,6 +89,13 @@ export type AppSettings = {
   autoRestartApps: boolean;
   restoreDefaultOnExit: boolean;
   vscodeReloadMode: "manual_reload_window" | "restart_app" | "none";
+  customPaths: EnvironmentPathOverride[];
+};
+
+export type EnvironmentPathOverride = {
+  environment: TargetEnvironment;
+  kind: EnvironmentPathKind;
+  path: string;
 };
 
 export type SwitchHistoryEntry = {

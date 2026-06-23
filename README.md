@@ -4,7 +4,7 @@ Codex Switch is a local desktop app for managing multiple already-authorized Cod
 
 ## Current Status
 
-Milestone 1 created the project structure, Tauri + React shell, documentation, and privacy-focused repository hygiene. Milestone 2 adds the read-only detector contract and UI wiring for Codex CLI, VS Code, and Codex Desktop App evidence. Milestone 4 can import selected current-environment state into a saved local Profile.
+Milestone 1 created the project structure, Tauri + React shell, documentation, and privacy-focused repository hygiene. Milestone 2 adds the read-only detector contract and UI wiring for Codex CLI, VS Code, and Codex Desktop App evidence. Milestone 4 can import selected current-environment state into a saved local Profile. The detector also supports user-configured path overrides for machine-specific auth, config, cache, or app paths.
 
 The React frontend builds successfully on this machine. The Tauri backend compiles, Rust detector tests pass, and an app-only macOS bundle is produced at `src-tauri/target/release/bundle/macos/Codex Switch.app`.
 
@@ -64,10 +64,11 @@ scripts/verify.sh
 
 1. Sign in through the official Codex login flow outside this app.
 2. Open Codex Switch and run environment detection.
-3. Review the read-only current-state evidence, including detected account hints and candidate paths.
-4. Save the current authorized local state as a named profile.
-5. Select a target profile and choose which environments to switch.
-6. The app stops relevant processes, backs up the current state, restores the target profile, restarts supported apps, verifies the result, and rolls back on failure.
+3. If the detector misses a machine-specific path, add it in Settings as a custom detector path and rescan.
+4. Review the read-only current-state evidence, including detected account hints and candidate paths.
+5. Save the current authorized local state as a named profile.
+6. Select a target profile and choose which environments to switch.
+7. The app stops relevant processes, backs up the current state, restores the target profile, restarts supported apps, verifies the result, and rolls back on failure.
 
 ## Privacy Rules
 
@@ -88,7 +89,7 @@ codex_switch/
 
 ## Known Limits
 
-- Read-only environment detection code is present in the Tauri backend and is wired into the UI. VS Code and Codex Desktop detection now records typed auth, cache, and config candidates for known OpenAI/Codex support paths instead of relying only on broad support roots.
+- Read-only environment detection code is present in the Tauri backend and is wired into the UI. VS Code and Codex Desktop detection now records typed auth, cache, and config candidates for known OpenAI/Codex support paths instead of relying only on broad support roots. Settings can add custom detector paths that are included in future scans and imports.
 - Current environment import is implemented for selected CLI, VS Code, and Desktop detector results. The Profiles UI now guides the official-login-first workflow, shows read-only current account evidence beside the import controls, and blocks multi-environment imports until same-account confirmation is checked.
 - Profile management supports editing names, tags, notes, setting a default Profile, and deleting Profile metadata with associated keychain payload cleanup.
 - Successful restore transactions update Profile `lastUsedAt`, record the previous Profile in local history, and expose Home actions for restoring the default Profile or switching back to the previous Profile.

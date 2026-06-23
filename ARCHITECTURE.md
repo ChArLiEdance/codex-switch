@@ -68,6 +68,8 @@ Detection returns installed path, config paths, cache paths, running state, perm
 
 The macOS detector seeds explicit candidates for known VS Code extension storage (`openai.chatgpt`, `openai.codex`) and Codex Desktop browser-support locations such as local storage, session storage, network, partition, cache, and bundle-support directories. These are still read-only discovery records; auth contents remain bounded by the account-hint scanner and are not logged.
 
+Settings may add custom detector paths per environment and path kind. These overrides are stored as non-secret path metadata in `settings.json`, are expanded for leading `~/`, and are appended to read-only detection before import snapshots are captured. This keeps unknown real-world VS Code or Desktop auth locations configurable without treating a guessed path as universally verified.
+
 ## Switch Transaction
 
 A switch is modeled as an append-only transaction state machine:
@@ -142,7 +144,7 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 
 `AppStateRepository` persists non-secret app state under `~/.codex-switch`:
 
-- `settings.json`: default switch scope, close confirmation, app restart preference, default-on-exit preference, and VS Code reload mode.
+- `settings.json`: default switch scope, close confirmation, app restart preference, default-on-exit preference, VS Code reload mode, and custom detector path overrides.
 - `history.json`: local switch history with previous/target profile names, environment list, status, and error category only.
 - `transactions/current.json`: current switch transaction journal written before restore starts, overwritten with the terminal transaction state after restore/restart completes, and inspected on startup for recovery.
 

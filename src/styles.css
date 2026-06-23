@@ -212,6 +212,12 @@ h2 {
   margin-left: auto;
 }
 
+.secondary-button.icon-only {
+  min-width: 34px;
+  padding: 0;
+  margin-left: 0;
+}
+
 .status-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -674,6 +680,46 @@ dd {
   background: #ffffff;
 }
 
+.setting-section-title {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.path-overrides {
+  gap: 12px;
+}
+
+.path-override-list {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+}
+
+.path-override-list p {
+  margin: 0;
+  color: #647067;
+}
+
+.path-override-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.8fr) minmax(90px, 0.7fr) minmax(220px, 2fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.path-override-row select,
+.path-override-row input {
+  min-height: 36px;
+  min-width: 0;
+  border-radius: 6px;
+  border: 1px solid #cbd3cc;
+  padding: 0 10px;
+  background: #ffffff;
+}
+
 .dialog-backdrop {
   position: fixed;
   inset: 0;
@@ -864,7 +910,8 @@ dd {
   .import-detected-grid,
   .import-fields,
   .environment-row,
-  .history-row {
+  .history-row,
+  .path-override-row {
     grid-template-columns: 1fr;
   }
 
@@ -878,6 +925,7 @@ dd {
   }
 
   .view-header,
+  .setting-section-title,
   .setting-row {
     flex-direction: column;
     align-items: stretch;
