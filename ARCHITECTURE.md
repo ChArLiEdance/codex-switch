@@ -94,7 +94,7 @@ Every transition records only non-secret metadata. If the app exits during a tra
 The current `TransactionRunner` implements the filesystem core of this model for restore plans:
 
 - Creates a per-transaction backup manifest before writing target files
-- Rejects restore plans with duplicate normalized target paths, direct symlink targets, or nearest existing symlink target ancestors before backup or writes begin
+- Rejects restore plans with duplicate normalized target paths, direct symlink targets, nearest existing symlink target ancestors, or existing non-file targets before backup or writes begin
 - Writes restored files through a temporary file followed by rename
 - Removes restored cache artifacts after restore so target apps refresh volatile cache state on next launch
 - Reads restored non-cache auth/config artifacts back from disk and compares their bytes and captured Unix file modes with the target Profile snapshot before post-restore actions run

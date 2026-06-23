@@ -107,6 +107,7 @@ pub enum TransactionError {
     InvalidBase64(String),
     Io(String),
     InjectedFailure,
+    InvalidRestoreTarget(String),
     UnsafeRestoreTarget(String),
     Verification(String),
     PostRestore(String),
@@ -387,6 +388,9 @@ fn validate_unique_restore_targets(plan: &RestorePlan) -> Result<(), Transaction
         if let Err(error) = reject_symlink_target_or_ancestor(&artifact.target_path) {
             return Err(error);
         }
+        if let Err(error) = reject_non_file_target(&artifact.target_path) {
+            return Err(error);
+        }
         let normalized = normalize_restore_path(&artifact.target_path);
         if !seen.insert(normalized.clone()) {
             return Err(TransactionError::ConflictingRestoreTarget(format!(
@@ -396,6 +400,25 @@ fn validate_unique_restore_targets(plan: &RestorePlan) -> Result<(), Transaction
         }
     }
     Ok(())
+}
+
+fn reject_non_file_target(path: &Path) -> Result<(), TransactionError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_file() => Ok(()),
+        Ok(metadata) => {
+            let target_type = if metadata.is_dir() {
+                "directory"
+            } else {
+                "unsupported filesystem entry"
+            };
+            Err(TransactionError::InvalidRestoreTarget(format!(
+                "restore target is a {target_type} {}",
+                path.display()
+            )))
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(TransactionError::Io(error.to_string())),
+    }
 }
 
 fn reject_symlink_target_or_ancestor(path: &Path) -> Result<(), TransactionError> {
@@ -796,6 +819,34 @@ mod tests {
             .file_type()
             .is_symlink());
         assert!(!root.join("backups/tx-symlink-parent").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn directory_restore_target_fails_before_backup_or_write() {
+        let root = temp_dir("directory-target");
+        let target = root.join("auth-dir");
+        fs::create_dir_all(&target).expect("create target dir");
+        let plan = RestorePlan {
+            transaction_id: "tx-directory-target".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "new")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction.events.iter().any(|event| {
+            event.phase == TransactionPhase::Failed
+                && event.message.contains("restore target is a directory")
+        }));
+        assert!(!transaction
+            .events
+            .iter()
+            .any(|event| event.phase == TransactionPhase::BackingUp));
+        assert!(target.is_dir());
+        assert!(!root.join("backups/tx-directory-target").exists());
         let _ = fs::remove_dir_all(root);
     }
 
