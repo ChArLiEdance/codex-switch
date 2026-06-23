@@ -63,3 +63,11 @@
 - Return a manual Developer: Reload Window instruction by default
 - Support explicit VS Code app restart with quit timeout handling
 - Skip reload or restart if restore fails
+
+## Milestone 9
+
+- Persist settings locally
+- Persist and clear local switch history
+- Inspect unfinished transaction journals on startup
+- Wire Home history and Settings controls to backend state commands
+- Keep logs and recovery status free of auth content

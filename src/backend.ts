@@ -74,6 +74,31 @@ export type ProfileImportResult = {
   warnings: string[];
 };
 
+export type AppSettings = {
+  defaultScope: TargetEnvironment[];
+  confirmBeforeClosingApps: boolean;
+  autoRestartApps: boolean;
+  restoreDefaultOnExit: boolean;
+  vscodeReloadMode: "manual_reload_window" | "restart_app" | "none";
+};
+
+export type SwitchHistoryEntry = {
+  id: string;
+  switchedAt: string;
+  fromProfile: string | null;
+  toProfile: string;
+  environments: TargetEnvironment[];
+  status: "success" | "failed" | "rolled_back" | "incomplete";
+  errorType: string | null;
+};
+
+export type RecoveryStatus = {
+  needsRecovery: boolean;
+  transactionId: string | null;
+  phase: string | null;
+  message: string;
+};
+
 export const emptyEnvironmentScan: EnvironmentScan = {
   os: "unknown",
   scannedAt: "Not scanned",
@@ -110,6 +135,39 @@ export async function listProfiles(): Promise<ProfileMetadata[]> {
 
 export async function importCurrentProfile(request: ProfileImportRequest): Promise<ProfileImportResult> {
   return await invoke<ProfileImportResult>("import_current_profile", { request });
+}
+
+export async function getSettings(): Promise<AppSettings> {
+  return await invoke<AppSettings>("get_settings");
+}
+
+export async function saveSettings(settings: AppSettings): Promise<AppSettings> {
+  return await invoke<AppSettings>("save_settings", { settings });
+}
+
+export async function listSwitchHistory(): Promise<SwitchHistoryEntry[]> {
+  try {
+    return await invoke<SwitchHistoryEntry[]>("list_switch_history");
+  } catch {
+    return [];
+  }
+}
+
+export async function clearSwitchHistory(): Promise<void> {
+  await invoke<void>("clear_switch_history");
+}
+
+export async function checkRecoveryStatus(): Promise<RecoveryStatus> {
+  try {
+    return await invoke<RecoveryStatus>("check_recovery_status");
+  } catch (error) {
+    return {
+      needsRecovery: false,
+      transactionId: null,
+      phase: null,
+      message: `Recovery check unavailable in this runtime: ${String(error)}`
+    };
+  }
 }
 
 function emptyEnvironment(id: EnvironmentId): EnvironmentState {

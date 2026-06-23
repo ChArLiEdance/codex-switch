@@ -1,3 +1,4 @@
+pub mod app_state;
 pub mod cli_app;
 pub mod desktop_app;
 pub mod importer;
@@ -7,6 +8,10 @@ pub mod secret_store;
 pub mod switch_transaction;
 pub mod vscode_app;
 
+use app_state::{
+    default_app_state_dir, load_recovery_status, AppSettings, AppStateRepository, RecoveryStatus,
+    SwitchHistoryEntry,
+};
 use importer::{import_profile_from_scan, ProfileImportRequest, ProfileImportResult};
 use profile::ProfileMetadata;
 use profile_store::{ProfileRepository, ProfileStoreError};
@@ -119,6 +124,41 @@ fn import_current_profile(request: ProfileImportRequest) -> Result<ProfileImport
         .upsert_profile(result.profile.clone())
         .map_err(profile_store_error_message)?;
     Ok(result)
+}
+
+#[tauri::command]
+fn get_settings() -> Result<AppSettings, String> {
+    app_state_repository()
+        .load_settings()
+        .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
+fn save_settings(settings: AppSettings) -> Result<AppSettings, String> {
+    let repository = app_state_repository();
+    repository
+        .save_settings(&settings)
+        .map_err(|error| format!("{error:?}"))?;
+    Ok(settings)
+}
+
+#[tauri::command]
+fn list_switch_history() -> Result<Vec<SwitchHistoryEntry>, String> {
+    app_state_repository()
+        .list_history()
+        .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
+fn clear_switch_history() -> Result<(), String> {
+    app_state_repository()
+        .clear_history()
+        .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
+fn check_recovery_status() -> Result<RecoveryStatus, String> {
+    load_recovery_status(&app_state_repository()).map_err(|error| format!("{error:?}"))
 }
 
 fn detect_cli(processes: &[String]) -> EnvironmentState {
@@ -411,6 +451,10 @@ fn profile_repository() -> ProfileRepository {
     ProfileRepository::new(profile_metadata_path())
 }
 
+fn app_state_repository() -> AppStateRepository {
+    AppStateRepository::new(default_app_state_dir(home_dir().unwrap_or_else(|| PathBuf::from("."))))
+}
+
 fn profile_metadata_path() -> PathBuf {
     home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
@@ -479,7 +523,12 @@ pub fn run() {
             backend_health,
             detect_environments,
             list_profiles,
-            import_current_profile
+            import_current_profile,
+            get_settings,
+            save_settings,
+            list_switch_history,
+            clear_switch_history,
+            check_recovery_status
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Codex Switch");

@@ -131,6 +131,16 @@ The current system validator runs `codex --version` or the detected executable p
 
 Restore failures skip all reload or restart actions. Timeout errors include the still-running process names. Tests use a mock controller and do not operate on a real VS Code instance.
 
+## Settings, History, And Recovery
+
+`AppStateRepository` persists non-secret app state under `~/.codex-switch`:
+
+- `settings.json`: default switch scope, close confirmation, app restart preference, default-on-exit preference, and VS Code reload mode.
+- `history.json`: local switch history with profile names/IDs, environment list, status, and error category only.
+- `transactions/current.json`: optional current transaction journal inspected on startup for recovery.
+
+`check_recovery_status` reports whether a transaction journal is unfinished. It does not read auth payloads or secret snapshots.
+
 ## Atomic Restore Strategy
 
 Restores should write into temporary staging paths, verify permissions and checksums, then atomically rename into place where the platform supports it. If any target fails, completed targets are restored from the timestamped backup.

@@ -64,6 +64,8 @@ CLI switching refuses to restore while matching Codex CLI processes are active. 
 
 VS Code switching defaults to a manual Reload Window instruction to avoid closing unsaved editor work. Automatic restart is available through the adapter but remains an explicit configuration choice.
 
+Settings, history, and recovery status store only non-secret operational metadata. History entries record profile names or IDs, environments, status, and error type; they do not record tokens, prompts, code contents, cookies, or complete auth payloads.
+
 ## Logging Policy
 
 Allowed:

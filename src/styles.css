@@ -248,6 +248,20 @@ h2 {
   padding: 18px;
 }
 
+.recovery-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  margin-bottom: 18px;
+  border: 1px solid #e2bf72;
+  border-radius: 8px;
+  background: #fff7df;
+  color: #6f4a0b;
+  font-weight: 700;
+}
+
 .panel-title {
   display: flex;
   align-items: center;
@@ -498,6 +512,11 @@ dd {
   justify-content: space-between;
   gap: 18px;
   border-bottom: 1px solid #edf0ec;
+}
+
+.setting-row.stacked {
+  align-items: flex-start;
+  padding-bottom: 12px;
 }
 
 .setting-row select {

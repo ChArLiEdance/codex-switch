@@ -17,27 +17,41 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
+  AppSettings,
+  checkRecoveryStatus,
+  clearSwitchHistory,
   detectEnvironments,
   emptyEnvironmentScan,
   EnvironmentId,
   EnvironmentScan,
   EnvironmentState,
+  getSettings,
   importCurrentProfile,
   listProfiles,
+  listSwitchHistory,
   ProfileMetadata,
+  RecoveryStatus,
+  saveSettings,
+  SwitchHistoryEntry,
   TargetEnvironment
 } from "./backend";
 
 type Tab = "home" | "profiles" | "environment" | "settings";
 
-const recentHistory = [
-  {
-    time: "No switch history",
-    from: "-",
-    to: "-",
-    status: "Waiting for first verified transaction"
-  }
-];
+const defaultSettings: AppSettings = {
+  defaultScope: ["cli", "vscode", "desktop"],
+  confirmBeforeClosingApps: true,
+  autoRestartApps: true,
+  restoreDefaultOnExit: false,
+  vscodeReloadMode: "manual_reload_window"
+};
+
+const defaultRecoveryStatus: RecoveryStatus = {
+  needsRecovery: false,
+  transactionId: null,
+  phase: null,
+  message: "Recovery check has not run"
+};
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
@@ -45,6 +59,9 @@ export default function App() {
   const [scan, setScan] = useState<EnvironmentScan>(emptyEnvironmentScan);
   const [scanBusy, setScanBusy] = useState(false);
   const [profiles, setProfiles] = useState<ProfileMetadata[]>([]);
+  const [history, setHistory] = useState<SwitchHistoryEntry[]>([]);
+  const [settings, setSettings] = useState<AppSettings>(defaultSettings);
+  const [recovery, setRecovery] = useState<RecoveryStatus>(defaultRecoveryStatus);
   const [scope, setScope] = useState<Record<EnvironmentId, boolean>>({
     CLI: true,
     "VS Code": true,
@@ -56,6 +73,9 @@ export default function App() {
   useEffect(() => {
     void runScan();
     void refreshProfiles();
+    void refreshHistory();
+    void refreshSettings();
+    void refreshRecovery();
   }, []);
 
   async function runScan() {
@@ -69,6 +89,31 @@ export default function App() {
 
   async function refreshProfiles() {
     setProfiles(await listProfiles());
+  }
+
+  async function refreshHistory() {
+    setHistory(await listSwitchHistory());
+  }
+
+  async function refreshSettings() {
+    try {
+      setSettings(await getSettings());
+    } catch {
+      setSettings(defaultSettings);
+    }
+  }
+
+  async function refreshRecovery() {
+    setRecovery(await checkRecoveryStatus());
+  }
+
+  async function updateSettings(next: AppSettings) {
+    setSettings(await saveSettings(next));
+  }
+
+  async function clearHistory() {
+    await clearSwitchHistory();
+    await refreshHistory();
   }
 
   return (
@@ -90,10 +135,24 @@ export default function App() {
       </aside>
 
       <main className="content">
-        {tab === "home" && <Home activeProfile={activeProfile} scan={scan} onSwitch={() => setSwitchOpen(true)} />}
+        {tab === "home" && (
+          <Home
+            activeProfile={activeProfile}
+            scan={scan}
+            history={history}
+            recovery={recovery}
+            onSwitch={() => setSwitchOpen(true)}
+          />
+        )}
         {tab === "profiles" && <Profiles profiles={profiles} onImported={refreshProfiles} />}
         {tab === "environment" && <Environment scan={scan} busy={scanBusy} onScan={runScan} />}
-        {tab === "settings" && <SettingsView />}
+        {tab === "settings" && (
+          <SettingsView
+            settings={settings}
+            onChange={updateSettings}
+            onClearHistory={clearHistory}
+          />
+        )}
       </main>
 
       {switchOpen && (
@@ -126,7 +185,19 @@ function NavButton({
   );
 }
 
-function Home({ activeProfile, scan, onSwitch }: { activeProfile?: ProfileMetadata; scan: EnvironmentScan; onSwitch: () => void }) {
+function Home({
+  activeProfile,
+  scan,
+  history,
+  recovery,
+  onSwitch
+}: {
+  activeProfile?: ProfileMetadata;
+  scan: EnvironmentScan;
+  history: SwitchHistoryEntry[];
+  recovery: RecoveryStatus;
+  onSwitch: () => void;
+}) {
   return (
     <section className="view">
       <header className="view-header">
@@ -146,17 +217,31 @@ function Home({ activeProfile, scan, onSwitch }: { activeProfile?: ProfileMetada
         ))}
       </div>
 
+      {recovery.needsRecovery && (
+        <section className="recovery-banner">
+          <AlertTriangle size={18} />
+          <span>{recovery.message}</span>
+        </section>
+      )}
+
       <section className="panel">
         <div className="panel-title">
           <History size={18} />
           <h2>Recent switch history</h2>
         </div>
         <div className="history-list">
-          {recentHistory.map((item) => (
-            <div className="history-row" key={item.status}>
-              <span>{item.time}</span>
-              <strong>{item.from} {"->"} {item.to}</strong>
-              <em>{item.status}</em>
+          {history.length === 0 && (
+            <div className="history-row">
+              <span>No switch history</span>
+              <strong>- {"->"} -</strong>
+              <em>Waiting for first verified transaction</em>
+            </div>
+          )}
+          {history.map((item) => (
+            <div className="history-row" key={item.id}>
+              <span>{item.switchedAt}</span>
+              <strong>{item.fromProfile ?? "-"} {"->"} {item.toProfile}</strong>
+              <em>{item.status}{item.errorType ? ` · ${item.errorType}` : ""}</em>
             </div>
           ))}
         </div>
@@ -379,7 +464,22 @@ function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: bool
   );
 }
 
-function SettingsView() {
+function SettingsView({
+  settings,
+  onChange,
+  onClearHistory
+}: {
+  settings: AppSettings;
+  onChange: (settings: AppSettings) => Promise<void>;
+  onClearHistory: () => Promise<void>;
+}) {
+  function toggleScope(environment: TargetEnvironment, enabled: boolean) {
+    const nextScope = enabled
+      ? Array.from(new Set([...settings.defaultScope, environment]))
+      : settings.defaultScope.filter((item) => item !== environment);
+    void onChange({ ...settings, defaultScope: nextScope });
+  }
+
   return (
     <section className="view">
       <header className="view-header">
@@ -394,28 +494,57 @@ function SettingsView() {
       </header>
 
       <section className="settings-grid">
-        <label className="setting-row">
+        <div className="setting-row stacked">
           <span>Default switch scope</span>
-          <select defaultValue="all">
-            <option value="all">All supported environments</option>
-            <option value="cli">CLI only</option>
-            <option value="vscode">VS Code only</option>
-            <option value="desktop">Desktop only</option>
+          <div className="scope-picker inline">
+            {(["cli", "vscode", "desktop"] as TargetEnvironment[]).map((environment) => (
+              <label key={environment}>
+                <input
+                  type="checkbox"
+                  checked={settings.defaultScope.includes(environment)}
+                  onChange={(event) => toggleScope(environment, event.target.checked)}
+                />
+                <span>{environmentLabel(environment)}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <label className="setting-row">
+          <span>VS Code post-switch action</span>
+          <select
+            value={settings.vscodeReloadMode}
+            onChange={(event) => void onChange({ ...settings, vscodeReloadMode: event.target.value as AppSettings["vscodeReloadMode"] })}
+          >
+            <option value="manual_reload_window">Manual Reload Window</option>
+            <option value="restart_app">Restart VS Code</option>
+            <option value="none">No reload</option>
           </select>
         </label>
         <label className="setting-row">
           <span>Confirm before closing apps</span>
-          <input type="checkbox" defaultChecked />
+          <input
+            type="checkbox"
+            checked={settings.confirmBeforeClosingApps}
+            onChange={(event) => void onChange({ ...settings, confirmBeforeClosingApps: event.target.checked })}
+          />
         </label>
         <label className="setting-row">
           <span>Auto-restart supported apps</span>
-          <input type="checkbox" defaultChecked />
+          <input
+            type="checkbox"
+            checked={settings.autoRestartApps}
+            onChange={(event) => void onChange({ ...settings, autoRestartApps: event.target.checked })}
+          />
         </label>
         <label className="setting-row">
           <span>Restore default account on exit</span>
-          <input type="checkbox" />
+          <input
+            type="checkbox"
+            checked={settings.restoreDefaultOnExit}
+            onChange={(event) => void onChange({ ...settings, restoreDefaultOnExit: event.target.checked })}
+          />
         </label>
-        <button className="danger-button">Clear local history</button>
+        <button className="danger-button" onClick={() => void onClearHistory()}>Clear local history</button>
       </section>
     </section>
   );
