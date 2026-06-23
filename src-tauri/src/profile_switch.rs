@@ -57,6 +57,28 @@ pub struct RestoreDefaultOnExitResult {
     pub switch_result: Option<ProfileSwitchResult>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileRecoverySwitchRequest {
+    pub auto_restart_apps: bool,
+    pub vscode_reload_mode: VscodeReloadMode,
+    pub confirm_process_close: bool,
+    pub desktop_app_path: Option<String>,
+    pub vscode_app_path: Option<String>,
+    pub quit_timeout_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileRecoverySwitchResult {
+    pub attempted: bool,
+    pub action: String,
+    pub reason: String,
+    pub target_profile: Option<ProfileMetadata>,
+    pub environments: Vec<TargetEnvironment>,
+    pub switch_result: Option<ProfileSwitchResult>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RestartAppRequest {
@@ -343,6 +365,99 @@ pub fn restore_default_on_exit_with_runtime<S: SecretStore, R: ProfileSwitchRunt
     })
 }
 
+pub fn restore_default_profile_with_runtime<S: SecretStore, R: ProfileSwitchRuntime>(
+    request: ProfileRecoverySwitchRequest,
+    profile_repository: &ProfileRepository,
+    app_state_repository: &AppStateRepository,
+    vault: &SecretVault<S>,
+    timestamp: String,
+    runtime: &R,
+) -> Result<ProfileRecoverySwitchResult, ProfileSwitchError> {
+    let settings = app_state_repository
+        .load_settings()
+        .map_err(|error| ProfileSwitchError::AppState(format!("{error:?}")))?;
+    let profiles = profile_repository.list_profiles()?;
+    let Some(default_profile) = profiles
+        .iter()
+        .find(|profile| profile.default_profile)
+        .cloned()
+    else {
+        return Ok(ProfileRecoverySwitchResult {
+            attempted: false,
+            action: "restore_default".to_string(),
+            reason: "No default profile is configured".to_string(),
+            target_profile: None,
+            environments: Vec::new(),
+            switch_result: None,
+        });
+    };
+
+    let current_profile_id = latest_used_profile_id(&profiles);
+    if current_profile_id == Some(default_profile.id.as_str()) {
+        return Ok(ProfileRecoverySwitchResult {
+            attempted: false,
+            action: "restore_default".to_string(),
+            reason: "Default profile is already the latest used profile".to_string(),
+            target_profile: Some(default_profile),
+            environments: Vec::new(),
+            switch_result: None,
+        });
+    }
+
+    switch_recovery_target(
+        "restore_default",
+        "Default profile restore transaction completed",
+        default_profile,
+        request,
+        &settings.default_scope,
+        profile_repository,
+        app_state_repository,
+        vault,
+        timestamp,
+        runtime,
+    )
+}
+
+pub fn switch_previous_profile_with_runtime<S: SecretStore, R: ProfileSwitchRuntime>(
+    request: ProfileRecoverySwitchRequest,
+    profile_repository: &ProfileRepository,
+    app_state_repository: &AppStateRepository,
+    vault: &SecretVault<S>,
+    timestamp: String,
+    runtime: &R,
+) -> Result<ProfileRecoverySwitchResult, ProfileSwitchError> {
+    let settings = app_state_repository
+        .load_settings()
+        .map_err(|error| ProfileSwitchError::AppState(format!("{error:?}")))?;
+    let profiles = profile_repository.list_profiles()?;
+    let history = app_state_repository
+        .list_history()
+        .map_err(|error| ProfileSwitchError::AppState(format!("{error:?}")))?;
+    let Some(previous_profile) = previous_profile_from_history(&history, &profiles)? else {
+        return Ok(ProfileRecoverySwitchResult {
+            attempted: false,
+            action: "switch_previous".to_string(),
+            reason: "No previous profile is available in switch history".to_string(),
+            target_profile: None,
+            environments: Vec::new(),
+            switch_result: None,
+        });
+    };
+
+    switch_recovery_target(
+        "switch_previous",
+        "Previous profile switch transaction completed",
+        previous_profile,
+        request,
+        &settings.default_scope,
+        profile_repository,
+        app_state_repository,
+        vault,
+        timestamp,
+        runtime,
+    )
+}
+
 pub fn retry_restart_desktop<R: ProfileSwitchRuntime>(
     runtime: &R,
     app_path: Option<&str>,
@@ -550,6 +665,110 @@ fn latest_used_profile(
         })
         .max_by_key(|(used_at, _)| *used_at)
         .map(|(_, profile)| profile)
+}
+
+fn latest_used_profile_id(profiles: &[ProfileMetadata]) -> Option<&str> {
+    profiles
+        .iter()
+        .filter_map(|profile| {
+            profile
+                .last_used_at
+                .as_ref()
+                .map(|used_at| (used_at.parse::<u64>().unwrap_or(0), profile.id.as_str()))
+        })
+        .max_by_key(|(used_at, _)| *used_at)
+        .map(|(_, id)| id)
+}
+
+fn previous_profile_from_history(
+    history: &[SwitchHistoryEntry],
+    profiles: &[ProfileMetadata],
+) -> Result<Option<ProfileMetadata>, ProfileSwitchError> {
+    for entry in history {
+        if let Some(profile_id) = entry.from_profile_id.as_deref() {
+            if let Some(profile) = profiles.iter().find(|profile| profile.id == profile_id) {
+                return Ok(Some(profile.clone()));
+            }
+            continue;
+        }
+        if let Some(profile_name) = entry.from_profile.as_deref() {
+            let matches: Vec<ProfileMetadata> = profiles
+                .iter()
+                .filter(|profile| profile.name == profile_name)
+                .cloned()
+                .collect();
+            match matches.len() {
+                0 => continue,
+                1 => return Ok(matches.into_iter().next()),
+                _ => {
+                    return Err(ProfileSwitchError::AppState(format!(
+                        "Legacy previous profile name is ambiguous: {profile_name}"
+                    )));
+                }
+            }
+        }
+    }
+    Ok(None)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn switch_recovery_target<S: SecretStore, R: ProfileSwitchRuntime>(
+    action: &str,
+    completed_reason: &str,
+    target_profile: ProfileMetadata,
+    request: ProfileRecoverySwitchRequest,
+    default_scope: &[TargetEnvironment],
+    profile_repository: &ProfileRepository,
+    app_state_repository: &AppStateRepository,
+    vault: &SecretVault<S>,
+    timestamp: String,
+    runtime: &R,
+) -> Result<ProfileRecoverySwitchResult, ProfileSwitchError> {
+    let environments: Vec<TargetEnvironment> = default_scope
+        .iter()
+        .copied()
+        .filter(|environment| target_profile.supports(*environment))
+        .collect();
+    if environments.is_empty() {
+        return Ok(ProfileRecoverySwitchResult {
+            attempted: false,
+            action: action.to_string(),
+            reason: format!(
+                "{} has no available environments in the default switch scope",
+                target_profile.name
+            ),
+            target_profile: Some(target_profile),
+            environments,
+            switch_result: None,
+        });
+    }
+
+    let switch_result = switch_saved_profile_with_runtime(
+        ProfileSwitchRequest {
+            profile_id: target_profile.id.clone(),
+            environments: environments.clone(),
+            auto_restart_apps: request.auto_restart_apps,
+            vscode_reload_mode: request.vscode_reload_mode,
+            confirm_process_close: request.confirm_process_close,
+            desktop_app_path: request.desktop_app_path,
+            vscode_app_path: request.vscode_app_path,
+            quit_timeout_ms: request.quit_timeout_ms,
+        },
+        profile_repository,
+        app_state_repository,
+        vault,
+        timestamp,
+        runtime,
+    )?;
+
+    Ok(ProfileRecoverySwitchResult {
+        attempted: true,
+        action: action.to_string(),
+        reason: completed_reason.to_string(),
+        target_profile: Some(target_profile),
+        environments,
+        switch_result: Some(switch_result),
+    })
 }
 
 fn manual_actions_for(request: &ProfileSwitchRequest) -> Vec<String> {
@@ -1323,6 +1542,177 @@ mod tests {
         assert_eq!(history[0].from_profile, Some("Other".to_string()));
         assert_eq!(history[0].to_profile_id, Some(default_profile.id));
         assert_eq!(history[0].to_profile, "Work");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn restore_default_profile_runs_manual_restore_transaction() {
+        let root = temp_root("manual-restore-default");
+        let target = root.join("auth.json");
+        fs::write(&target, "other-auth").expect("write old");
+        let mut default_profile = profile(TargetEnvironment::Cli);
+        default_profile.last_used_at = Some("1000".to_string());
+        let mut other_profile = profile(TargetEnvironment::Cli);
+        other_profile.id = "profile-other".to_string();
+        other_profile.name = "Other".to_string();
+        other_profile.default_profile = false;
+        other_profile.last_used_at = Some("2000".to_string());
+        other_profile.environments[0].secret_ref =
+            Some("profile:profile-other:environment:cli".to_string());
+        let profile_repository = ProfileRepository::new(root.join("profiles.json"));
+        profile_repository
+            .upsert_profile(default_profile.clone())
+            .expect("save default");
+        profile_repository
+            .upsert_profile(other_profile)
+            .expect("save other");
+        let app_state_repository = AppStateRepository::new(root.join("state"));
+        let mut settings = crate::app_state::AppSettings::default();
+        settings.default_scope = vec![TargetEnvironment::Cli];
+        app_state_repository
+            .save_settings(&settings)
+            .expect("save settings");
+        let vault = SecretVault::new(MemorySecretStore::default());
+        store_snapshot(
+            &vault,
+            &default_profile,
+            TargetEnvironment::Cli,
+            &target,
+            r#"{"email":"work@example.com"}"#,
+        );
+
+        let result = restore_default_profile_with_runtime(
+            ProfileRecoverySwitchRequest {
+                auto_restart_apps: false,
+                vscode_reload_mode: VscodeReloadMode::None,
+                confirm_process_close: true,
+                desktop_app_path: None,
+                vscode_app_path: None,
+                quit_timeout_ms: 50,
+            },
+            &profile_repository,
+            &app_state_repository,
+            &vault,
+            "3000".to_string(),
+            &MockRuntime::default(),
+        )
+        .expect("restore default profile");
+
+        assert!(result.attempted);
+        assert_eq!(result.action, "restore_default");
+        assert_eq!(
+            result.target_profile.expect("target").id,
+            default_profile.id
+        );
+        assert_eq!(result.environments, vec![TargetEnvironment::Cli]);
+        assert_eq!(
+            result.switch_result.expect("switch").profile.id,
+            default_profile.id
+        );
+        assert_eq!(
+            fs::read_to_string(target).expect("read target"),
+            r#"{"email":"work@example.com"}"#
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn switch_previous_profile_uses_stable_history_profile_id() {
+        let root = temp_root("switch-previous-id");
+        let target = root.join("auth.json");
+        fs::write(&target, "current-auth").expect("write current");
+        let mut current_profile = profile(TargetEnvironment::Cli);
+        current_profile.name = "Current".to_string();
+        current_profile.last_used_at = Some("3000".to_string());
+        let mut previous_profile = profile(TargetEnvironment::Cli);
+        previous_profile.id = "profile-previous".to_string();
+        previous_profile.name = "Duplicate".to_string();
+        previous_profile.default_profile = false;
+        previous_profile.last_used_at = Some("1000".to_string());
+        previous_profile.environments[0].secret_ref =
+            Some("profile:profile-previous:environment:cli".to_string());
+        let mut ambiguous_profile = profile(TargetEnvironment::Cli);
+        ambiguous_profile.id = "profile-ambiguous".to_string();
+        ambiguous_profile.name = "Duplicate".to_string();
+        ambiguous_profile.default_profile = false;
+        ambiguous_profile.environments[0].secret_ref =
+            Some("profile:profile-ambiguous:environment:cli".to_string());
+        let profile_repository = ProfileRepository::new(root.join("profiles.json"));
+        profile_repository
+            .upsert_profile(current_profile.clone())
+            .expect("save current");
+        profile_repository
+            .upsert_profile(previous_profile.clone())
+            .expect("save previous");
+        profile_repository
+            .upsert_profile(ambiguous_profile.clone())
+            .expect("save ambiguous");
+        let app_state_repository = AppStateRepository::new(root.join("state"));
+        let mut settings = crate::app_state::AppSettings::default();
+        settings.default_scope = vec![TargetEnvironment::Cli];
+        app_state_repository
+            .save_settings(&settings)
+            .expect("save settings");
+        app_state_repository
+            .append_history(SwitchHistoryEntry {
+                id: "history-3000-profile-1".to_string(),
+                switched_at: "3000".to_string(),
+                from_profile_id: Some(previous_profile.id.clone()),
+                from_profile: Some(previous_profile.name.clone()),
+                to_profile_id: Some(current_profile.id.clone()),
+                to_profile: current_profile.name.clone(),
+                environments: vec![TargetEnvironment::Cli],
+                status: SwitchHistoryStatus::Success,
+                error_type: None,
+            })
+            .expect("save history");
+        let vault = SecretVault::new(MemorySecretStore::default());
+        store_snapshot(
+            &vault,
+            &previous_profile,
+            TargetEnvironment::Cli,
+            &target,
+            "previous-auth",
+        );
+        store_snapshot(
+            &vault,
+            &ambiguous_profile,
+            TargetEnvironment::Cli,
+            &target,
+            "wrong-auth",
+        );
+
+        let result = switch_previous_profile_with_runtime(
+            ProfileRecoverySwitchRequest {
+                auto_restart_apps: false,
+                vscode_reload_mode: VscodeReloadMode::None,
+                confirm_process_close: true,
+                desktop_app_path: None,
+                vscode_app_path: None,
+                quit_timeout_ms: 50,
+            },
+            &profile_repository,
+            &app_state_repository,
+            &vault,
+            "4000".to_string(),
+            &MockRuntime::default(),
+        )
+        .expect("switch previous profile");
+
+        assert!(result.attempted);
+        assert_eq!(result.action, "switch_previous");
+        assert_eq!(
+            result.target_profile.expect("target").id,
+            previous_profile.id
+        );
+        assert_eq!(
+            result.switch_result.expect("switch").profile.id,
+            previous_profile.id
+        );
+        assert_eq!(
+            fs::read_to_string(target).expect("read target"),
+            "previous-auth"
+        );
         let _ = fs::remove_dir_all(root);
     }
 

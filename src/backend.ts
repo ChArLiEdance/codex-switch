@@ -198,6 +198,15 @@ export type ProfileSwitchRequest = {
   quitTimeoutMs: number;
 };
 
+export type ProfileRecoverySwitchRequest = {
+  autoRestartApps: boolean;
+  vscodeReloadMode: AppSettings["vscodeReloadMode"];
+  confirmProcessClose: boolean;
+  desktopAppPath: string | null;
+  vscodeAppPath: string | null;
+  quitTimeoutMs: number;
+};
+
 export type SwitchTransactionEvent = {
   phase: string;
   message: string;
@@ -229,6 +238,15 @@ export type ProfileSwitchResult = {
   warnings: string[];
   closedProcesses: string[];
   restartedApps: string[];
+};
+
+export type ProfileRecoverySwitchResult = {
+  attempted: boolean;
+  action: "restore_default" | "switch_previous" | string;
+  reason: string;
+  targetProfile: ProfileMetadata | null;
+  environments: TargetEnvironment[];
+  switchResult: ProfileSwitchResult | null;
 };
 
 export type RestoreDefaultOnExitResult = {
@@ -344,6 +362,14 @@ export async function rollbackUnfinishedTransaction(): Promise<RecoveryRollbackR
 
 export async function switchToProfile(request: ProfileSwitchRequest): Promise<ProfileSwitchResult> {
   return await invoke<ProfileSwitchResult>("switch_to_profile", { request });
+}
+
+export async function restoreDefaultProfile(request: ProfileRecoverySwitchRequest): Promise<ProfileRecoverySwitchResult> {
+  return await invoke<ProfileRecoverySwitchResult>("restore_default_profile", { request });
+}
+
+export async function switchPreviousProfile(request: ProfileRecoverySwitchRequest): Promise<ProfileRecoverySwitchResult> {
+  return await invoke<ProfileRecoverySwitchResult>("switch_previous_profile", { request });
 }
 
 export async function restoreDefaultOnExit(): Promise<RestoreDefaultOnExitResult> {

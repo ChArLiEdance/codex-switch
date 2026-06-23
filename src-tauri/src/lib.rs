@@ -22,9 +22,11 @@ use importer::{
 use profile::{ProfileMetadata, TargetEnvironment};
 use profile_store::{ProfileRepository, ProfileStoreError, ProfileUpdateRequest};
 use profile_switch::{
-    restore_default_on_exit_with_runtime, retry_restart_desktop, retry_restart_vscode,
-    switch_saved_profile, ProfileSwitchRequest, ProfileSwitchResult, RestartAppRequest,
-    RestartAppResult, RestoreDefaultOnExitResult,
+    restore_default_on_exit_with_runtime, restore_default_profile_with_runtime,
+    retry_restart_desktop, retry_restart_vscode, switch_previous_profile_with_runtime,
+    switch_saved_profile, ProfileRecoverySwitchRequest, ProfileRecoverySwitchResult,
+    ProfileSwitchRequest, ProfileSwitchResult, RestartAppRequest, RestartAppResult,
+    RestoreDefaultOnExitResult,
 };
 use secret_store::{KeychainSecretStore, SecretVault};
 use serde::{Deserialize, Serialize};
@@ -285,6 +287,44 @@ fn switch_to_profile(request: ProfileSwitchRequest) -> Result<ProfileSwitchResul
         &app_state_repository,
         &vault,
         unix_timestamp_string(),
+    )
+    .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
+fn restore_default_profile(
+    request: ProfileRecoverySwitchRequest,
+) -> Result<ProfileRecoverySwitchResult, String> {
+    let profile_repository = profile_repository();
+    let app_state_repository = app_state_repository();
+    let vault = SecretVault::new(KeychainSecretStore::new());
+    let runtime = profile_switch::SystemProfileSwitchRuntime::default();
+    restore_default_profile_with_runtime(
+        request,
+        &profile_repository,
+        &app_state_repository,
+        &vault,
+        unix_timestamp_string(),
+        &runtime,
+    )
+    .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
+fn switch_previous_profile(
+    request: ProfileRecoverySwitchRequest,
+) -> Result<ProfileRecoverySwitchResult, String> {
+    let profile_repository = profile_repository();
+    let app_state_repository = app_state_repository();
+    let vault = SecretVault::new(KeychainSecretStore::new());
+    let runtime = profile_switch::SystemProfileSwitchRuntime::default();
+    switch_previous_profile_with_runtime(
+        request,
+        &profile_repository,
+        &app_state_repository,
+        &vault,
+        unix_timestamp_string(),
+        &runtime,
     )
     .map_err(|error| format!("{error:?}"))
 }
@@ -1073,6 +1113,8 @@ pub fn run() {
             resolve_recovery_status,
             rollback_unfinished_transaction,
             switch_to_profile,
+            restore_default_profile,
+            switch_previous_profile,
             restore_default_on_exit,
             restart_desktop_app,
             restart_vscode_app

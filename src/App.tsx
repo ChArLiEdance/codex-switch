@@ -44,15 +44,19 @@ import {
   previewCurrentImport,
   ProfileMetadata,
   ProfileImportPreflightResult,
+  ProfileRecoverySwitchRequest,
+  ProfileRecoverySwitchResult,
   ProfileSwitchResult,
   RecoveryStatus,
   resolveRecoveryStatus,
   rollbackUnfinishedTransaction,
+  restoreDefaultProfile,
   restoreDefaultOnExit,
   restartDesktopApp,
   restartVscodeApp,
   saveSettings,
   SwitchHistoryEntry,
+  switchPreviousProfile,
   switchToProfile,
   TargetEnvironment,
   updateProfile
@@ -109,16 +113,10 @@ export default function App() {
       ?? history.find((item) => item.toProfile === currentProfile.name && item.switchedAt === currentProfile.lastUsedAt)
       ?? history.find((item) => item.toProfile === currentProfile.name);
   }, [currentProfile, history]);
-  const previousProfile = useMemo(() => {
-    const previous = history.find((item) => item.fromProfileId || item.fromProfile);
-    if (!previous) {
-      return undefined;
-    }
-    if (previous.fromProfileId) {
-      return profiles.find((profile) => profile.id === previous.fromProfileId);
-    }
-    return previous.fromProfile ? profiles.find((profile) => profile.name === previous.fromProfile) : undefined;
-  }, [history, profiles]);
+  const previousSwitchCandidateAvailable = useMemo(
+    () => history.some((item) => item.fromProfileId || item.fromProfile),
+    [history]
+  );
 
   useEffect(() => {
     void runScan();
@@ -221,35 +219,41 @@ export default function App() {
     await refreshHistory();
   }
 
-  async function quickSwitchProfile(profile: ProfileMetadata, label: string) {
-    const environments = settings.defaultScope.filter((environment) =>
-      profile.environments.some((state) => state.environment === environment && state.status === "available")
-    );
-    if (environments.length === 0) {
-      setQuickSwitchMessage(`${profile.name} has no available environments in the default switch scope.`);
+  function recoverySwitchRequest() {
+    return {
+      autoRestartApps: settings.autoRestartApps,
+      vscodeReloadMode: settings.vscodeReloadMode,
+      confirmProcessClose: true,
+      desktopAppPath: scan.environments.find((environment) => environment.id === "Desktop")?.executablePath ?? null,
+      vscodeAppPath: scan.environments.find((environment) => environment.id === "VS Code")?.executablePath ?? null,
+      quitTimeoutMs: 8000
+    } satisfies ProfileRecoverySwitchRequest;
+  }
+
+  async function runRecoveryProfileSwitch(
+    label: string,
+    operation: (request: ProfileRecoverySwitchRequest) => Promise<ProfileRecoverySwitchResult>
+  ) {
+    if (settings.confirmBeforeClosingApps && !window.confirm(`Close running Desktop / VS Code windows if needed, then ${label}?`)) {
       return;
     }
-    const needsCloseApproval = settings.confirmBeforeClosingApps && environments.some((environment) => environment === "vscode" || environment === "desktop");
-    if (needsCloseApproval && !window.confirm(`Close running Desktop / VS Code windows if needed, then ${label}?`)) {
-      return;
-    }
-    setQuickSwitchMessage(`${label} started for ${profile.name}.`);
+    setQuickSwitchMessage(`${label} started.`);
     try {
-      const response = await switchToProfile({
-        profileId: profile.id,
-        environments,
-        autoRestartApps: settings.autoRestartApps,
-        vscodeReloadMode: settings.vscodeReloadMode,
-        confirmProcessClose: !settings.confirmBeforeClosingApps || needsCloseApproval,
-        desktopAppPath: scan.environments.find((environment) => environment.id === "Desktop")?.executablePath ?? null,
-        vscodeAppPath: scan.environments.find((environment) => environment.id === "VS Code")?.executablePath ?? null,
-        quitTimeoutMs: 8000
+      const result = await operation({
+        ...recoverySwitchRequest(),
+        confirmProcessClose: true
       });
       await refreshProfiles();
       await refreshHistory();
       await refreshRecovery();
       await runScan();
-      setQuickSwitchMessage(`${label} finished: ${response.transaction.phase}.`);
+      const phase = result.switchResult?.transaction.phase;
+      const target = result.targetProfile?.name;
+      setQuickSwitchMessage(
+        result.attempted
+          ? `${label} finished for ${target ?? "target profile"}: ${phase ?? result.reason}.`
+          : `${label} skipped: ${result.reason}.`
+      );
     } catch (error) {
       setQuickSwitchMessage(`${label} failed: ${String(error)}`);
     }
@@ -279,7 +283,7 @@ export default function App() {
             currentProfile={currentProfile}
             currentSwitchHistory={currentSwitchHistory}
             defaultProfile={defaultProfile}
-            previousProfile={previousProfile}
+            previousSwitchCandidateAvailable={previousSwitchCandidateAvailable}
             scan={scan}
             history={history}
             recovery={recovery}
@@ -288,14 +292,10 @@ export default function App() {
             onResolveRecovery={() => void resolveRecovery()}
             onRollbackRecovery={() => void rollbackRecovery()}
             onRestoreDefault={() => {
-              if (defaultProfile) {
-                void quickSwitchProfile(defaultProfile, "Restore default account");
-              }
+              void runRecoveryProfileSwitch("Restore default account", restoreDefaultProfile);
             }}
             onSwitchPrevious={() => {
-              if (previousProfile) {
-                void quickSwitchProfile(previousProfile, "Switch back to previous account");
-              }
+              void runRecoveryProfileSwitch("Switch back to previous account", switchPreviousProfile);
             }}
           />
         )}
@@ -359,7 +359,7 @@ function Home({
   currentProfile,
   currentSwitchHistory,
   defaultProfile,
-  previousProfile,
+  previousSwitchCandidateAvailable,
   scan,
   history,
   recovery,
@@ -373,7 +373,7 @@ function Home({
   currentProfile?: ProfileMetadata;
   currentSwitchHistory?: SwitchHistoryEntry;
   defaultProfile?: ProfileMetadata;
-  previousProfile?: ProfileMetadata;
+  previousSwitchCandidateAvailable: boolean;
   scan: EnvironmentScan;
   history: SwitchHistoryEntry[];
   recovery: RecoveryStatus;
@@ -406,7 +406,7 @@ function Home({
             <RotateCcw size={18} />
             Restore default
           </button>
-          <button className="secondary-button" onClick={onSwitchPrevious} disabled={!previousProfile}>
+          <button className="secondary-button" onClick={onSwitchPrevious} disabled={!previousSwitchCandidateAvailable}>
             <History size={18} />
             Switch back
           </button>
