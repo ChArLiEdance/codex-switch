@@ -109,6 +109,18 @@ The runner is currently covered by simulated filesystem tests. It is not yet con
 
 The macOS process controller uses application-level quit and open commands. Tests use a mock process controller, so simulated coverage does not kill or restart real apps.
 
+## Codex CLI Adapter
+
+`CliSwitchCoordinator` handles CLI profile switching:
+
+1. Detect currently running Codex CLI tasks before restore.
+2. Refuse to switch when CLI work appears active, returning the matching process lines.
+3. Restore CLI profile artifacts through `TransactionRunner`.
+4. Validate immediate CLI availability with a runtime validator.
+5. Return a manual verification command for the user.
+
+The current system validator runs `codex --version` or the detected executable path with `--version`. This proves the CLI responds after restore, but it does not prove account identity. The report therefore marks this as inconclusive until a real identity check is available.
+
 ## Atomic Restore Strategy
 
 Restores should write into temporary staging paths, verify permissions and checksums, then atomically rename into place where the platform supports it. If any target fails, completed targets are restored from the timestamped backup.

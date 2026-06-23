@@ -60,6 +60,8 @@ The transaction runner stores backup manifests and transaction events without ra
 
 Desktop process handling prefers graceful application quit before restore. If the app cannot be confirmed stopped, restore does not proceed and the error includes the still-running process names.
 
+CLI switching refuses to restore while matching Codex CLI processes are active. CLI validation reports availability separately from account identity so the app does not claim a verified account without evidence.
+
 ## Logging Policy
 
 Allowed:

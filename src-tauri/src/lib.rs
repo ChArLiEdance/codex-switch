@@ -1,3 +1,4 @@
+pub mod cli_app;
 pub mod desktop_app;
 pub mod importer;
 pub mod profile;

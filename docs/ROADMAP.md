@@ -47,3 +47,11 @@
 - Restore Desktop artifacts through the transaction runner
 - Restart the Desktop app when configured
 - Cover close, restore, rollback, timeout, and restart behavior with mock process tests
+
+## Milestone 7
+
+- Add Codex CLI switch coordinator
+- Block switching when CLI tasks are detected
+- Restore CLI artifacts through the transaction runner
+- Return an immediate validation result and manual verification command
+- Treat CLI account identity as inconclusive until a real identity endpoint is available
