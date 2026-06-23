@@ -30,6 +30,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Post-switch redacted account-hint comparison with verified, incomplete, or mismatched identity status
 - Restore-default-on-exit hook backed by the normal switch transaction path
 - Functional Settings restore-defaults button
+- Transaction-aware switch dialog progress rows and Home account verification badge
 - App-only macOS Tauri bundle
 
 ### Not Yet Verified As Complete Production Switching

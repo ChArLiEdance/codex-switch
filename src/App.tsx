@@ -37,6 +37,7 @@ import {
   listProfiles,
   listSwitchHistory,
   ProfileMetadata,
+  ProfileSwitchResult,
   RecoveryStatus,
   resolveRecoveryStatus,
   restoreDefaultOnExit,
@@ -83,6 +84,14 @@ export default function App() {
       .sort((left, right) => Number(right.lastUsedAt ?? 0) - Number(left.lastUsedAt ?? 0))[0];
     return recentlyUsed ?? defaultProfile;
   }, [defaultProfile, profiles]);
+  const currentSwitchHistory = useMemo(() => {
+    if (!currentProfile) {
+      return undefined;
+    }
+    return history.find((item) =>
+      item.toProfile === currentProfile.name && item.switchedAt === currentProfile.lastUsedAt
+    ) ?? history.find((item) => item.toProfile === currentProfile.name);
+  }, [currentProfile, history]);
   const previousProfile = useMemo(() => {
     const previousName = history.find((item) => item.fromProfile)?.fromProfile;
     return previousName ? profiles.find((profile) => profile.name === previousName) : undefined;
@@ -228,6 +237,7 @@ export default function App() {
         {tab === "home" && (
           <Home
             currentProfile={currentProfile}
+            currentSwitchHistory={currentSwitchHistory}
             defaultProfile={defaultProfile}
             previousProfile={previousProfile}
             scan={scan}
@@ -298,6 +308,7 @@ function NavButton({
 
 function Home({
   currentProfile,
+  currentSwitchHistory,
   defaultProfile,
   previousProfile,
   scan,
@@ -310,6 +321,7 @@ function Home({
   onSwitchPrevious
 }: {
   currentProfile?: ProfileMetadata;
+  currentSwitchHistory?: SwitchHistoryEntry;
   defaultProfile?: ProfileMetadata;
   previousProfile?: ProfileMetadata;
   scan: EnvironmentScan;
@@ -328,6 +340,11 @@ function Home({
           <p className="eyebrow">Current account</p>
           <h1>{currentProfile?.accountHint ?? "No verified account"}</h1>
           <span className="scan-meta">{currentProfile ? `${currentProfile.name}${currentProfile.lastUsedAt ? ` · last used ${currentProfile.lastUsedAt}` : ""}` : "No profile has been switched yet"}</span>
+          {currentProfile && (
+            <span className={`account-verification ${verificationClass(currentSwitchHistory)}`}>
+              {verificationLabel(currentSwitchHistory)}
+            </span>
+          )}
         </div>
         <div className="header-actions">
           <button className="primary-button" onClick={onSwitch}>
@@ -668,6 +685,37 @@ function environmentLabel(environment: TargetEnvironment) {
   return "Desktop";
 }
 
+function verificationClass(history?: SwitchHistoryEntry) {
+  if (!history) {
+    return "unknown";
+  }
+  if (history.status === "success") {
+    return "verified";
+  }
+  if (history.status === "incomplete") {
+    return "incomplete";
+  }
+  return "failed";
+}
+
+function verificationLabel(history?: SwitchHistoryEntry) {
+  if (!history) {
+    return "No switch verification recorded";
+  }
+  if (history.status === "success") {
+    return "Verified by post-switch account hint";
+  }
+  if (history.status === "incomplete") {
+    return history.errorType === "IdentityMismatch"
+      ? "Account hint mismatch after switch"
+      : "Identity verification incomplete";
+  }
+  if (history.status === "rolled_back") {
+    return "Last switch rolled back";
+  }
+  return "Last switch failed";
+}
+
 function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: boolean; onScan: () => void }) {
   return (
     <section className="view">
@@ -865,11 +913,11 @@ function SwitchDialog({
     desktop: settings.defaultScope.includes("desktop")
   });
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<string[]>([]);
+  const [result, setResult] = useState<ProfileSwitchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmProcessClose, setConfirmProcessClose] = useState(!settings.confirmBeforeClosingApps);
   const closeApprovalRequired = settings.confirmBeforeClosingApps && (scope.vscode || scope.desktop);
-  const steps = ["Checking profile", "Closing apps", "Backing up", "Restoring profile", "Restarting apps", "Recording history"];
+  const steps = switchSteps(result, busy, settings);
 
   async function startSwitch() {
     const environments = (Object.entries(scope) as Array<[TargetEnvironment, boolean]>)
@@ -877,7 +925,7 @@ function SwitchDialog({
       .map(([environment]) => environment);
     setBusy(true);
     setError(null);
-    setResult([]);
+    setResult(null);
     try {
       const response = await switchToProfile({
         profileId,
@@ -889,14 +937,7 @@ function SwitchDialog({
         vscodeAppPath: scan.environments.find((environment) => environment.id === "VS Code")?.executablePath ?? null,
         quitTimeoutMs: 8000
       });
-      setResult([
-        `Transaction ${response.transaction.id}: ${response.transaction.phase}`,
-        `Identity ${response.identityVerification.status}: ${response.identityVerification.message}`,
-        response.closedProcesses.length > 0 ? `Closed: ${response.closedProcesses.join(", ")}` : "No running GUI apps closed",
-        response.restartedApps.length > 0 ? `Restarted: ${response.restartedApps.join(", ")}` : "No app restart performed",
-        ...response.warnings,
-        ...response.manualActions
-      ]);
+      setResult(response);
       await onSwitched();
     } catch (switchError) {
       setError(String(switchError));
@@ -951,18 +992,26 @@ function SwitchDialog({
 
         <ol className="step-list">
           {steps.map((step) => (
-            <li key={step}>
+            <li className={step.status} key={step.label}>
               <ListChecks size={16} />
-              <span>{step}</span>
-              <em>Waiting</em>
+              <span>{step.label}</span>
+              <em>{step.detail}</em>
             </li>
           ))}
         </ol>
 
         {error && <p className="dialog-error">{error}</p>}
-        {result.length > 0 && (
+        {result && (
           <ul className="dialog-result">
-            {result.map((item) => <li key={item}>{item}</li>)}
+            <li>{`Transaction ${result.transaction.id}: ${result.transaction.phase}`}</li>
+            <li>{`Identity ${result.identityVerification.status}: ${result.identityVerification.message}`}</li>
+            {result.closedProcesses.length > 0 && <li>{`Closed: ${result.closedProcesses.join(", ")}`}</li>}
+            {result.restartedApps.length > 0 && <li>{`Restarted: ${result.restartedApps.join(", ")}`}</li>}
+            {result.warnings.map((item) => <li key={`warning-${item}`}>{item}</li>)}
+            {result.manualActions.map((item) => <li key={`action-${item}`}>{item}</li>)}
+            {result.transaction.events.map((event, index) => (
+              <li key={`${event.phase}-${index}`}>{`${event.phase}: ${event.message}`}</li>
+            ))}
           </ul>
         )}
 
@@ -976,4 +1025,64 @@ function SwitchDialog({
       </section>
     </div>
   );
+}
+
+type SwitchStep = {
+  label: string;
+  status: "waiting" | "running" | "done" | "skipped" | "warning" | "failed";
+  detail: string;
+};
+
+function switchSteps(result: ProfileSwitchResult | null, busy: boolean, settings: AppSettings): SwitchStep[] {
+  const hasPhase = (phase: string) => Boolean(result?.transaction.events.some((event) => event.phase === phase));
+  const terminalPhase = result?.transaction.phase;
+  const failed = terminalPhase === "failed";
+  const rolledBack = terminalPhase === "rolled_back";
+
+  if (!result) {
+    return [
+      { label: "Checking profile", status: busy ? "running" : "waiting", detail: busy ? "Running" : "Waiting" },
+      { label: "Closing apps", status: "waiting", detail: "Waiting" },
+      { label: "Backing up", status: "waiting", detail: "Waiting" },
+      { label: "Restoring profile", status: "waiting", detail: "Waiting" },
+      { label: "Restarting apps", status: "waiting", detail: "Waiting" },
+      { label: "Verifying account", status: "waiting", detail: "Waiting" },
+      { label: "Recording history", status: "waiting", detail: "Waiting" }
+    ];
+  }
+
+  const identityStatus = result.identityVerification.status;
+  return [
+    { label: "Checking profile", status: "done", detail: "Done" },
+    {
+      label: "Closing apps",
+      status: result.closedProcesses.length > 0 ? "done" : "skipped",
+      detail: result.closedProcesses.length > 0 ? result.closedProcesses.join(", ") : "No running GUI apps closed"
+    },
+    {
+      label: "Backing up",
+      status: hasPhase("backup_complete") ? "done" : failed || rolledBack ? "failed" : "waiting",
+      detail: hasPhase("backup_complete") ? "Backup complete" : "Not completed"
+    },
+    {
+      label: "Restoring profile",
+      status: hasPhase("restore_complete") ? "done" : failed || rolledBack ? "failed" : "waiting",
+      detail: hasPhase("restore_complete") ? "Restore complete" : "Not completed"
+    },
+    {
+      label: "Restarting apps",
+      status: result.restartedApps.length > 0 ? "done" : settings.autoRestartApps ? "skipped" : "skipped",
+      detail: result.restartedApps.length > 0 ? result.restartedApps.join(", ") : "No restart performed"
+    },
+    {
+      label: "Verifying account",
+      status: identityStatus === "verified" ? "done" : identityStatus === "mismatch" ? "failed" : "warning",
+      detail: identityStatus
+    },
+    {
+      label: "Recording history",
+      status: terminalPhase === "completed" ? "done" : rolledBack ? "warning" : "failed",
+      detail: terminalPhase ?? "unknown"
+    }
+  ];
 }

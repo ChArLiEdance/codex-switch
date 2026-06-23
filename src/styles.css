@@ -122,6 +122,31 @@ button:disabled {
   font-size: 13px;
 }
 
+.account-verification {
+  display: table;
+  margin-top: 10px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.account-verification.verified {
+  background: #dff3e4;
+  color: #276749;
+}
+
+.account-verification.incomplete,
+.account-verification.unknown {
+  background: #fff2d8;
+  color: #79510c;
+}
+
+.account-verification.failed {
+  background: #f8e2df;
+  color: #80322f;
+}
+
 h1,
 h2,
 p {
@@ -681,6 +706,31 @@ dd {
   padding: 0 12px;
   border-radius: 6px;
   background: #f7f8f4;
+}
+
+.step-list li.done {
+  background: #eef7ef;
+  color: #244f36;
+}
+
+.step-list li.running {
+  background: #eaf1ff;
+  color: #234b7c;
+}
+
+.step-list li.skipped {
+  background: #f2f4ef;
+  color: #59645d;
+}
+
+.step-list li.warning {
+  background: #fff7df;
+  color: #6f4a0b;
+}
+
+.step-list li.failed {
+  background: #f8e2df;
+  color: #80322f;
 }
 
 .step-list em {

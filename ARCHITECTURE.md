@@ -159,9 +159,9 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 12. Reads restored target files with the same bounded account-hint scanner used by read-only detection.
 13. Compares discovered redacted hints with the target Profile's redacted hint and marks identity as verified, incomplete, or mismatched.
 14. Appends local switch history, including the previously most recently used Profile when known. Completed restore transactions are recorded as `success` only when the redacted identity hint matches; otherwise they are recorded as `incomplete` with an identity error category.
-15. Returns closed-process, restarted-app, identity-verification, warning, and manual-verification details to the dialog.
+15. Returns closed-process, restarted-app, identity-verification, warning, manual-verification details, and non-secret transaction events to the dialog.
 
-This command now makes saved Profiles switchable from the UI and coordinates process close/restart for Desktop and VS Code after explicit confirmation. The process behavior is covered by mock process-controller tests; real Codex Desktop and VS Code extension auth-path semantics still require machine-specific validation.
+This command now makes saved Profiles switchable from the UI and coordinates process close/restart for Desktop and VS Code after explicit confirmation. The switch dialog maps the returned transaction events into phase rows for closing apps, backup, restore, restart, verification, and history recording. The process behavior is covered by mock process-controller tests; real Codex Desktop and VS Code extension auth-path semantics still require machine-specific validation.
 
 The Home view derives the current Profile from the latest `lastUsedAt` value, then offers quick actions to restore the default Profile or switch back to the previous Profile recorded in history. These actions reuse `switch_to_profile` and the configured default switch scope.
 
