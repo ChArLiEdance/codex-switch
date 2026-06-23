@@ -96,6 +96,7 @@ The current `TransactionRunner` implements the filesystem core of this model for
 - Creates a per-transaction backup manifest before writing target files
 - Writes restored files through a temporary file followed by rename
 - Removes restored cache artifacts after restore so target apps refresh volatile cache state on next launch
+- Reads restored non-cache auth/config artifacts back from disk and compares their bytes with the target Profile snapshot before post-restore actions run
 - Rolls back completed writes from the backup manifest if a later restore step fails
 - Removes files created during a failed transaction when no previous file existed
 - Records transaction events without file contents
@@ -164,10 +165,10 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 4. Checks for active CLI tasks and blocks switching while a Codex CLI task is running.
 5. Detects running Desktop and VS Code processes and requires explicit UI confirmation before asking them to quit.
 6. Persists a planned transaction journal before filesystem restore begins.
-7. Runs one `TransactionRunner` backup/restore/cache-refresh/rollback transaction.
+7. Runs one `TransactionRunner` backup/restore/cache-refresh/readback-verification/rollback transaction.
 8. Runs Desktop restart and VS Code restart, when enabled, inside a post-restore transaction hook, then verifies that the restarted process is observed.
 9. Persists the terminal transaction journal returned by the runner.
-10. Rolls back restored files and refreshed cache paths if restore, cache refresh, post-restore restart, or post-restart process verification fails.
+10. Rolls back restored files and refreshed cache paths if restore, cache refresh, restored-file readback verification, post-restore restart, or post-restart process verification fails.
 11. Marks the target Profile with `lastUsedAt` on success.
 12. Reads restored target files with the same bounded account-hint scanner used by read-only detection.
 13. Compares discovered redacted hints with the target Profile's redacted hint and marks identity as verified, incomplete, or mismatched.

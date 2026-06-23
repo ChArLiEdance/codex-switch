@@ -103,6 +103,7 @@ pub enum TransactionError {
     InvalidBase64(String),
     Io(String),
     InjectedFailure,
+    Verification(String),
     PostRestore(String),
 }
 
@@ -195,6 +196,23 @@ impl TransactionRunner {
             );
             return Ok(transaction);
         }
+        transaction.transition(
+            TransactionPhase::Verifying,
+            "Verifying restored auth/config artifacts",
+        );
+        if let Err(error) = self.verify_restored_artifacts(plan) {
+            transaction.transition(
+                TransactionPhase::RollingBack,
+                "File verification failed; rolling back",
+            );
+            self.rollback(&manifest)?;
+            transaction.transition(TransactionPhase::RolledBack, "Rollback complete");
+            transaction.transition(
+                TransactionPhase::Failed,
+                format!("File verification failed: {error:?}"),
+            );
+            return Ok(transaction);
+        }
         if let Some(post_restore) = post_restore.as_mut() {
             if let Err(error) = post_restore() {
                 transaction.transition(
@@ -210,10 +228,6 @@ impl TransactionRunner {
                 return Ok(transaction);
             }
         }
-        transaction.transition(
-            TransactionPhase::Verifying,
-            "File restore verification complete",
-        );
         transaction.transition(TransactionPhase::Completed, "Transaction complete");
         Ok(transaction)
     }
@@ -273,6 +287,28 @@ impl TransactionRunner {
                 .map_err(|error| TransactionError::InvalidBase64(error.to_string()))?;
             atomic_write(&artifact.target_path, &content)?;
             writes += 1;
+        }
+        Ok(())
+    }
+
+    fn verify_restored_artifacts(&self, plan: &RestorePlan) -> Result<(), TransactionError> {
+        for artifact in plan
+            .artifacts
+            .iter()
+            .filter(|artifact| artifact.kind != RestoreArtifactKind::Cache)
+        {
+            let expected = STANDARD
+                .decode(&artifact.content_base64)
+                .map_err(|error| TransactionError::InvalidBase64(error.to_string()))?;
+            let actual = fs::read(&artifact.target_path)
+                .map_err(|error| TransactionError::Verification(error.to_string()))?;
+            if actual != expected {
+                return Err(TransactionError::Verification(format!(
+                    "restored content mismatch for {} {}",
+                    artifact.environment,
+                    artifact.target_path.display()
+                )));
+            }
         }
         Ok(())
     }
@@ -511,6 +547,32 @@ mod tests {
 
         assert_eq!(transaction.phase, TransactionPhase::Failed);
         assert_eq!(fs::read_to_string(cache).expect("read cache"), "old-cache");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn verification_failure_rolls_back_restored_files() {
+        let root = temp_dir("verification-rollback");
+        let target = root.join("auth.json");
+        fs::write(&target, "old").expect("write old");
+        let plan = RestorePlan {
+            transaction_id: "tx-verification-rollback".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![
+                artifact(target.clone(), "expected-one"),
+                artifact(target.clone(), "expected-two"),
+            ],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction.events.iter().any(|event| {
+            event.phase == TransactionPhase::Failed
+                && event.message.contains("File verification failed")
+        }));
+        assert_eq!(fs::read_to_string(target).expect("read target"), "old");
         let _ = fs::remove_dir_all(root);
     }
 
