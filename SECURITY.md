@@ -1,0 +1,69 @@
+# Security
+
+## Security Goals
+
+Codex Switch manages only local authentication state that the user has already created through official Codex login flows. The app must preserve account boundaries, avoid credential disclosure, and make failed switches recoverable.
+
+## Non-Goals
+
+- No password collection
+- No browser cookie scraping
+- No web login automation
+- No MFA bypass
+- No shared-account workaround
+- No prompt, source-code, or repository-content logging
+
+## Credential Storage
+
+Sensitive values such as access tokens, refresh tokens, API keys, cookies, and complete auth payloads must not be stored in ordinary JSON files, frontend state, localStorage, logs, crash reports, or Git.
+
+The backend will use a credential-store abstraction with these platform targets:
+
+- macOS: Keychain
+- Windows: Credential Manager
+- Linux: Secret Service / keyring
+
+Profile metadata can be stored locally if it contains only redacted account hints, labels, notes, support state, and timestamps. Secret profile payloads must be encrypted or stored through the system secure credential store.
+
+## Threat Model
+
+Primary risks:
+
+- Accidental credential commit
+- Token leakage through logs or UI state
+- Partial switch leaving mixed account state
+- Wrong-account restore after detector ambiguity
+- Destructive process shutdown while user work is unsaved
+- Local malware or hostile user with filesystem access
+
+Controls:
+
+- Privacy-focused `.gitignore`
+- Redacted account identifiers only
+- Transaction log with non-secret state only
+- Timestamped backups before every switch
+- Rollback on write, permission, validation, or restart failure
+- Read-only real-environment detection mode
+- Explicit user confirmation before process shutdown
+
+## Logging Policy
+
+Allowed:
+
+- Switch timestamp
+- Source and target profile IDs or display names
+- Environment list
+- Success, failure, or rollback status
+- Error category and non-secret diagnostic text
+
+Forbidden:
+
+- Tokens
+- API keys
+- Cookies
+- Passwords
+- Complete email addresses
+- Prompt content
+- Code file content
+- Full auth payloads
+
