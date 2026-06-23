@@ -1,0 +1,375 @@
+use base64::{engine::general_purpose::STANDARD, Engine};
+use serde::{Deserialize, Serialize};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TransactionPhase {
+    Planned,
+    BackingUp,
+    BackupComplete,
+    Restoring,
+    RestoreComplete,
+    Verifying,
+    Completed,
+    RollingBack,
+    RolledBack,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TransactionEvent {
+    pub phase: TransactionPhase,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SwitchTransaction {
+    pub id: String,
+    pub target_profile_id: String,
+    pub phase: TransactionPhase,
+    pub events: Vec<TransactionEvent>,
+}
+
+impl SwitchTransaction {
+    pub fn new(id: String, target_profile_id: String) -> Self {
+        let mut transaction = Self {
+            id,
+            target_profile_id,
+            phase: TransactionPhase::Planned,
+            events: Vec::new(),
+        };
+        transaction.transition(TransactionPhase::Planned, "Transaction planned");
+        transaction
+    }
+
+    fn transition(&mut self, phase: TransactionPhase, message: impl Into<String>) {
+        self.phase = phase;
+        self.events.push(TransactionEvent {
+            phase,
+            message: message.into(),
+        });
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreArtifact {
+    pub environment: String,
+    pub target_path: PathBuf,
+    pub content_base64: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestorePlan {
+    pub transaction_id: String,
+    pub target_profile_id: String,
+    pub artifacts: Vec<RestoreArtifact>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupEntry {
+    pub original_path: PathBuf,
+    pub backup_path: Option<PathBuf>,
+    pub existed: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupManifest {
+    pub transaction_id: String,
+    pub entries: Vec<BackupEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TransactionError {
+    EmptyRestorePlan,
+    InvalidBase64(String),
+    Io(String),
+    InjectedFailure,
+}
+
+pub struct TransactionRunner {
+    backup_root: PathBuf,
+}
+
+impl TransactionRunner {
+    pub fn new(backup_root: PathBuf) -> Self {
+        Self { backup_root }
+    }
+
+    pub fn run(&self, plan: &RestorePlan) -> Result<SwitchTransaction, TransactionError> {
+        self.run_inner(plan, None)
+    }
+
+    #[cfg(test)]
+    fn run_with_failure_after(
+        &self,
+        plan: &RestorePlan,
+        writes_before_failure: usize,
+    ) -> Result<SwitchTransaction, TransactionError> {
+        self.run_inner(plan, Some(writes_before_failure))
+    }
+
+    fn run_inner(
+        &self,
+        plan: &RestorePlan,
+        fail_after_writes: Option<usize>,
+    ) -> Result<SwitchTransaction, TransactionError> {
+        if plan.artifacts.is_empty() {
+            return Err(TransactionError::EmptyRestorePlan);
+        }
+
+        let mut transaction =
+            SwitchTransaction::new(plan.transaction_id.clone(), plan.target_profile_id.clone());
+        transaction.transition(TransactionPhase::BackingUp, "Backing up current state");
+        let manifest = self.backup(plan)?;
+        transaction.transition(TransactionPhase::BackupComplete, "Backup complete");
+        transaction.transition(TransactionPhase::Restoring, "Restoring target profile state");
+
+        let restore_result = self.restore(plan, fail_after_writes);
+        if let Err(error) = restore_result {
+            transaction.transition(TransactionPhase::RollingBack, "Restore failed; rolling back");
+            self.rollback(&manifest)?;
+            transaction.transition(TransactionPhase::RolledBack, "Rollback complete");
+            transaction.transition(TransactionPhase::Failed, format!("Restore failed: {error:?}"));
+            return Ok(transaction);
+        }
+
+        transaction.transition(TransactionPhase::RestoreComplete, "Restore complete");
+        transaction.transition(TransactionPhase::Verifying, "File restore verification complete");
+        transaction.transition(TransactionPhase::Completed, "Transaction complete");
+        Ok(transaction)
+    }
+
+    pub fn backup(&self, plan: &RestorePlan) -> Result<BackupManifest, TransactionError> {
+        let transaction_backup_root = self.backup_root.join(&plan.transaction_id);
+        fs::create_dir_all(&transaction_backup_root)
+            .map_err(|error| TransactionError::Io(error.to_string()))?;
+
+        let mut entries = Vec::new();
+        for (index, artifact) in plan.artifacts.iter().enumerate() {
+            let original_path = artifact.target_path.clone();
+            if original_path.exists() {
+                let backup_path = transaction_backup_root.join(format!("artifact-{index}.bak"));
+                if original_path.is_dir() {
+                    copy_dir_all(&original_path, &backup_path)?;
+                } else {
+                    if let Some(parent) = backup_path.parent() {
+                        fs::create_dir_all(parent)
+                            .map_err(|error| TransactionError::Io(error.to_string()))?;
+                    }
+                    fs::copy(&original_path, &backup_path)
+                        .map_err(|error| TransactionError::Io(error.to_string()))?;
+                }
+                entries.push(BackupEntry {
+                    original_path,
+                    backup_path: Some(backup_path),
+                    existed: true,
+                });
+            } else {
+                entries.push(BackupEntry {
+                    original_path,
+                    backup_path: None,
+                    existed: false,
+                });
+            }
+        }
+
+        Ok(BackupManifest {
+            transaction_id: plan.transaction_id.clone(),
+            entries,
+        })
+    }
+
+    fn restore(
+        &self,
+        plan: &RestorePlan,
+        fail_after_writes: Option<usize>,
+    ) -> Result<(), TransactionError> {
+        let mut writes = 0;
+        for artifact in &plan.artifacts {
+            if fail_after_writes == Some(writes) {
+                return Err(TransactionError::InjectedFailure);
+            }
+            let content = STANDARD
+                .decode(&artifact.content_base64)
+                .map_err(|error| TransactionError::InvalidBase64(error.to_string()))?;
+            atomic_write(&artifact.target_path, &content)?;
+            writes += 1;
+        }
+        Ok(())
+    }
+
+    pub fn rollback(&self, manifest: &BackupManifest) -> Result<(), TransactionError> {
+        for entry in manifest.entries.iter().rev() {
+            if entry.existed {
+                let Some(backup_path) = &entry.backup_path else {
+                    continue;
+                };
+                if backup_path.is_dir() {
+                    if entry.original_path.exists() {
+                        remove_path(&entry.original_path)?;
+                    }
+                    copy_dir_all(backup_path, &entry.original_path)?;
+                } else {
+                    if let Some(parent) = entry.original_path.parent() {
+                        fs::create_dir_all(parent)
+                            .map_err(|error| TransactionError::Io(error.to_string()))?;
+                    }
+                    fs::copy(backup_path, &entry.original_path)
+                        .map_err(|error| TransactionError::Io(error.to_string()))?;
+                }
+            } else if entry.original_path.exists() {
+                remove_path(&entry.original_path)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn atomic_write(path: &Path, content: &[u8]) -> Result<(), TransactionError> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| TransactionError::Io(error.to_string()))?;
+    }
+    let temporary_path = path.with_extension("codex-switch.tmp");
+    fs::write(&temporary_path, content).map_err(|error| TransactionError::Io(error.to_string()))?;
+    fs::rename(&temporary_path, path).map_err(|error| TransactionError::Io(error.to_string()))
+}
+
+fn copy_dir_all(source: &Path, destination: &Path) -> Result<(), TransactionError> {
+    fs::create_dir_all(destination).map_err(|error| TransactionError::Io(error.to_string()))?;
+    for entry in fs::read_dir(source).map_err(|error| TransactionError::Io(error.to_string()))? {
+        let entry = entry.map_err(|error| TransactionError::Io(error.to_string()))?;
+        let file_type = entry
+            .file_type()
+            .map_err(|error| TransactionError::Io(error.to_string()))?;
+        let target = destination.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_all(&entry.path(), &target)?;
+        } else if file_type.is_file() {
+            fs::copy(entry.path(), target).map_err(|error| TransactionError::Io(error.to_string()))?;
+        }
+    }
+    Ok(())
+}
+
+fn remove_path(path: &Path) -> Result<(), TransactionError> {
+    if path.is_dir() {
+        fs::remove_dir_all(path).map_err(|error| TransactionError::Io(error.to_string()))
+    } else {
+        fs::remove_file(path).map_err(|error| TransactionError::Io(error.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "codex-switch-transaction-{name}-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).expect("create temp dir");
+        path
+    }
+
+    fn artifact(path: PathBuf, content: &str) -> RestoreArtifact {
+        RestoreArtifact {
+            environment: "cli".to_string(),
+            target_path: path,
+            content_base64: STANDARD.encode(content.as_bytes()),
+        }
+    }
+
+    #[test]
+    fn successful_transaction_backs_up_and_restores_files() {
+        let root = temp_dir("success");
+        let target = root.join("auth.json");
+        fs::write(&target, "old").expect("write old file");
+        let plan = RestorePlan {
+            transaction_id: "tx-success".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "new")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Completed);
+        assert_eq!(fs::read_to_string(target).expect("read target"), "new");
+        assert!(root.join("backups/tx-success/artifact-0.bak").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn failed_restore_rolls_back_prior_writes() {
+        let root = temp_dir("rollback");
+        let first = root.join("first.json");
+        let second = root.join("second.json");
+        fs::write(&first, "old-first").expect("write first");
+        fs::write(&second, "old-second").expect("write second");
+        let plan = RestorePlan {
+            transaction_id: "tx-rollback".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(first.clone(), "new-first"), artifact(second.clone(), "new-second")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner
+            .run_with_failure_after(&plan, 1)
+            .expect("run transaction with injected failure");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction
+            .events
+            .iter()
+            .any(|event| event.phase == TransactionPhase::RolledBack));
+        assert_eq!(fs::read_to_string(first).expect("read first"), "old-first");
+        assert_eq!(fs::read_to_string(second).expect("read second"), "old-second");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rollback_removes_files_that_did_not_exist_before_switch() {
+        let root = temp_dir("remove-created");
+        let target = root.join("new-auth.json");
+        let plan = RestorePlan {
+            transaction_id: "tx-created".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "created")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+        let manifest = runner.backup(&plan).expect("backup");
+        atomic_write(&target, b"created").expect("write target");
+
+        runner.rollback(&manifest).expect("rollback");
+
+        assert!(!target.exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn rejects_empty_restore_plan() {
+        let root = temp_dir("empty");
+        let plan = RestorePlan {
+            transaction_id: "tx-empty".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: Vec::new(),
+        };
+        let runner = TransactionRunner::new(root.clone());
+
+        assert_eq!(runner.run(&plan), Err(TransactionError::EmptyRestorePlan));
+        let _ = fs::remove_dir_all(root);
+    }
+}
+

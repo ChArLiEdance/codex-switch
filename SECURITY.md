@@ -56,6 +56,8 @@ Controls:
 - Read-only real-environment detection mode
 - Explicit user confirmation before process shutdown
 
+The transaction runner stores backup manifests and transaction events without raw file contents. Restored contents are written only to the target filesystem paths supplied by a backend restore plan.
+
 ## Logging Policy
 
 Allowed:

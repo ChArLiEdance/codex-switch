@@ -86,6 +86,16 @@ A switch is modeled as an append-only transaction state machine:
 
 Every transition records only non-secret metadata. If the app exits during a transaction, startup recovery checks the last transaction and offers rollback or completion verification.
 
+The current `TransactionRunner` implements the filesystem core of this model for restore plans:
+
+- Creates a per-transaction backup manifest before writing target files
+- Writes restored files through a temporary file followed by rename
+- Rolls back completed writes from the backup manifest if a later restore step fails
+- Removes files created during a failed transaction when no previous file existed
+- Records transaction events without file contents
+
+The runner is currently covered by simulated filesystem tests. It is not yet connected to real Codex profile switching commands.
+
 ## Atomic Restore Strategy
 
 Restores should write into temporary staging paths, verify permissions and checksums, then atomically rename into place where the platform supports it. If any target fails, completed targets are restored from the timestamped backup.

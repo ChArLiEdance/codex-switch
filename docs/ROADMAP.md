@@ -30,6 +30,7 @@
 
 - Implement switch transaction state machine
 - Add backup, restore, atomic write, and rollback tests with simulated environments
+- Keep transaction events non-secret and file-content-free
 
 ## Milestones 6-10
 
