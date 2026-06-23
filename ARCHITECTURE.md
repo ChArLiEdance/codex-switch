@@ -174,6 +174,8 @@ This command now makes saved Profiles switchable from the UI and coordinates pro
 
 The Home view derives the current Profile from the latest `lastUsedAt` value, then offers quick actions to restore the default Profile or switch back to the previous Profile recorded in history. These actions reuse `switch_to_profile` and the configured default switch scope.
 
+The switch result dialog also exposes a direct rollback button when the previous usable Profile has captured state for at least one just-switched environment. This is still a normal `switch_to_profile` call, so process confirmation, backup, restore, restart, identity verification, and history recording stay on the same transaction path.
+
 ## Restore Default On Exit
 
 The frontend registers a Tauri window close handler. When `restoreDefaultOnExit` is enabled, the handler prevents immediate close, calls `restore_default_on_exit`, and closes the window only after the backend returns successfully. If the backend reports an error, the window remains open and the Home status message shows the failure.

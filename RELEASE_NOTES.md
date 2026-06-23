@@ -27,6 +27,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Switch dialog close confirmation for running Desktop/VS Code windows
 - Last-used Profile tracking and previous-Profile switch history
 - Home actions for restoring the default Profile and switching back to the previous Profile
+- Switch result dialog action for rolling back to the previous usable Profile through the normal transaction path
 - Local settings persistence
 - Settings UI for adding and removing custom detector paths
 - Local switch history persistence and clearing

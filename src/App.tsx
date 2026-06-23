@@ -764,6 +764,13 @@ function profileSupportsEnvironment(profile: ProfileMetadata | undefined, enviro
   return environmentProfileState(profile, environment)?.status === "available";
 }
 
+function previousUsableProfile(profiles: ProfileMetadata[], targetProfileId: string) {
+  return profiles
+    .filter((profile) => profile.id !== targetProfileId)
+    .filter((profile) => profile.environments.some((state) => state.status === "available"))
+    .sort((left, right) => Number(right.lastUsedAt ?? 0) - Number(left.lastUsedAt ?? 0))[0];
+}
+
 function verificationClass(history?: SwitchHistoryEntry) {
   if (!history) {
     return "unknown";
@@ -1109,8 +1116,15 @@ function SwitchDialog({
   const [result, setResult] = useState<ProfileSwitchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [restartMessage, setRestartMessage] = useState<string | null>(null);
+  const [rollbackProfileId, setRollbackProfileId] = useState<string | null>(null);
   const [confirmProcessClose, setConfirmProcessClose] = useState(!settings.confirmBeforeClosingApps);
   const targetProfile = profiles.find((profile) => profile.id === profileId);
+  const rollbackProfile = rollbackProfileId
+    ? profiles.find((profile) => profile.id === rollbackProfileId)
+    : undefined;
+  const rollbackEnvironments = result && rollbackProfile
+    ? result.switchedEnvironments.filter((environment) => profileSupportsEnvironment(rollbackProfile, environment))
+    : [];
   const supportedEnvironments = (["cli", "vscode", "desktop"] as TargetEnvironment[])
     .filter((environment) => profileSupportsEnvironment(targetProfile, environment));
   const selectedEnvironments = (Object.entries(scope) as Array<[TargetEnvironment, boolean]>)
@@ -1143,6 +1157,7 @@ function SwitchDialog({
     setError(null);
     setResult(null);
     setRestartMessage(null);
+    setRollbackProfileId(previousUsableProfile(profiles, profileId)?.id ?? null);
     try {
       const response = await switchToProfile({
         profileId,
@@ -1158,6 +1173,45 @@ function SwitchDialog({
       await onSwitched();
     } catch (switchError) {
       setError(String(switchError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rollbackToPreviousProfile() {
+    if (!rollbackProfile || rollbackEnvironments.length === 0 || !result) {
+      setError("Rollback unavailable: no previous Profile has captured state for the switched environments.");
+      return;
+    }
+    if (
+      settings.confirmBeforeClosingApps
+      && rollbackEnvironments.some((environment) => environment === "desktop" || environment === "vscode")
+      && !confirmProcessClose
+    ) {
+      setError("Rollback blocked: approve closing running Desktop / VS Code windows first.");
+      return;
+    }
+    const currentProfileId = result.profile.id;
+    setBusy(true);
+    setError(null);
+    setRestartMessage(null);
+    try {
+      const response = await switchToProfile({
+        profileId: rollbackProfile.id,
+        environments: rollbackEnvironments,
+        autoRestartApps: settings.autoRestartApps,
+        vscodeReloadMode: settings.vscodeReloadMode,
+        confirmProcessClose,
+        desktopAppPath: scan.environments.find((environment) => environment.id === "Desktop")?.executablePath ?? null,
+        vscodeAppPath: scan.environments.find((environment) => environment.id === "VS Code")?.executablePath ?? null,
+        quitTimeoutMs: 8000
+      });
+      setProfileId(response.profile.id);
+      setRollbackProfileId(currentProfileId);
+      setResult(response);
+      await onSwitched();
+    } catch (rollbackError) {
+      setError(`Rollback failed: ${String(rollbackError)}`);
     } finally {
       setBusy(false);
     }
@@ -1265,6 +1319,12 @@ function SwitchDialog({
 
         {result && (
           <div className="dialog-restart-actions">
+            {rollbackProfile && rollbackEnvironments.length > 0 && (
+              <button className="secondary-button compact" onClick={() => void rollbackToPreviousProfile()} disabled={busy}>
+                <RotateCcw size={14} />
+                Roll back to {rollbackProfile.name}
+              </button>
+            )}
             {result.switchedEnvironments.includes("desktop") && (
               <button className="secondary-button compact" onClick={() => void retryRestart("desktop")}>
                 <RefreshCw size={14} />
