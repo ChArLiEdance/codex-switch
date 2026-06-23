@@ -137,9 +137,9 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 
 - `settings.json`: default switch scope, close confirmation, app restart preference, default-on-exit preference, and VS Code reload mode.
 - `history.json`: local switch history with previous/target profile names, environment list, status, and error category only.
-- `transactions/current.json`: optional current transaction journal inspected on startup for recovery.
+- `transactions/current.json`: current switch transaction journal written before restore starts, overwritten with the terminal transaction state after restore/restart completes, and inspected on startup for recovery.
 
-`check_recovery_status` reports whether a transaction journal is unfinished. It does not read auth payloads or secret snapshots.
+`check_recovery_status` reports whether a transaction journal is unfinished. It does not read auth payloads or secret snapshots. A non-terminal journal means the app exited while a restore transaction was in progress or before terminal status was persisted.
 
 ## Saved Profile Switch Command
 
@@ -150,12 +150,14 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 3. Builds a combined restore plan from captured artifact source paths.
 4. Checks for active CLI tasks and blocks switching while a Codex CLI task is running.
 5. Detects running Desktop and VS Code processes and requires explicit UI confirmation before asking them to quit.
-6. Runs one `TransactionRunner` backup/restore/rollback transaction.
-7. Runs Desktop restart and VS Code restart, when enabled, inside a post-restore transaction hook.
-8. Rolls back restored files if either restore or post-restore restart fails.
-9. Marks the target Profile with `lastUsedAt` on success.
-10. Appends local switch history, including the previously most recently used Profile when known.
-11. Returns closed-process, restarted-app, warning, and manual-verification details to the dialog.
+6. Persists a planned transaction journal before filesystem restore begins.
+7. Runs one `TransactionRunner` backup/restore/rollback transaction.
+8. Runs Desktop restart and VS Code restart, when enabled, inside a post-restore transaction hook.
+9. Persists the terminal transaction journal returned by the runner.
+10. Rolls back restored files if either restore or post-restore restart fails.
+11. Marks the target Profile with `lastUsedAt` on success.
+12. Appends local switch history, including the previously most recently used Profile when known.
+13. Returns closed-process, restarted-app, warning, and manual-verification details to the dialog.
 
 This command now makes saved Profiles switchable from the UI and coordinates process close/restart for Desktop and VS Code after explicit confirmation. The process behavior is covered by mock process-controller tests; real Codex Desktop and VS Code extension auth-path semantics still require machine-specific validation.
 

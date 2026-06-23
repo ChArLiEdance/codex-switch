@@ -136,6 +136,13 @@ impl AppStateRepository {
         self.root.join("transactions").join("current.json")
     }
 
+    pub fn save_current_transaction(
+        &self,
+        transaction: &SwitchTransaction,
+    ) -> Result<(), AppStateError> {
+        write_json_atomic(&self.current_transaction_path(), transaction)
+    }
+
     fn load_history(&self) -> Result<HistoryDocument, AppStateError> {
         let path = self.history_path();
         if !path.exists() {
@@ -267,7 +274,8 @@ mod tests {
         let root = temp_root("recovery");
         let repository = AppStateRepository::new(root.clone());
         let transaction = SwitchTransaction::new("tx-1".to_string(), "profile-1".to_string());
-        write_json_atomic(&repository.current_transaction_path(), &transaction)
+        repository
+            .save_current_transaction(&transaction)
             .expect("write transaction");
 
         let status = load_recovery_status(&repository).expect("recovery status");
@@ -276,5 +284,21 @@ mod tests {
         assert_eq!(status.transaction_id, Some("tx-1".to_string()));
         let _ = fs::remove_dir_all(root);
     }
-}
 
+    #[test]
+    fn recovery_status_treats_terminal_transaction_as_complete() {
+        let root = temp_root("recovery-complete");
+        let repository = AppStateRepository::new(root.clone());
+        let mut transaction = SwitchTransaction::new("tx-2".to_string(), "profile-1".to_string());
+        transaction.phase = crate::switch_transaction::TransactionPhase::Completed;
+        repository
+            .save_current_transaction(&transaction)
+            .expect("write transaction");
+
+        let status = load_recovery_status(&repository).expect("recovery status");
+
+        assert!(!status.needs_recovery);
+        assert_eq!(status.transaction_id, Some("tx-2".to_string()));
+        let _ = fs::remove_dir_all(root);
+    }
+}

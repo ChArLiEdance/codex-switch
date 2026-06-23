@@ -116,12 +116,20 @@ pub fn switch_saved_profile_with_runtime<S: SecretStore, R: ProfileSwitchRuntime
     let mut restarted_apps = Vec::new();
     let backup_root = app_state_repository.root().join("backups");
     let runner = TransactionRunner::new(backup_root);
+    let planned_transaction =
+        SwitchTransaction::new(plan.transaction_id.clone(), plan.target_profile_id.clone());
+    app_state_repository
+        .save_current_transaction(&planned_transaction)
+        .map_err(|error| ProfileSwitchError::AppState(format!("{error:?}")))?;
     let transaction = runner
         .run_with_post_restore(&plan, || {
             restart_after_restore(&request, runtime, &mut restarted_apps)
                 .map_err(|error| TransactionError::PostRestore(format!("{error:?}")))
         })
         .map_err(|error| ProfileSwitchError::Transaction(format!("{error:?}")))?;
+    app_state_repository
+        .save_current_transaction(&transaction)
+        .map_err(|error| ProfileSwitchError::AppState(format!("{error:?}")))?;
     let status = if transaction.phase == TransactionPhase::Completed {
         SwitchHistoryStatus::Success
     } else if transaction
@@ -646,6 +654,11 @@ mod tests {
         let history = app_state_repository.list_history().expect("history");
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].from_profile, None);
+        let journal = fs::read_to_string(app_state_repository.current_transaction_path())
+            .expect("read transaction journal");
+        let journal: SwitchTransaction =
+            serde_json::from_str(&journal).expect("journal json");
+        assert_eq!(journal.phase, TransactionPhase::Completed);
         let _ = fs::remove_dir_all(root);
     }
 
@@ -858,6 +871,11 @@ mod tests {
             .events
             .iter()
             .any(|event| event.phase == TransactionPhase::RolledBack));
+        let journal = fs::read_to_string(app_state_repository.current_transaction_path())
+            .expect("read transaction journal");
+        let journal: SwitchTransaction =
+            serde_json::from_str(&journal).expect("journal json");
+        assert_eq!(journal.phase, TransactionPhase::Failed);
         let _ = fs::remove_dir_all(root);
     }
 
