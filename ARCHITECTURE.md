@@ -66,6 +66,8 @@ Each adapter is expected to support:
 
 Detection returns installed path, config paths, cache paths, running state, permission status, redacted account hint when safely available, and support confidence.
 
+The macOS detector seeds explicit candidates for known VS Code extension storage (`openai.chatgpt`, `openai.codex`) and Codex Desktop browser-support locations such as local storage, session storage, network, partition, cache, and bundle-support directories. These are still read-only discovery records; auth contents remain bounded by the account-hint scanner and are not logged.
+
 ## Switch Transaction
 
 A switch is modeled as an append-only transaction state machine:

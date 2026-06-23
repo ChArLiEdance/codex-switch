@@ -82,7 +82,7 @@ pub(crate) enum SupportState {
     NotDetected,
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum PathKind {
     App,
@@ -293,11 +293,11 @@ fn detect_vscode(processes: &[String]) -> EnvironmentState {
     let executable_path = find_executable("code").or_else(find_vscode_app);
     let mut discovered_paths = Vec::new();
 
-    for path in vscode_candidate_paths() {
-        discovered_paths.push(discovered_path(PathKind::Config, path.clone()));
+    for (kind, path) in vscode_candidate_paths() {
+        push_discovered_path(&mut discovered_paths, kind, path.clone());
         if path.exists() {
             for child in children_matching(&path, &["codex", "openai"]) {
-                discovered_paths.push(discovered_path(PathKind::Auth, child));
+                push_discovered_path(&mut discovered_paths, PathKind::Auth, child);
             }
         }
     }
@@ -316,11 +316,11 @@ fn detect_desktop(processes: &[String]) -> EnvironmentState {
     let executable_path = find_desktop_app();
     let mut discovered_paths = Vec::new();
 
-    for path in desktop_candidate_paths() {
-        discovered_paths.push(discovered_path(PathKind::Config, path.clone()));
+    for (kind, path) in desktop_candidate_paths() {
+        push_discovered_path(&mut discovered_paths, kind, path.clone());
         if path.exists() {
             for child in children_matching(&path, &["codex", "openai"]) {
-                discovered_paths.push(discovered_path(PathKind::Auth, child));
+                push_discovered_path(&mut discovered_paths, PathKind::Auth, child);
             }
         }
     }
@@ -397,6 +397,17 @@ fn discovered_path(kind: PathKind, path: PathBuf) -> DiscoveredPath {
         exists,
         permission: permission_for_path(&path),
     }
+}
+
+fn push_discovered_path(paths: &mut Vec<DiscoveredPath>, kind: PathKind, path: PathBuf) {
+    let path_text = path.to_string_lossy().to_string();
+    if paths
+        .iter()
+        .any(|candidate| candidate.kind == kind && candidate.path == path_text)
+    {
+        return;
+    }
+    paths.push(discovered_path(kind, path));
 }
 
 fn permission_for_path(path: &Path) -> PermissionState {
@@ -483,33 +494,81 @@ fn first_existing(paths: &[&str]) -> Option<String> {
         .map(|path| path.to_string_lossy().to_string())
 }
 
-fn vscode_candidate_paths() -> Vec<PathBuf> {
+fn vscode_candidate_paths() -> Vec<(PathKind, PathBuf)> {
     let mut paths = Vec::new();
     if let Some(home) = home_dir() {
-        paths.push(home.join("Library/Application Support/Code/User/globalStorage"));
-        paths.push(home.join("Library/Application Support/Code - Insiders/User/globalStorage"));
-        paths.push(home.join(".config/Code/User/globalStorage"));
-        paths.push(home.join(".config/Code - Insiders/User/globalStorage"));
+        paths.extend(vscode_candidate_paths_for_home(&home));
     }
     if let Ok(appdata) = env::var("APPDATA") {
-        paths.push(PathBuf::from(appdata).join("Code/User/globalStorage"));
+        let appdata = PathBuf::from(appdata);
+        for product in ["Code", "Code - Insiders"] {
+            let storage = appdata.join(product).join("User/globalStorage");
+            paths.push((PathKind::Auth, storage.join("openai.chatgpt")));
+            paths.push((PathKind::Auth, storage.join("openai.codex")));
+            paths.push((PathKind::Config, storage));
+        }
     }
     paths
 }
 
-fn desktop_candidate_paths() -> Vec<PathBuf> {
+fn vscode_candidate_paths_for_home(home: &Path) -> Vec<(PathKind, PathBuf)> {
+    let mut paths = Vec::new();
+    for product in ["Code", "Code - Insiders"] {
+        let storage = home
+            .join("Library/Application Support")
+            .join(product)
+            .join("User/globalStorage");
+        paths.push((PathKind::Auth, storage.join("openai.chatgpt")));
+        paths.push((PathKind::Auth, storage.join("openai.codex")));
+        paths.push((PathKind::Config, storage));
+    }
+    for product in ["Code", "Code - Insiders"] {
+        let storage = home.join(".config").join(product).join("User/globalStorage");
+        paths.push((PathKind::Auth, storage.join("openai.chatgpt")));
+        paths.push((PathKind::Auth, storage.join("openai.codex")));
+        paths.push((PathKind::Config, storage));
+    }
+    paths
+}
+
+fn desktop_candidate_paths() -> Vec<(PathKind, PathBuf)> {
     let mut paths = Vec::new();
     if let Some(home) = home_dir() {
-        paths.push(home.join("Library/Application Support/Codex"));
-        paths.push(home.join("Library/Application Support/Codex Desktop"));
-        paths.push(home.join("Library/Application Support/OpenAI/Codex"));
-        paths.push(home.join(".config/codex-desktop"));
+        paths.extend(desktop_candidate_paths_for_home(&home));
     }
     if let Ok(appdata) = env::var("APPDATA") {
         let appdata = PathBuf::from(appdata);
-        paths.push(appdata.join("Codex"));
-        paths.push(appdata.join("Codex Desktop"));
+        for product in ["Codex", "Codex Desktop", "OpenAI/Codex"] {
+            let root = appdata.join(product);
+            paths.push((PathKind::Auth, root.join("Default/Local Storage")));
+            paths.push((PathKind::Auth, root.join("Default/Session Storage")));
+            paths.push((PathKind::Auth, root.join("Default/Network")));
+            paths.push((PathKind::Cache, root.join("Cache")));
+            paths.push((PathKind::Config, root));
+        }
     }
+    paths
+}
+
+fn desktop_candidate_paths_for_home(home: &Path) -> Vec<(PathKind, PathBuf)> {
+    let support = home.join("Library/Application Support");
+    let mut paths = Vec::new();
+    for product in ["Codex", "Codex Desktop", "OpenAI/Codex"] {
+        let root = support.join(product);
+        paths.push((PathKind::Auth, root.join("Default/Local Storage")));
+        paths.push((PathKind::Auth, root.join("Default/Session Storage")));
+        paths.push((PathKind::Auth, root.join("Default/Network")));
+        paths.push((PathKind::Auth, root.join("Default/Cookies")));
+        paths.push((PathKind::Auth, root.join("Partitions/codex-browser-app")));
+        paths.push((PathKind::Cache, root.join("Cache")));
+        paths.push((PathKind::Cache, root.join("Code Cache")));
+        paths.push((PathKind::Cache, root.join("GPUCache")));
+        paths.push((PathKind::Config, root));
+    }
+    let bundle_root = support.join("com.openai.codex");
+    paths.push((PathKind::Auth, bundle_root.join("web")));
+    paths.push((PathKind::Config, bundle_root));
+    paths.push((PathKind::Config, home.join(".config/codex-desktop")));
     paths
 }
 
@@ -688,6 +747,44 @@ mod tests {
         assert_eq!(state.account_hint, "p***@example.com");
         assert!(!state.account_hint.contains("person@example.com"));
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn vscode_candidates_include_openai_extension_storage() {
+        let home = PathBuf::from("/Users/example");
+        let candidates = vscode_candidate_paths_for_home(&home);
+
+        assert!(candidates.iter().any(|(kind, path)| {
+            *kind == PathKind::Auth
+                && path.ends_with("Library/Application Support/Code/User/globalStorage/openai.chatgpt")
+        }));
+        assert!(candidates.iter().any(|(kind, path)| {
+            *kind == PathKind::Auth
+                && path.ends_with("Library/Application Support/Code/User/globalStorage/openai.codex")
+        }));
+    }
+
+    #[test]
+    fn desktop_candidates_include_browser_auth_and_cache_roots() {
+        let home = PathBuf::from("/Users/example");
+        let candidates = desktop_candidate_paths_for_home(&home);
+
+        assert!(candidates.iter().any(|(kind, path)| {
+            *kind == PathKind::Auth
+                && path.ends_with("Library/Application Support/Codex/Default/Local Storage")
+        }));
+        assert!(candidates.iter().any(|(kind, path)| {
+            *kind == PathKind::Auth
+                && path.ends_with("Library/Application Support/Codex/Partitions/codex-browser-app")
+        }));
+        assert!(candidates.iter().any(|(kind, path)| {
+            *kind == PathKind::Cache
+                && path.ends_with("Library/Application Support/Codex/Cache")
+        }));
+        assert!(candidates.iter().any(|(kind, path)| {
+            *kind == PathKind::Auth
+                && path.ends_with("Library/Application Support/com.openai.codex/web")
+        }));
     }
 }
 

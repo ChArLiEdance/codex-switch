@@ -88,7 +88,7 @@ codex_switch/
 
 ## Known Limits
 
-- Read-only environment detection code is present in the Tauri backend and is wired into the UI.
+- Read-only environment detection code is present in the Tauri backend and is wired into the UI. VS Code and Codex Desktop detection now records typed auth, cache, and config candidates for known OpenAI/Codex support paths instead of relying only on broad support roots.
 - Current environment import is implemented for selected CLI, VS Code, and Desktop detector results. The Profiles UI now guides the official-login-first workflow, shows read-only current account evidence beside the import controls, and blocks multi-environment imports until same-account confirmation is checked.
 - Profile management supports editing names, tags, notes, setting a default Profile, and deleting Profile metadata with associated keychain payload cleanup.
 - Successful restore transactions update Profile `lastUsedAt`, record the previous Profile in local history, and expose Home actions for restoring the default Profile or switching back to the previous Profile.

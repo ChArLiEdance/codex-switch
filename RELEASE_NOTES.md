@@ -9,6 +9,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Tauri + React + TypeScript desktop shell
 - Privacy-focused `.gitignore`
 - Read-only detection for Codex CLI, VS Code, and Codex Desktop App candidates
+- Typed VS Code and Codex Desktop auth/cache/config path candidates for known OpenAI/Codex support locations
 - Redacted account-hint extraction from bounded read-only auth/config scans
 - Profile metadata model
 - OS keychain-backed secret-store abstraction
