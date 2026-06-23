@@ -524,6 +524,13 @@ h2 {
   gap: 18px;
 }
 
+.environment-row-heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
 .environment-row .summary-card {
   border: 0;
   background: #f7f8f4;
@@ -747,12 +754,28 @@ dd {
   font-weight: 700;
 }
 
+.dialog-info {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #eaf1ff;
+  color: #234b7c;
+  font-weight: 700;
+}
+
 .dialog-result {
   margin: 0 0 14px;
   padding: 10px 12px 10px 30px;
   border-radius: 6px;
   background: #eef7ef;
   color: #244f36;
+}
+
+.dialog-restart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 14px;
 }
 
 @media (max-width: 860px) {

@@ -41,6 +41,8 @@ import {
   RecoveryStatus,
   resolveRecoveryStatus,
   restoreDefaultOnExit,
+  restartDesktopApp,
+  restartVscodeApp,
   saveSettings,
   SwitchHistoryEntry,
   switchToProfile,
@@ -717,6 +719,21 @@ function verificationLabel(history?: SwitchHistoryEntry) {
 }
 
 function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: boolean; onScan: () => void }) {
+  const [restartMessage, setRestartMessage] = useState<string | null>(null);
+
+  async function restartEnvironment(environment: EnvironmentState) {
+    setRestartMessage(`Restarting ${environment.id}.`);
+    try {
+      const response = environment.id === "Desktop"
+        ? await restartDesktopApp(environment.executablePath)
+        : await restartVscodeApp(environment.executablePath);
+      setRestartMessage(response.message);
+      onScan();
+    } catch (error) {
+      setRestartMessage(`Restart ${environment.id} failed: ${String(error)}`);
+    }
+  }
+
   return (
     <section className="view">
       <header className="view-header">
@@ -731,10 +748,29 @@ function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: bool
         </button>
       </header>
 
+      {restartMessage && (
+        <section className="recovery-banner">
+          <RefreshCw size={18} />
+          <span>{restartMessage}</span>
+        </section>
+      )}
+
       <div className="environment-list">
         {scan.environments.map((environment) => (
           <article className="environment-row" key={environment.id}>
-            <EnvironmentSummary environment={environment} />
+            <div className="environment-row-heading">
+              <EnvironmentSummary environment={environment} />
+              {(environment.id === "Desktop" || environment.id === "VS Code") && (
+                <button
+                  className="secondary-button compact"
+                  onClick={() => void restartEnvironment(environment)}
+                  disabled={!environment.executablePath}
+                >
+                  <RefreshCw size={14} />
+                  Restart
+                </button>
+              )}
+            </div>
             <dl>
               <div>
                 <dt>App path</dt>
@@ -915,6 +951,7 @@ function SwitchDialog({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ProfileSwitchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [restartMessage, setRestartMessage] = useState<string | null>(null);
   const [confirmProcessClose, setConfirmProcessClose] = useState(!settings.confirmBeforeClosingApps);
   const closeApprovalRequired = settings.confirmBeforeClosingApps && (scope.vscode || scope.desktop);
   const steps = switchSteps(result, busy, settings);
@@ -926,6 +963,7 @@ function SwitchDialog({
     setBusy(true);
     setError(null);
     setResult(null);
+    setRestartMessage(null);
     try {
       const response = await switchToProfile({
         profileId,
@@ -943,6 +981,19 @@ function SwitchDialog({
       setError(String(switchError));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function retryRestart(target: "desktop" | "vscode") {
+    setRestartMessage(`Restarting ${target === "desktop" ? "Codex Desktop" : "VS Code"}.`);
+    try {
+      const response = target === "desktop"
+        ? await restartDesktopApp(scan.environments.find((environment) => environment.id === "Desktop")?.executablePath ?? null)
+        : await restartVscodeApp(scan.environments.find((environment) => environment.id === "VS Code")?.executablePath ?? null);
+      setRestartMessage(response.message);
+      await onSwitched();
+    } catch (restartError) {
+      setRestartMessage(`Restart failed: ${String(restartError)}`);
     }
   }
 
@@ -1001,6 +1052,7 @@ function SwitchDialog({
         </ol>
 
         {error && <p className="dialog-error">{error}</p>}
+        {restartMessage && <p className="dialog-info">{restartMessage}</p>}
         {result && (
           <ul className="dialog-result">
             <li>{`Transaction ${result.transaction.id}: ${result.transaction.phase}`}</li>
@@ -1013,6 +1065,23 @@ function SwitchDialog({
               <li key={`${event.phase}-${index}`}>{`${event.phase}: ${event.message}`}</li>
             ))}
           </ul>
+        )}
+
+        {result && (
+          <div className="dialog-restart-actions">
+            {result.switchedEnvironments.includes("desktop") && (
+              <button className="secondary-button compact" onClick={() => void retryRestart("desktop")}>
+                <RefreshCw size={14} />
+                Restart Desktop
+              </button>
+            )}
+            {result.switchedEnvironments.includes("vscode") && (
+              <button className="secondary-button compact" onClick={() => void retryRestart("vscode")}>
+                <RefreshCw size={14} />
+                Restart VS Code
+              </button>
+            )}
+          </div>
         )}
 
         <footer>

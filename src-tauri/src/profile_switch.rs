@@ -54,6 +54,20 @@ pub struct RestoreDefaultOnExitResult {
     pub switch_result: Option<ProfileSwitchResult>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestartAppRequest {
+    pub app_path: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestartAppResult {
+    pub target: String,
+    pub restarted: bool,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SwitchIdentityStatus {
@@ -321,6 +335,30 @@ pub fn restore_default_on_exit_with_runtime<S: SecretStore, R: ProfileSwitchRunt
         attempted: true,
         reason: "Default profile restore transaction completed for app exit".to_string(),
         switch_result: Some(switch_result),
+    })
+}
+
+pub fn retry_restart_desktop<R: ProfileSwitchRuntime>(
+    runtime: &R,
+    app_path: Option<&str>,
+) -> Result<RestartAppResult, ProfileSwitchError> {
+    runtime.restart_desktop(app_path)?;
+    Ok(RestartAppResult {
+        target: "desktop".to_string(),
+        restarted: true,
+        message: "Codex Desktop restart requested".to_string(),
+    })
+}
+
+pub fn retry_restart_vscode<R: ProfileSwitchRuntime>(
+    runtime: &R,
+    app_path: Option<&str>,
+) -> Result<RestartAppResult, ProfileSwitchError> {
+    runtime.restart_vscode(app_path)?;
+    Ok(RestartAppResult {
+        target: "vscode".to_string(),
+        restarted: true,
+        message: "VS Code restart requested".to_string(),
     })
 }
 
@@ -685,6 +723,7 @@ mod tests {
         closed: Vec<String>,
         restarted: Vec<String>,
         fail_desktop_restart: bool,
+        fail_vscode_restart: bool,
     }
 
     #[derive(Clone, Default)]
@@ -739,7 +778,13 @@ mod tests {
         }
 
         fn restart_vscode(&self, _app_path: Option<&str>) -> Result<(), ProfileSwitchError> {
-            self.state.borrow_mut().restarted.push("vscode".to_string());
+            let mut state = self.state.borrow_mut();
+            if state.fail_vscode_restart {
+                return Err(ProfileSwitchError::Process(
+                    "vscode restart failed".to_string(),
+                ));
+            }
+            state.restarted.push("vscode".to_string());
             Ok(())
         }
     }
@@ -1182,6 +1227,32 @@ mod tests {
         assert_eq!(history[0].from_profile, Some("Other".to_string()));
         assert_eq!(history[0].to_profile, "Work");
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn retry_restart_desktop_uses_runtime_restart() {
+        let runtime = MockRuntime::default();
+
+        let result = retry_restart_desktop(&runtime, Some("/Applications/Codex.app"))
+            .expect("retry desktop restart");
+
+        assert!(result.restarted);
+        assert_eq!(result.target, "desktop");
+        assert_eq!(runtime.state.borrow().restarted, vec!["desktop"]);
+    }
+
+    #[test]
+    fn retry_restart_vscode_reports_runtime_failure() {
+        let runtime = MockRuntime::default();
+        runtime.state.borrow_mut().fail_vscode_restart = true;
+
+        let error = retry_restart_vscode(&runtime, Some("/Applications/Visual Studio Code.app"))
+            .expect_err("retry vscode restart fails");
+
+        assert_eq!(
+            error,
+            ProfileSwitchError::Process("vscode restart failed".to_string())
+        );
     }
 
     #[test]

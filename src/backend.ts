@@ -157,6 +157,12 @@ export type RestoreDefaultOnExitResult = {
   switchResult: ProfileSwitchResult | null;
 };
 
+export type RestartAppResult = {
+  target: "desktop" | "vscode";
+  restarted: boolean;
+  message: string;
+};
+
 export const emptyEnvironmentScan: EnvironmentScan = {
   os: "unknown",
   scannedAt: "Not scanned",
@@ -246,6 +252,14 @@ export async function switchToProfile(request: ProfileSwitchRequest): Promise<Pr
 
 export async function restoreDefaultOnExit(): Promise<RestoreDefaultOnExitResult> {
   return await invoke<RestoreDefaultOnExitResult>("restore_default_on_exit");
+}
+
+export async function restartDesktopApp(appPath: string | null): Promise<RestartAppResult> {
+  return await invoke<RestartAppResult>("restart_desktop_app", { request: { appPath } });
+}
+
+export async function restartVscodeApp(appPath: string | null): Promise<RestartAppResult> {
+  return await invoke<RestartAppResult>("restart_vscode_app", { request: { appPath } });
 }
 
 function emptyEnvironment(id: EnvironmentId): EnvironmentState {

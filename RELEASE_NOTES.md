@@ -31,6 +31,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Restore-default-on-exit hook backed by the normal switch transaction path
 - Functional Settings restore-defaults button
 - Transaction-aware switch dialog progress rows and Home account verification badge
+- Manual restart retry commands and UI buttons for Codex Desktop and VS Code
 - App-only macOS Tauri bundle
 
 ### Not Yet Verified As Complete Production Switching
@@ -40,6 +41,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Strong account identity verification when no redacted local account hint is discoverable
 - Automatic Desktop/VS Code close and restart against real running apps on this machine
 - Restore-default-on-exit against real running Desktop/VS Code apps when close confirmation is enabled
+- Manual restart retry against real Codex Desktop and VS Code app paths on this machine
 - DMG packaging on this machine; default Tauri bundling fails during `bundle_dmg.sh`
 
 ### Verification Commands

@@ -131,6 +131,10 @@ The current system validator runs `codex --version` or the detected executable p
 
 Restore failures skip all reload or restart actions. Timeout errors include the still-running process names. Tests use a mock controller and do not operate on a real VS Code instance.
 
+## Manual Restart Retry
+
+`restart_desktop_app` and `restart_vscode_app` expose narrow retry commands for cases where an app restart was skipped, failed, or needs to be repeated after the user has resolved a local issue. These commands call the same platform process controllers used by switch transactions, return a non-secret status message, and do not read or write Profile data. The switch dialog and Environment page pass the app paths discovered by read-only detection.
+
 ## Settings, History, And Recovery
 
 `AppStateRepository` persists non-secret app state under `~/.codex-switch`:

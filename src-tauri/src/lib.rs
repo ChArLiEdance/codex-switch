@@ -19,8 +19,9 @@ use importer::{import_profile_from_scan, ProfileImportRequest, ProfileImportResu
 use profile::{ProfileMetadata, TargetEnvironment};
 use profile_store::{ProfileRepository, ProfileStoreError, ProfileUpdateRequest};
 use profile_switch::{
-    restore_default_on_exit_with_runtime, switch_saved_profile, ProfileSwitchRequest,
-    ProfileSwitchResult, RestoreDefaultOnExitResult,
+    restore_default_on_exit_with_runtime, retry_restart_desktop, retry_restart_vscode,
+    switch_saved_profile, ProfileSwitchRequest, ProfileSwitchResult, RestartAppRequest,
+    RestartAppResult, RestoreDefaultOnExitResult,
 };
 use secret_store::{KeychainSecretStore, SecretVault};
 use serde::{Deserialize, Serialize};
@@ -243,6 +244,20 @@ fn restore_default_on_exit() -> Result<RestoreDefaultOnExitResult, String> {
         &runtime,
     )
     .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
+fn restart_desktop_app(request: RestartAppRequest) -> Result<RestartAppResult, String> {
+    let runtime = profile_switch::SystemProfileSwitchRuntime::default();
+    retry_restart_desktop(&runtime, request.app_path.as_deref())
+        .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
+fn restart_vscode_app(request: RestartAppRequest) -> Result<RestartAppResult, String> {
+    let runtime = profile_switch::SystemProfileSwitchRuntime::default();
+    retry_restart_vscode(&runtime, request.app_path.as_deref())
+        .map_err(|error| format!("{error:?}"))
 }
 
 fn detect_cli(processes: &[String]) -> EnvironmentState {
@@ -693,7 +708,9 @@ pub fn run() {
             check_recovery_status,
             resolve_recovery_status,
             switch_to_profile,
-            restore_default_on_exit
+            restore_default_on_exit,
+            restart_desktop_app,
+            restart_vscode_app
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Codex Switch");
