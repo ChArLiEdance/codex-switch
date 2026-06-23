@@ -19,6 +19,7 @@ use profile_switch::{switch_saved_profile, ProfileSwitchRequest, ProfileSwitchRe
 use profile_store::{ProfileRepository, ProfileStoreError, ProfileUpdateRequest};
 use secret_store::{KeychainSecretStore, SecretVault};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{
     env,
     fs,
@@ -297,6 +298,7 @@ fn environment_state(
         discovered_paths.insert(0, discovered_path(PathKind::App, PathBuf::from(path)));
     }
     let permission = summarize_permissions(&discovered_paths);
+    let account_hint = account_hint_from_paths(&discovered_paths);
     let support = if installed {
         SupportState::Detected
     } else if discovered_paths.iter().any(|path| path.exists) || !running_processes.is_empty() {
@@ -320,10 +322,144 @@ fn environment_state(
         running: !running_processes.is_empty(),
         running_processes,
         permission,
-        account_hint: "Unknown".to_string(),
+        account_hint,
         support,
         status_message,
     }
+}
+
+fn account_hint_from_paths(paths: &[DiscoveredPath]) -> String {
+    let mut budget = AccountHintBudget {
+        files_remaining: 20,
+        bytes_remaining: 512 * 1024,
+        max_depth: 3,
+    };
+    for path in paths
+        .iter()
+        .filter(|path| path.exists && matches!(path.kind, PathKind::Auth | PathKind::Config))
+    {
+        if let Some(hint) = account_hint_from_path(&PathBuf::from(&path.path), 0, &mut budget) {
+            return hint;
+        }
+    }
+    "Unknown".to_string()
+}
+
+fn account_hint_from_path(path: &Path, depth: usize, budget: &mut AccountHintBudget) -> Option<String> {
+    if budget.files_remaining == 0 || budget.bytes_remaining == 0 || depth > budget.max_depth {
+        return None;
+    }
+    let metadata = fs::symlink_metadata(path).ok()?;
+    if metadata.file_type().is_symlink() {
+        return None;
+    }
+    if metadata.is_dir() {
+        let entries = fs::read_dir(path).ok()?;
+        for entry in entries.filter_map(Result::ok) {
+            if let Some(hint) = account_hint_from_path(&entry.path(), depth + 1, budget) {
+                return Some(hint);
+            }
+        }
+        return None;
+    }
+    if !metadata.is_file() {
+        return None;
+    }
+    let size = metadata.len() as usize;
+    if size == 0 || size > budget.bytes_remaining || size > 128 * 1024 {
+        return None;
+    }
+    budget.files_remaining = budget.files_remaining.saturating_sub(1);
+    budget.bytes_remaining = budget.bytes_remaining.saturating_sub(size);
+    let content = fs::read_to_string(path).ok()?;
+    account_hint_from_content(&content)
+}
+
+fn account_hint_from_content(content: &str) -> Option<String> {
+    if let Ok(value) = serde_json::from_str::<Value>(content) {
+        if let Some(email) = email_from_json_value(&value) {
+            return Some(redact_email(&email));
+        }
+    }
+    first_email_like(content).map(|email| redact_email(&email))
+}
+
+fn email_from_json_value(value: &Value) -> Option<String> {
+    match value {
+        Value::Object(map) => {
+            for (key, value) in map {
+                let key = key.to_ascii_lowercase();
+                if matches!(
+                    key.as_str(),
+                    "email" | "account" | "account_email" | "user" | "username" | "login"
+                        | "profile"
+                ) {
+                    if let Value::String(text) = value {
+                        if let Some(email) = first_email_like(text) {
+                            return Some(email);
+                        }
+                    }
+                }
+            }
+            for value in map.values() {
+                if let Some(email) = email_from_json_value(value) {
+                    return Some(email);
+                }
+            }
+            None
+        }
+        Value::Array(values) => values.iter().find_map(email_from_json_value),
+        Value::String(text) => first_email_like(text),
+        _ => None,
+    }
+}
+
+fn first_email_like(content: &str) -> Option<String> {
+    for token in content.split(|character: char| {
+        character.is_whitespace()
+            || matches!(
+                character,
+                '"' | '\'' | '<' | '>' | '(' | ')' | '[' | ']' | '{' | '}' | ',' | ';'
+            )
+    }) {
+        let candidate = token.trim_matches(|character: char| {
+            !character.is_ascii_alphanumeric() && !matches!(character, '@' | '.' | '_' | '-' | '+')
+        });
+        if is_email_like(candidate) {
+            return Some(candidate.to_string());
+        }
+    }
+    None
+}
+
+fn is_email_like(value: &str) -> bool {
+    let Some((local, domain)) = value.split_once('@') else {
+        return false;
+    };
+    !local.is_empty()
+        && local.len() <= 128
+        && domain.contains('.')
+        && domain.len() <= 255
+        && local
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-' | '+'))
+        && domain
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '-'))
+}
+
+fn redact_email(email: &str) -> String {
+    let Some((local, domain)) = email.split_once('@') else {
+        return "Unknown".to_string();
+    };
+    let first = local.chars().next().unwrap_or('*');
+    format!("{first}***@{domain}")
+}
+
+struct AccountHintBudget {
+    files_remaining: usize,
+    bytes_remaining: usize,
+    max_depth: usize,
 }
 
 fn discovered_path(kind: PathKind, path: PathBuf) -> DiscoveredPath {
@@ -568,6 +704,50 @@ mod tests {
 
         assert!(!state.installed);
         assert!(matches!(state.support, SupportState::Partial));
+    }
+
+    #[test]
+    fn redacts_email_from_json_account_hint() {
+        let content = r#"{"auth":{"email":"charlie@example.com","access_token":"secret"}}"#;
+
+        assert_eq!(
+            account_hint_from_content(content),
+            Some("c***@example.com".to_string())
+        );
+    }
+
+    #[test]
+    fn redacts_email_from_text_fallback() {
+        let content = "signed in as user.name+codex@example.org";
+
+        assert_eq!(
+            account_hint_from_content(content),
+            Some("u***@example.org".to_string())
+        );
+    }
+
+    #[test]
+    fn environment_state_reports_redacted_account_hint_from_auth_path() {
+        let root = env::temp_dir().join(format!(
+            "codex-switch-account-hint-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).expect("create hint dir");
+        let auth_path = root.join("auth.json");
+        fs::write(&auth_path, r#"{"email":"person@example.com"}"#).expect("write auth");
+
+        let state = environment_state(
+            "CLI",
+            None,
+            vec![discovered_path(PathKind::Auth, auth_path)],
+            Vec::new(),
+            "detected",
+        );
+
+        assert_eq!(state.account_hint, "p***@example.com");
+        assert!(!state.account_hint.contains("person@example.com"));
+        let _ = fs::remove_dir_all(root);
     }
 }
 

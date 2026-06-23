@@ -25,6 +25,6 @@ Known packaging limitation:
 
 Real-environment limitations:
 
-- Read-only detection is implemented, but real Codex Desktop and VS Code extension auth paths remain detector candidates until validated on machines with those apps and accounts.
+- Read-only detection is implemented, including bounded redacted account-hint extraction, but real Codex Desktop and VS Code extension auth paths remain detector candidates until validated on machines with those apps and accounts.
 - CLI validation currently proves CLI availability, not account identity.
 - Tests use mock/simulated environments and do not require real tokens.

@@ -28,6 +28,7 @@ Profile metadata can be stored locally if it contains only redacted account hint
 Current implementation status:
 
 - `ProfileMetadata` rejects unredacted email-style account hints.
+- Read-only detection may derive a redacted hint from bounded local auth/config scans, but raw detected identifiers are not persisted.
 - Available environment states must reference an opaque secret key, not inline auth content.
 - `SecretStore` defines the secret persistence boundary.
 - `KeychainSecretStore` uses the Rust `keyring` crate for the production OS credential backend.
