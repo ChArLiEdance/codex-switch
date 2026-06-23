@@ -6,6 +6,8 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
+const BACKUP_MANIFEST_FILE: &str = "manifest.json";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TransactionPhase {
@@ -102,6 +104,7 @@ pub struct BackupManifest {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransactionError {
+    BackupManifestPersistence(String),
     BackupVerification(String),
     EmptyRestorePlan,
     ConflictingRestoreTarget(String),
@@ -381,7 +384,21 @@ impl TransactionRunner {
             tamper_after_backup(&manifest)?;
         }
         verify_backup_manifest(&manifest)?;
+        self.persist_backup_manifest(&manifest)?;
         Ok(manifest)
+    }
+
+    pub fn backup_manifest_path(&self, transaction_id: &str) -> PathBuf {
+        self.backup_root
+            .join(transaction_id)
+            .join(BACKUP_MANIFEST_FILE)
+    }
+
+    fn persist_backup_manifest(&self, manifest: &BackupManifest) -> Result<(), TransactionError> {
+        let path = self.backup_manifest_path(&manifest.transaction_id);
+        let content = serde_json::to_vec_pretty(manifest)
+            .map_err(|error| TransactionError::BackupManifestPersistence(error.to_string()))?;
+        atomic_write(&path, &content, None)
     }
 
     fn validate_backup_location(&self, plan: &RestorePlan) -> Result<(), TransactionError> {
@@ -884,6 +901,13 @@ mod tests {
         assert_eq!(transaction.phase, TransactionPhase::Completed);
         assert_eq!(fs::read_to_string(target).expect("read target"), "new");
         assert!(root.join("backups/tx-success/artifact-0.bak").exists());
+        let manifest_path = runner.backup_manifest_path("tx-success");
+        let manifest = fs::read_to_string(manifest_path).expect("read backup manifest");
+        let manifest: BackupManifest =
+            serde_json::from_str(&manifest).expect("backup manifest json");
+        assert_eq!(manifest.transaction_id, "tx-success");
+        assert_eq!(manifest.entries.len(), 1);
+        assert_eq!(manifest.entries[0].original_path, root.join("auth.json"));
         let _ = fs::remove_dir_all(root);
     }
 

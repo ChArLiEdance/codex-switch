@@ -1008,6 +1008,18 @@ mod tests {
             .expect("read transaction journal");
         let journal: SwitchTransaction = serde_json::from_str(&journal).expect("journal json");
         assert_eq!(journal.phase, TransactionPhase::Completed);
+        let backup_manifest_path = root
+            .join("state/backups")
+            .join(format!("switch-3000-{}", profile.id))
+            .join("manifest.json");
+        let backup_manifest =
+            fs::read_to_string(backup_manifest_path).expect("read backup manifest");
+        let backup_manifest: crate::switch_transaction::BackupManifest =
+            serde_json::from_str(&backup_manifest).expect("backup manifest json");
+        assert_eq!(
+            backup_manifest.transaction_id,
+            format!("switch-3000-{}", profile.id)
+        );
         let _ = fs::remove_dir_all(root);
     }
 

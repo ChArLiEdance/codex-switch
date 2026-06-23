@@ -96,6 +96,7 @@ Every transition records only non-secret metadata. If the app exits during a tra
 The current `TransactionRunner` implements the filesystem core of this model for restore plans:
 
 - Creates a per-transaction backup manifest before writing target files
+- Persists that manifest as `manifest.json` inside the timestamped transaction backup directory before restore writes begin
 - Rejects restore plans with duplicate normalized target paths, direct symlink targets, nearest existing symlink target ancestors, or existing non-file targets before backup or writes begin
 - Rejects unsafe backup locations, including non-segment transaction IDs, symlink backup roots, and non-directory backup roots, before backup or restore writes begin
 - Reads copied backup files back from disk and compares them with their original files before restore writes begin

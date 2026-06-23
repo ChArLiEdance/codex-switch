@@ -21,6 +21,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Profile edit, delete, and set-default actions from the Profiles UI
 - Keychain payload cleanup when a saved Profile is deleted
 - Switch transaction core with backup, atomic restore, and rollback
+- Timestamped transaction backup manifest persistence at restore time
 - Duplicate, direct symlink, nearest-existing-ancestor symlink, and existing non-file restore-target rejection before backup or writes begin
 - Unsafe transaction ID, symlink backup root, and non-directory backup root rejection before backup or writes begin
 - Backup file readback verification before restore writes begin
