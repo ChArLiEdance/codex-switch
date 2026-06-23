@@ -4,7 +4,9 @@ Codex Switch is a local desktop app for managing multiple already-authorized Cod
 
 ## Current Status
 
-Milestone 1 creates the project structure, Tauri + React shell, documentation, and privacy-focused repository hygiene. The UI currently uses mock data until the Rust environment detectors are implemented in milestone 2.
+Milestone 1 created the project structure, Tauri + React shell, documentation, and privacy-focused repository hygiene. Milestone 2 adds the read-only detector contract and UI wiring for Codex CLI, VS Code, and Codex Desktop App evidence.
+
+The React frontend builds successfully on this machine. The Tauri backend compiles, Rust detector tests pass, and an app-only macOS bundle is produced at `src-tauri/target/release/bundle/macos/Codex Switch.app`.
 
 ## Target Environments
 
@@ -24,7 +26,7 @@ Each environment will have its own adapter. Profiles may support one, two, or al
   - Windows Credential Manager
   - Linux Secret Service / keyring
 
-This workspace currently verifies the frontend with npm. Full Tauri execution requires installing Rust and the Tauri prerequisites for the host OS.
+This workspace verifies the frontend with npm and the Tauri backend with Cargo. Full installer packaging may require additional host-specific macOS packaging prerequisites.
 
 ## Development
 
@@ -71,7 +73,7 @@ codex_switch/
 
 ## Known Limits
 
-- Real environment detection is not implemented yet.
+- Read-only environment detection code is present in the Tauri backend and is wired into the UI.
+- Account identity verification is not implemented yet; detector account hints are `Unknown`.
 - No profile import, backup, restore, process control, or rollback is implemented yet.
-- Tauri build has not been verified on this machine because the Rust toolchain is not currently installed.
-
+- `npm run tauri:build -- --bundles app` succeeds. Full default bundling currently fails at the DMG packaging step on this machine.

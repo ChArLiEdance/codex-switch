@@ -4,6 +4,7 @@ target/
 dist/
 dist-ssr/
 src-tauri/target/
+src-tauri/gen/
 
 # Local runtime data and credentials
 .codex-switch/
@@ -46,4 +47,3 @@ settings.local.*
 .vscode/
 *.swp
 *.swo
-

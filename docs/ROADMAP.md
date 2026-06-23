@@ -12,6 +12,7 @@
 - Implement read-only environment detection for Codex CLI, VS Code, and Codex Desktop App
 - Report installation path, running state, candidate auth/config/cache paths, and permissions
 - Keep unknown paths explicit instead of hard-coding unsupported assumptions
+- Wire detector output into the Environment page and Home status cards
 
 ## Milestone 3
 
@@ -36,4 +37,3 @@
 - Add VS Code restart or reload flow
 - Complete UI, logs, settings, abnormal-exit recovery
 - Finalize tests, docs, build checks, and release notes
-

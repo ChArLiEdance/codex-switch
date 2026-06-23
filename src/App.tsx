@@ -15,22 +15,16 @@ import {
   SquareTerminal,
   UserPlus
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  detectEnvironments,
+  emptyEnvironmentScan,
+  EnvironmentId,
+  EnvironmentScan,
+  EnvironmentState
+} from "./backend";
 
 type Tab = "home" | "profiles" | "environment" | "settings";
-type EnvironmentId = "CLI" | "VS Code" | "Desktop";
-
-type EnvironmentState = {
-  id: EnvironmentId;
-  installed: boolean;
-  path: string;
-  authPath: string;
-  cachePath: string;
-  running: boolean;
-  permission: "read-write" | "read-only" | "unknown";
-  accountHint: string;
-  support: "detected" | "partial" | "not-detected";
-};
 
 type Profile = {
   name: string;
@@ -41,42 +35,6 @@ type Profile = {
   note: string;
   environments: Record<EnvironmentId, "available" | "missing" | "unknown">;
 };
-
-const environments: EnvironmentState[] = [
-  {
-    id: "CLI",
-    installed: false,
-    path: "Not scanned yet",
-    authPath: "Detector pending",
-    cachePath: "Detector pending",
-    running: false,
-    permission: "unknown",
-    accountHint: "Unknown",
-    support: "not-detected"
-  },
-  {
-    id: "VS Code",
-    installed: false,
-    path: "Not scanned yet",
-    authPath: "Detector pending",
-    cachePath: "Detector pending",
-    running: false,
-    permission: "unknown",
-    accountHint: "Unknown",
-    support: "not-detected"
-  },
-  {
-    id: "Desktop",
-    installed: false,
-    path: "Not scanned yet",
-    authPath: "Detector pending",
-    cachePath: "Detector pending",
-    running: false,
-    permission: "unknown",
-    accountHint: "Unknown",
-    support: "not-detected"
-  }
-];
 
 const profiles: Profile[] = [
   {
@@ -119,6 +77,8 @@ const recentHistory = [
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
   const [switchOpen, setSwitchOpen] = useState(false);
+  const [scan, setScan] = useState<EnvironmentScan>(emptyEnvironmentScan);
+  const [scanBusy, setScanBusy] = useState(false);
   const [scope, setScope] = useState<Record<EnvironmentId, boolean>>({
     CLI: true,
     "VS Code": true,
@@ -126,6 +86,19 @@ export default function App() {
   });
 
   const activeProfile = useMemo(() => profiles.find((profile) => profile.defaultProfile), []);
+
+  useEffect(() => {
+    void runScan();
+  }, []);
+
+  async function runScan() {
+    setScanBusy(true);
+    try {
+      setScan(await detectEnvironments());
+    } finally {
+      setScanBusy(false);
+    }
+  }
 
   return (
     <div className="app-shell">
@@ -146,9 +119,9 @@ export default function App() {
       </aside>
 
       <main className="content">
-        {tab === "home" && <Home activeProfile={activeProfile} onSwitch={() => setSwitchOpen(true)} />}
+        {tab === "home" && <Home activeProfile={activeProfile} scan={scan} onSwitch={() => setSwitchOpen(true)} />}
         {tab === "profiles" && <Profiles />}
-        {tab === "environment" && <Environment />}
+        {tab === "environment" && <Environment scan={scan} busy={scanBusy} onScan={runScan} />}
         {tab === "settings" && <SettingsView />}
       </main>
 
@@ -182,7 +155,7 @@ function NavButton({
   );
 }
 
-function Home({ activeProfile, onSwitch }: { activeProfile?: Profile; onSwitch: () => void }) {
+function Home({ activeProfile, scan, onSwitch }: { activeProfile?: Profile; scan: EnvironmentScan; onSwitch: () => void }) {
   return (
     <section className="view">
       <header className="view-header">
@@ -197,7 +170,7 @@ function Home({ activeProfile, onSwitch }: { activeProfile?: Profile; onSwitch: 
       </header>
 
       <div className="status-grid">
-        {environments.map((environment) => (
+        {scan.environments.map((environment) => (
           <EnvironmentSummary key={environment.id} environment={environment} />
         ))}
       </div>
@@ -268,40 +241,59 @@ function Profiles() {
   );
 }
 
-function Environment() {
+function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: boolean; onScan: () => void }) {
   return (
     <section className="view">
       <header className="view-header">
         <div>
           <p className="eyebrow">Read-only detection</p>
           <h1>Environment status</h1>
+          <span className="scan-meta">{scan.os} · {scan.scannedAt} · {scan.readOnly ? "read-only" : "write-enabled"}</span>
         </div>
-        <button className="secondary-button">
+        <button className="secondary-button" onClick={onScan} disabled={busy}>
           <FolderSearch size={18} />
-          Rescan
+          {busy ? "Scanning" : "Rescan"}
         </button>
       </header>
 
       <div className="environment-list">
-        {environments.map((environment) => (
+        {scan.environments.map((environment) => (
           <article className="environment-row" key={environment.id}>
             <EnvironmentSummary environment={environment} />
             <dl>
               <div>
                 <dt>App path</dt>
-                <dd>{environment.path}</dd>
+                <dd>{environment.executablePath ?? "Not detected"}</dd>
               </div>
               <div>
-                <dt>Auth paths</dt>
-                <dd>{environment.authPath}</dd>
+                <dt>Running</dt>
+                <dd>{environment.runningProcesses.length > 0 ? environment.runningProcesses.join(", ") : "No matching process"}</dd>
               </div>
               <div>
-                <dt>Cache paths</dt>
-                <dd>{environment.cachePath}</dd>
+                <dt>Status</dt>
+                <dd>{environment.statusMessage}</dd>
               </div>
               <div>
                 <dt>Permission</dt>
                 <dd>{environment.permission}</dd>
+              </div>
+              <div className="path-list">
+                <dt>Discovered paths</dt>
+                <dd>
+                  {environment.discoveredPaths.length === 0 ? (
+                    "No candidate paths found"
+                  ) : (
+                    <ul>
+                      {environment.discoveredPaths.map((item) => (
+                        <li key={`${item.kind}-${item.path}`}>
+                          <strong>{item.kind}</strong>
+                          <span>{item.path}</span>
+                          <em>{item.exists ? item.permission : "missing"}</em>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </dd>
               </div>
             </dl>
           </article>
@@ -437,3 +429,4 @@ function SwitchDialog({
     </div>
   );
 }
+
