@@ -152,6 +152,20 @@ h2 {
   white-space: nowrap;
 }
 
+.header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled,
+.danger-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .primary-button {
   background: #276749;
   color: #ffffff;

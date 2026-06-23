@@ -156,6 +156,26 @@ impl ProfileRepository {
         self.save(&document)?;
         Ok(removed)
     }
+
+    pub fn mark_profile_used(
+        &self,
+        profile_id: &str,
+        used_at: String,
+    ) -> Result<ProfileMetadata, ProfileStoreError> {
+        let mut document = self.load()?;
+        let mut updated_profile = None;
+        for profile in &mut document.profiles {
+            if profile.id == profile_id {
+                profile.last_used_at = Some(used_at.clone());
+                updated_profile = Some(profile.clone());
+                break;
+            }
+        }
+        let updated_profile = updated_profile
+            .ok_or_else(|| ProfileStoreError::NotFound(profile_id.to_string()))?;
+        self.save(&document)?;
+        Ok(updated_profile)
+    }
 }
 
 #[cfg(test)]
@@ -293,6 +313,30 @@ mod tests {
         assert_eq!(profiles.len(), 1);
         assert_eq!(profiles[0].id, "profile-2");
         assert!(profiles[0].default_profile);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn mark_profile_used_updates_last_used_timestamp() {
+        let path = test_path("used");
+        let _ = fs::remove_file(&path);
+        let repository = ProfileRepository::new(path.clone());
+        repository
+            .upsert_profile(profile("profile-1", true))
+            .expect("save profile");
+
+        let updated = repository
+            .mark_profile_used("profile-1", "2000".to_string())
+            .expect("mark used");
+
+        assert_eq!(updated.last_used_at, Some("2000".to_string()));
+        assert_eq!(
+            repository
+                .list_profiles()
+                .expect("list profiles")[0]
+                .last_used_at,
+            Some("2000".to_string())
+        );
         let _ = fs::remove_file(path);
     }
 }

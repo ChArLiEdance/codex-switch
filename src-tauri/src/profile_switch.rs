@@ -104,10 +104,12 @@ pub fn switch_saved_profile_with_runtime<S: SecretStore, R: ProfileSwitchRuntime
     }
 
     let profiles = profile_repository.list_profiles()?;
-    let profile = profiles
-        .into_iter()
+    let mut profile = profiles
+        .iter()
+        .cloned()
         .find(|profile| profile.id == request.profile_id)
         .ok_or_else(|| ProfileSwitchError::ProfileNotFound(request.profile_id.clone()))?;
+    let from_profile = latest_used_profile_name(&profiles, &profile.id);
 
     let plan = restore_plan_from_profile(&profile, &request.environments, vault, &timestamp)?;
     let mut closed_processes = close_running_processes(&request, runtime)?;
@@ -131,11 +133,17 @@ pub fn switch_saved_profile_with_runtime<S: SecretStore, R: ProfileSwitchRuntime
     } else {
         SwitchHistoryStatus::Failed
     };
+    if transaction.phase == TransactionPhase::Completed {
+        profile = profile_repository
+            .mark_profile_used(&profile.id, timestamp.clone())
+            .map_err(ProfileSwitchError::from)?;
+    }
+
     app_state_repository
         .append_history(SwitchHistoryEntry {
             id: format!("history-{timestamp}-{}", profile.id),
             switched_at: timestamp.clone(),
-            from_profile: None,
+            from_profile,
             to_profile: profile.name.clone(),
             environments: request.environments.clone(),
             status,
@@ -212,6 +220,20 @@ pub fn restore_plan_from_profile<S: SecretStore>(
         target_profile_id: profile.id.clone(),
         artifacts,
     })
+}
+
+fn latest_used_profile_name(profiles: &[ProfileMetadata], target_profile_id: &str) -> Option<String> {
+    profiles
+        .iter()
+        .filter(|profile| profile.id != target_profile_id)
+        .filter_map(|profile| {
+            profile
+                .last_used_at
+                .as_ref()
+                .map(|used_at| (used_at.parse::<u64>().unwrap_or(0), profile.name.clone()))
+        })
+        .max_by_key(|(used_at, _)| *used_at)
+        .map(|(_, name)| name)
 }
 
 fn manual_actions_for(request: &ProfileSwitchRequest) -> Vec<String> {
@@ -619,11 +641,64 @@ mod tests {
         .expect("switch profile");
 
         assert_eq!(result.transaction.phase, TransactionPhase::Completed);
+        assert_eq!(result.profile.last_used_at, Some("3000".to_string()));
         assert_eq!(fs::read_to_string(target).expect("read target"), "new-auth");
-        assert_eq!(
-            app_state_repository.list_history().expect("history").len(),
-            1
+        let history = app_state_repository.list_history().expect("history");
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].from_profile, None);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn switch_history_records_previous_recent_profile() {
+        let root = temp_root("previous-profile");
+        let target = root.join("auth.json");
+        fs::write(&target, "old-auth").expect("write old");
+        let mut previous_profile = profile(TargetEnvironment::Cli);
+        previous_profile.id = "profile-previous".to_string();
+        previous_profile.name = "Previous".to_string();
+        previous_profile.environments[0].secret_ref =
+            Some("profile:profile-previous:environment:cli".to_string());
+        previous_profile.last_used_at = Some("1000".to_string());
+        let profile = profile(TargetEnvironment::Cli);
+        let vault = SecretVault::new(MemorySecretStore::default());
+        store_snapshot(
+            &vault,
+            &profile,
+            TargetEnvironment::Cli,
+            &target,
+            "new-auth",
         );
+        let profile_repository = ProfileRepository::new(root.join("profiles.json"));
+        profile_repository
+            .upsert_profile(previous_profile)
+            .expect("save previous");
+        profile_repository
+            .upsert_profile(profile.clone())
+            .expect("save target");
+        let app_state_repository = AppStateRepository::new(root.join("state"));
+
+        switch_saved_profile_with_runtime(
+            ProfileSwitchRequest {
+                profile_id: profile.id.clone(),
+                environments: vec![TargetEnvironment::Cli],
+                auto_restart_apps: false,
+                vscode_reload_mode: VscodeReloadMode::None,
+                confirm_process_close: true,
+                desktop_app_path: None,
+                vscode_app_path: None,
+                quit_timeout_ms: 50,
+            },
+            &profile_repository,
+            &app_state_repository,
+            &vault,
+            "3000".to_string(),
+            &MockRuntime::default(),
+        )
+        .expect("switch profile");
+
+        let history = app_state_repository.list_history().expect("history");
+        assert_eq!(history[0].from_profile, Some("Previous".to_string()));
         let _ = fs::remove_dir_all(root);
     }
 

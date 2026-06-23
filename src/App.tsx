@@ -70,8 +70,19 @@ export default function App() {
   const [history, setHistory] = useState<SwitchHistoryEntry[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [recovery, setRecovery] = useState<RecoveryStatus>(defaultRecoveryStatus);
+  const [quickSwitchMessage, setQuickSwitchMessage] = useState<string | null>(null);
 
-  const activeProfile = useMemo(() => profiles.find((profile) => profile.defaultProfile), [profiles]);
+  const defaultProfile = useMemo(() => profiles.find((profile) => profile.defaultProfile), [profiles]);
+  const currentProfile = useMemo(() => {
+    const recentlyUsed = profiles
+      .filter((profile) => profile.lastUsedAt)
+      .sort((left, right) => Number(right.lastUsedAt ?? 0) - Number(left.lastUsedAt ?? 0))[0];
+    return recentlyUsed ?? defaultProfile;
+  }, [defaultProfile, profiles]);
+  const previousProfile = useMemo(() => {
+    const previousName = history.find((item) => item.fromProfile)?.fromProfile;
+    return previousName ? profiles.find((profile) => profile.name === previousName) : undefined;
+  }, [history, profiles]);
 
   useEffect(() => {
     void runScan();
@@ -119,6 +130,40 @@ export default function App() {
     await refreshHistory();
   }
 
+  async function quickSwitchProfile(profile: ProfileMetadata, label: string) {
+    const environments = settings.defaultScope.filter((environment) =>
+      profile.environments.some((state) => state.environment === environment && state.status === "available")
+    );
+    if (environments.length === 0) {
+      setQuickSwitchMessage(`${profile.name} has no available environments in the default switch scope.`);
+      return;
+    }
+    const needsCloseApproval = settings.confirmBeforeClosingApps && environments.some((environment) => environment === "vscode" || environment === "desktop");
+    if (needsCloseApproval && !window.confirm(`Close running Desktop / VS Code windows if needed, then ${label}?`)) {
+      return;
+    }
+    setQuickSwitchMessage(`${label} started for ${profile.name}.`);
+    try {
+      const response = await switchToProfile({
+        profileId: profile.id,
+        environments,
+        autoRestartApps: settings.autoRestartApps,
+        vscodeReloadMode: settings.vscodeReloadMode,
+        confirmProcessClose: !settings.confirmBeforeClosingApps || needsCloseApproval,
+        desktopAppPath: scan.environments.find((environment) => environment.id === "Desktop")?.executablePath ?? null,
+        vscodeAppPath: scan.environments.find((environment) => environment.id === "VS Code")?.executablePath ?? null,
+        quitTimeoutMs: 8000
+      });
+      await refreshProfiles();
+      await refreshHistory();
+      await refreshRecovery();
+      await runScan();
+      setQuickSwitchMessage(`${label} finished: ${response.transaction.phase}.`);
+    } catch (error) {
+      setQuickSwitchMessage(`${label} failed: ${String(error)}`);
+    }
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -140,11 +185,24 @@ export default function App() {
       <main className="content">
         {tab === "home" && (
           <Home
-            activeProfile={activeProfile}
+            currentProfile={currentProfile}
+            defaultProfile={defaultProfile}
+            previousProfile={previousProfile}
             scan={scan}
             history={history}
             recovery={recovery}
+            quickSwitchMessage={quickSwitchMessage}
             onSwitch={() => setSwitchOpen(true)}
+            onRestoreDefault={() => {
+              if (defaultProfile) {
+                void quickSwitchProfile(defaultProfile, "Restore default account");
+              }
+            }}
+            onSwitchPrevious={() => {
+              if (previousProfile) {
+                void quickSwitchProfile(previousProfile, "Switch back to previous account");
+              }
+            }}
           />
         )}
         {tab === "profiles" && <Profiles profiles={profiles} onProfilesChanged={refreshProfiles} />}
@@ -196,29 +254,50 @@ function NavButton({
 }
 
 function Home({
-  activeProfile,
+  currentProfile,
+  defaultProfile,
+  previousProfile,
   scan,
   history,
   recovery,
-  onSwitch
+  quickSwitchMessage,
+  onSwitch,
+  onRestoreDefault,
+  onSwitchPrevious
 }: {
-  activeProfile?: ProfileMetadata;
+  currentProfile?: ProfileMetadata;
+  defaultProfile?: ProfileMetadata;
+  previousProfile?: ProfileMetadata;
   scan: EnvironmentScan;
   history: SwitchHistoryEntry[];
   recovery: RecoveryStatus;
+  quickSwitchMessage: string | null;
   onSwitch: () => void;
+  onRestoreDefault: () => void;
+  onSwitchPrevious: () => void;
 }) {
   return (
     <section className="view">
       <header className="view-header">
         <div>
           <p className="eyebrow">Current account</p>
-          <h1>{activeProfile?.accountHint ?? "No verified account"}</h1>
+          <h1>{currentProfile?.accountHint ?? "No verified account"}</h1>
+          <span className="scan-meta">{currentProfile ? `${currentProfile.name}${currentProfile.lastUsedAt ? ` · last used ${currentProfile.lastUsedAt}` : ""}` : "No profile has been switched yet"}</span>
         </div>
-        <button className="primary-button" onClick={onSwitch}>
-          <RefreshCw size={18} />
-          One-click switch
-        </button>
+        <div className="header-actions">
+          <button className="primary-button" onClick={onSwitch}>
+            <RefreshCw size={18} />
+            One-click switch
+          </button>
+          <button className="secondary-button" onClick={onRestoreDefault} disabled={!defaultProfile}>
+            <RotateCcw size={18} />
+            Restore default
+          </button>
+          <button className="secondary-button" onClick={onSwitchPrevious} disabled={!previousProfile}>
+            <History size={18} />
+            Switch back
+          </button>
+        </div>
       </header>
 
       <div className="status-grid">
@@ -231,6 +310,13 @@ function Home({
         <section className="recovery-banner">
           <AlertTriangle size={18} />
           <span>{recovery.message}</span>
+        </section>
+      )}
+
+      {quickSwitchMessage && (
+        <section className="recovery-banner">
+          <ListChecks size={18} />
+          <span>{quickSwitchMessage}</span>
         </section>
       )}
 
@@ -468,6 +554,7 @@ function Profiles({ profiles, onProfilesChanged }: { profiles: ProfileMetadata[]
                   <div>
                     <h2>{profile.name}</h2>
                     <span>{profile.accountHint}</span>
+                    <span>{profile.lastUsedAt ? `Last used ${profile.lastUsedAt}` : "Never switched"}</span>
                   </div>
                   {profile.defaultProfile && <strong className="pill">Default</strong>}
                 </div>

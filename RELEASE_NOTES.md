@@ -22,6 +22,8 @@ This developer preview implements the project foundation and the backend pieces 
 - VS Code switch coordinator with manual reload or explicit restart behavior
 - UI-facing saved Profile switch command backed by one combined close, restore, restart, and rollback transaction
 - Switch dialog close confirmation for running Desktop/VS Code windows
+- Last-used Profile tracking and previous-Profile switch history
+- Home actions for restoring the default Profile and switching back to the previous Profile
 - Local settings persistence
 - Local switch history persistence and clearing
 - Startup recovery inspection for unfinished transaction journals

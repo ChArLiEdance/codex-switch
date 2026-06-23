@@ -136,7 +136,7 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 `AppStateRepository` persists non-secret app state under `~/.codex-switch`:
 
 - `settings.json`: default switch scope, close confirmation, app restart preference, default-on-exit preference, and VS Code reload mode.
-- `history.json`: local switch history with profile names/IDs, environment list, status, and error category only.
+- `history.json`: local switch history with previous/target profile names, environment list, status, and error category only.
 - `transactions/current.json`: optional current transaction journal inspected on startup for recovery.
 
 `check_recovery_status` reports whether a transaction journal is unfinished. It does not read auth payloads or secret snapshots.
@@ -153,10 +153,13 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 6. Runs one `TransactionRunner` backup/restore/rollback transaction.
 7. Runs Desktop restart and VS Code restart, when enabled, inside a post-restore transaction hook.
 8. Rolls back restored files if either restore or post-restore restart fails.
-9. Appends local switch history.
-10. Returns closed-process, restarted-app, warning, and manual-verification details to the dialog.
+9. Marks the target Profile with `lastUsedAt` on success.
+10. Appends local switch history, including the previously most recently used Profile when known.
+11. Returns closed-process, restarted-app, warning, and manual-verification details to the dialog.
 
 This command now makes saved Profiles switchable from the UI and coordinates process close/restart for Desktop and VS Code after explicit confirmation. The process behavior is covered by mock process-controller tests; real Codex Desktop and VS Code extension auth-path semantics still require machine-specific validation.
+
+The Home view derives the current Profile from the latest `lastUsedAt` value, then offers quick actions to restore the default Profile or switch back to the previous Profile recorded in history. These actions reuse `switch_to_profile` and the configured default switch scope.
 
 ## Atomic Restore Strategy
 
