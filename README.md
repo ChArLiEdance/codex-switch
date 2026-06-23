@@ -89,6 +89,7 @@ codex_switch/
 
 - Read-only environment detection code is present in the Tauri backend and is wired into the UI.
 - Current environment import is implemented for selected CLI, VS Code, and Desktop detector results. Multi-environment import requires explicit same-account confirmation.
+- Profile management supports editing names, tags, notes, setting a default Profile, and deleting Profile metadata with associated keychain payload cleanup.
 - Account identity verification is not implemented yet; detector account hints are `Unknown`.
 - Backup, restore, rollback, and per-environment switch coordinators are implemented in the backend and covered by simulated tests.
 - Saved Profile switching is wired from the UI to a combined backend transaction. With explicit user confirmation it closes running Desktop/VS Code processes, restores selected environments, restarts supported apps, records history, and rolls back if restore or restart fails.

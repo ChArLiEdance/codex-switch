@@ -36,7 +36,7 @@ Secret payload:
 
 The backend models this split with `ProfileMetadata`, `EnvironmentProfileState`, and `SecretVault`. Metadata stores only `secret_ref` identifiers. Secret payloads are written through the `SecretStore` trait, whose production implementation uses the OS keychain through the Rust `keyring` crate.
 
-Profile metadata is persisted by `ProfileRepository` as `~/.codex-switch/profiles.json`. The repository validates metadata before saving and clears older default flags when a newly imported profile is marked default.
+Profile metadata is persisted by `ProfileRepository` as `~/.codex-switch/profiles.json`. The repository validates metadata before saving and clears older default flags when a newly imported or edited profile is marked default. Profile updates are metadata-only operations for name, tags, notes, and default status. Profile deletion removes metadata and the corresponding per-environment secret payloads from the OS keychain.
 
 ## Import Flow
 

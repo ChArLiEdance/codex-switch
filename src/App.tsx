@@ -8,11 +8,16 @@ import {
   KeyRound,
   Laptop,
   ListChecks,
+  Pencil,
   RefreshCw,
   RotateCcw,
+  Save,
   Settings,
   ShieldCheck,
   SquareTerminal,
+  Star,
+  Trash2,
+  X,
   UserPlus
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -20,6 +25,7 @@ import {
   AppSettings,
   checkRecoveryStatus,
   clearSwitchHistory,
+  deleteProfile,
   detectEnvironments,
   emptyEnvironmentScan,
   EnvironmentId,
@@ -34,7 +40,8 @@ import {
   saveSettings,
   SwitchHistoryEntry,
   switchToProfile,
-  TargetEnvironment
+  TargetEnvironment,
+  updateProfile
 } from "./backend";
 
 type Tab = "home" | "profiles" | "environment" | "settings";
@@ -140,7 +147,7 @@ export default function App() {
             onSwitch={() => setSwitchOpen(true)}
           />
         )}
-        {tab === "profiles" && <Profiles profiles={profiles} onImported={refreshProfiles} />}
+        {tab === "profiles" && <Profiles profiles={profiles} onProfilesChanged={refreshProfiles} />}
         {tab === "environment" && <Environment scan={scan} busy={scanBusy} onScan={runScan} />}
         {tab === "settings" && (
           <SettingsView
@@ -253,7 +260,7 @@ function Home({
   );
 }
 
-function Profiles({ profiles, onImported }: { profiles: ProfileMetadata[]; onImported: () => Promise<void> }) {
+function Profiles({ profiles, onProfilesChanged }: { profiles: ProfileMetadata[]; onProfilesChanged: () => Promise<void> }) {
   const [name, setName] = useState("Imported Profile");
   const [tags, setTags] = useState("current");
   const [note, setNote] = useState("Imported from current local Codex state.");
@@ -265,6 +272,11 @@ function Profiles({ profiles, onImported }: { profiles: ProfileMetadata[]; onImp
   const [confirmSameAccount, setConfirmSameAccount] = useState(false);
   const [makeDefault, setMakeDefault] = useState(profiles.length === 0);
   const [importing, setImporting] = useState(false);
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editTags, setEditTags] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [busyProfileId, setBusyProfileId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   async function saveCurrentLogin() {
@@ -282,7 +294,7 @@ function Profiles({ profiles, onImported }: { profiles: ProfileMetadata[]; onImp
         confirmSameAccount,
         defaultProfile: makeDefault
       });
-      await onImported();
+      await onProfilesChanged();
       const importedCount = result.importedEnvironments
         .reduce((sum, item) => sum + item.artifactCount, 0);
       setMessage(`Saved ${result.profile.name}; captured ${importedCount} local artifacts into the secret vault.`);
@@ -290,6 +302,75 @@ function Profiles({ profiles, onImported }: { profiles: ProfileMetadata[]; onImp
       setMessage(`Import failed: ${String(error)}`);
     } finally {
       setImporting(false);
+    }
+  }
+
+  function startEdit(profile: ProfileMetadata) {
+    setEditingProfileId(profile.id);
+    setEditName(profile.name);
+    setEditTags(profile.tags.join(", "));
+    setEditNote(profile.note);
+    setMessage(null);
+  }
+
+  async function saveProfileEdit(profile: ProfileMetadata) {
+    setBusyProfileId(profile.id);
+    setMessage(null);
+    try {
+      const updated = await updateProfile({
+        profileId: profile.id,
+        name: editName,
+        tags: editTags.split(",").map((tag) => tag.trim()).filter(Boolean),
+        note: editNote,
+        defaultProfile: profile.defaultProfile
+      });
+      setEditingProfileId(null);
+      await onProfilesChanged();
+      setMessage(`Updated ${updated.name}.`);
+    } catch (error) {
+      setMessage(`Update failed: ${String(error)}`);
+    } finally {
+      setBusyProfileId(null);
+    }
+  }
+
+  async function setDefaultProfile(profile: ProfileMetadata) {
+    setBusyProfileId(profile.id);
+    setMessage(null);
+    try {
+      const updated = await updateProfile({
+        profileId: profile.id,
+        name: profile.name,
+        tags: profile.tags,
+        note: profile.note,
+        defaultProfile: true
+      });
+      await onProfilesChanged();
+      setMessage(`${updated.name} is now the default profile.`);
+    } catch (error) {
+      setMessage(`Default update failed: ${String(error)}`);
+    } finally {
+      setBusyProfileId(null);
+    }
+  }
+
+  async function removeProfile(profile: ProfileMetadata) {
+    if (!window.confirm(`Delete profile "${profile.name}" and its stored secret payloads?`)) {
+      return;
+    }
+    setBusyProfileId(profile.id);
+    setMessage(null);
+    try {
+      await deleteProfile(profile.id);
+      if (editingProfileId === profile.id) {
+        setEditingProfileId(null);
+      }
+      await onProfilesChanged();
+      setMessage(`Deleted ${profile.name}.`);
+    } catch (error) {
+      setMessage(`Delete failed: ${String(error)}`);
+    } finally {
+      setBusyProfileId(null);
     }
   }
 
@@ -361,16 +442,38 @@ function Profiles({ profiles, onImported }: { profiles: ProfileMetadata[]; onImp
             <p>Run read-only detection, confirm the selected environments belong to the same account, then save the current login.</p>
           </article>
         )}
-        {profiles.map((profile) => (
+        {profiles.map((profile) => {
+          const editing = editingProfileId === profile.id;
+          const busy = busyProfileId === profile.id;
+          return (
           <article className="profile-card" key={profile.id}>
-            <div className="profile-topline">
-              <div>
-                <h2>{profile.name}</h2>
-                <span>{profile.accountHint}</span>
+            {editing ? (
+              <div className="profile-edit">
+                <label>
+                  <span>Name</span>
+                  <input value={editName} onChange={(event) => setEditName(event.target.value)} />
+                </label>
+                <label>
+                  <span>Tags</span>
+                  <input value={editTags} onChange={(event) => setEditTags(event.target.value)} />
+                </label>
+                <label>
+                  <span>Note</span>
+                  <textarea value={editNote} onChange={(event) => setEditNote(event.target.value)} />
+                </label>
               </div>
-              {profile.defaultProfile && <strong className="pill">Default</strong>}
-            </div>
-            <p>{profile.note}</p>
+            ) : (
+              <>
+                <div className="profile-topline">
+                  <div>
+                    <h2>{profile.name}</h2>
+                    <span>{profile.accountHint}</span>
+                  </div>
+                  {profile.defaultProfile && <strong className="pill">Default</strong>}
+                </div>
+                <p>{profile.note}</p>
+              </>
+            )}
             {profile.tags.length > 0 && (
               <div className="tag-list">
                 {profile.tags.map((tag) => <span key={tag}>{tag}</span>)}
@@ -384,12 +487,39 @@ function Profiles({ profiles, onImported }: { profiles: ProfileMetadata[]; onImp
               ))}
             </div>
             <div className="card-actions">
-              <button>Edit</button>
-              <button>Rename</button>
-              <button>Delete</button>
+              {editing ? (
+                <>
+                  <button onClick={() => void saveProfileEdit(profile)} disabled={busy || editName.trim().length === 0}>
+                    <Save size={14} />
+                    Save
+                  </button>
+                  <button onClick={() => setEditingProfileId(null)} disabled={busy}>
+                    <X size={14} />
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => startEdit(profile)} disabled={busy}>
+                    <Pencil size={14} />
+                    Edit
+                  </button>
+                  {!profile.defaultProfile && (
+                    <button onClick={() => void setDefaultProfile(profile)} disabled={busy}>
+                      <Star size={14} />
+                      Set default
+                    </button>
+                  )}
+                  <button onClick={() => void removeProfile(profile)} disabled={busy} className="danger-card-button">
+                    <Trash2 size={14} />
+                    Delete
+                  </button>
+                </>
+              )}
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

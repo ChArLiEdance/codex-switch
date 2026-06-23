@@ -373,6 +373,34 @@ h2 {
   margin-top: 4px;
 }
 
+.profile-edit {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-edit label {
+  display: grid;
+  gap: 6px;
+  color: #3b463f;
+  font-weight: 700;
+}
+
+.profile-edit input,
+.profile-edit textarea {
+  width: 100%;
+  min-height: 38px;
+  border-radius: 6px;
+  border: 1px solid #cbd3cc;
+  padding: 8px 10px;
+  color: #19201d;
+  background: #ffffff;
+}
+
+.profile-edit textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
 .pill,
 .tag-list span,
 .env-chip {
@@ -420,10 +448,23 @@ h2 {
 }
 
 .card-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 34px;
   padding: 0 12px;
   border-radius: 6px;
   background: #edf0ec;
+}
+
+.card-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.danger-card-button {
+  color: #8f2f2a;
+  background: #f8e2df !important;
 }
 
 .environment-list {

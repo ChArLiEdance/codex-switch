@@ -13,6 +13,8 @@ This developer preview implements the project foundation and the backend pieces 
 - OS keychain-backed secret-store abstraction
 - Current local state import into profiles
 - Metadata persistence at `~/.codex-switch/profiles.json`
+- Profile edit, delete, and set-default actions from the Profiles UI
+- Keychain payload cleanup when a saved Profile is deleted
 - Switch transaction core with backup, atomic restore, and rollback
 - Desktop App switch coordinator with graceful quit and optional restart
 - Codex CLI switch coordinator with running-task detection and availability validation

@@ -74,6 +74,14 @@ export type ProfileImportResult = {
   warnings: string[];
 };
 
+export type ProfileUpdateRequest = {
+  profileId: string;
+  name: string;
+  tags: string[];
+  note: string;
+  defaultProfile: boolean;
+};
+
 export type AppSettings = {
   defaultScope: TargetEnvironment[];
   confirmBeforeClosingApps: boolean;
@@ -168,6 +176,14 @@ export async function listProfiles(): Promise<ProfileMetadata[]> {
 
 export async function importCurrentProfile(request: ProfileImportRequest): Promise<ProfileImportResult> {
   return await invoke<ProfileImportResult>("import_current_profile", { request });
+}
+
+export async function updateProfile(request: ProfileUpdateRequest): Promise<ProfileMetadata> {
+  return await invoke<ProfileMetadata>("update_profile", { request });
+}
+
+export async function deleteProfile(profileId: string): Promise<void> {
+  await invoke<void>("delete_profile", { request: { profileId } });
 }
 
 export async function getSettings(): Promise<AppSettings> {

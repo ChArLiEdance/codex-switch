@@ -14,11 +14,11 @@ use app_state::{
     SwitchHistoryEntry,
 };
 use importer::{import_profile_from_scan, ProfileImportRequest, ProfileImportResult};
-use profile::ProfileMetadata;
+use profile::{ProfileMetadata, TargetEnvironment};
 use profile_switch::{switch_saved_profile, ProfileSwitchRequest, ProfileSwitchResult};
-use profile_store::{ProfileRepository, ProfileStoreError};
+use profile_store::{ProfileRepository, ProfileStoreError, ProfileUpdateRequest};
 use secret_store::{KeychainSecretStore, SecretVault};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     env,
     fs,
@@ -86,6 +86,12 @@ pub(crate) enum PathKind {
     Cache,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProfileDeleteRequest {
+    profile_id: String,
+}
+
 #[tauri::command]
 fn backend_health() -> &'static str {
     "codex_switch_backend_ready"
@@ -126,6 +132,38 @@ fn import_current_profile(request: ProfileImportRequest) -> Result<ProfileImport
         .upsert_profile(result.profile.clone())
         .map_err(profile_store_error_message)?;
     Ok(result)
+}
+
+#[tauri::command]
+fn update_profile(request: ProfileUpdateRequest) -> Result<ProfileMetadata, String> {
+    profile_repository()
+        .update_profile(request)
+        .map_err(profile_store_error_message)
+}
+
+#[tauri::command]
+fn delete_profile(request: ProfileDeleteRequest) -> Result<(), String> {
+    let repository = profile_repository();
+    let profile = repository
+        .list_profiles()
+        .map_err(profile_store_error_message)?
+        .into_iter()
+        .find(|profile| profile.id == request.profile_id)
+        .ok_or_else(|| profile_store_error_message(ProfileStoreError::NotFound(request.profile_id.clone())))?;
+    let vault = SecretVault::new(KeychainSecretStore::new());
+    for environment in [
+        TargetEnvironment::Cli,
+        TargetEnvironment::Vscode,
+        TargetEnvironment::Desktop,
+    ] {
+        vault
+            .delete_profile_payload(&profile.id, environment)
+            .map_err(|error| format!("{error:?}"))?;
+    }
+    repository
+        .delete_profile(&profile.id)
+        .map_err(profile_store_error_message)?;
+    Ok(())
 }
 
 #[tauri::command]
@@ -541,6 +579,8 @@ pub fn run() {
             detect_environments,
             list_profiles,
             import_current_profile,
+            update_profile,
+            delete_profile,
             get_settings,
             save_settings,
             list_switch_history,
