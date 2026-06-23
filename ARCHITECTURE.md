@@ -95,6 +95,7 @@ The current `TransactionRunner` implements the filesystem core of this model for
 
 - Creates a per-transaction backup manifest before writing target files
 - Rejects restore plans with duplicate normalized target paths, direct symlink targets, nearest existing symlink target ancestors, or existing non-file targets before backup or writes begin
+- Rejects unsafe backup locations, including non-segment transaction IDs, symlink backup roots, and non-directory backup roots, before backup or restore writes begin
 - Writes restored files through a temporary file followed by rename
 - Removes restored cache artifacts after restore so target apps refresh volatile cache state on next launch
 - Reads restored non-cache auth/config artifacts back from disk and compares their bytes and captured Unix file modes with the target Profile snapshot before post-restore actions run

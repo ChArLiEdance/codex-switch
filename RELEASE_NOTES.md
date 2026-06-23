@@ -21,6 +21,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Keychain payload cleanup when a saved Profile is deleted
 - Switch transaction core with backup, atomic restore, and rollback
 - Duplicate, direct symlink, nearest-existing-ancestor symlink, and existing non-file restore-target rejection before backup or writes begin
+- Unsafe transaction ID, symlink backup root, and non-directory backup root rejection before backup or writes begin
 - Transactional cache refresh for captured cache artifacts during profile restore
 - Readback verification for restored auth/config artifact bytes and Unix file modes before post-restore app restarts
 - Desktop App switch coordinator with graceful quit and optional restart

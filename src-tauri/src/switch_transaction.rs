@@ -178,6 +178,13 @@ impl TransactionRunner {
             );
             return Ok(transaction);
         }
+        if let Err(error) = self.validate_backup_location(plan) {
+            transaction.transition(
+                TransactionPhase::Failed,
+                format!("Backup location rejected: {error:?}"),
+            );
+            return Ok(transaction);
+        }
         transaction.transition(TransactionPhase::BackingUp, "Backing up current state");
         let manifest = self.backup(plan)?;
         transaction.transition(TransactionPhase::BackupComplete, "Backup complete");
@@ -255,6 +262,7 @@ impl TransactionRunner {
     }
 
     pub fn backup(&self, plan: &RestorePlan) -> Result<BackupManifest, TransactionError> {
+        self.validate_backup_location(plan)?;
         let transaction_backup_root = self.backup_root.join(&plan.transaction_id);
         fs::create_dir_all(&transaction_backup_root)
             .map_err(|error| TransactionError::Io(error.to_string()))?;
@@ -292,6 +300,15 @@ impl TransactionRunner {
             transaction_id: plan.transaction_id.clone(),
             entries,
         })
+    }
+
+    fn validate_backup_location(&self, plan: &RestorePlan) -> Result<(), TransactionError> {
+        validate_backup_transaction_id(&plan.transaction_id)?;
+        validate_backup_directory(&self.backup_root, "backup root")?;
+        validate_backup_directory(
+            &self.backup_root.join(&plan.transaction_id),
+            "transaction backup directory",
+        )
     }
 
     fn restore(
@@ -397,6 +414,56 @@ fn validate_unique_restore_targets(plan: &RestorePlan) -> Result<(), Transaction
                 "duplicate restore target {}",
                 normalized.display()
             )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_backup_transaction_id(transaction_id: &str) -> Result<(), TransactionError> {
+    let mut components = Path::new(transaction_id).components();
+    match (components.next(), components.next()) {
+        (Some(Component::Normal(_)), None) if !transaction_id.trim().is_empty() => Ok(()),
+        _ => Err(TransactionError::InvalidRestoreTarget(format!(
+            "transaction id is not a safe path segment {transaction_id}"
+        ))),
+    }
+}
+
+fn validate_backup_directory(path: &Path, label: &str) -> Result<(), TransactionError> {
+    if path_is_symlink(path)? {
+        return Err(TransactionError::UnsafeRestoreTarget(format!(
+            "{label} is a symlink {}",
+            path.display()
+        )));
+    }
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_dir() => Ok(()),
+        Ok(_) => Err(TransactionError::InvalidRestoreTarget(format!(
+            "{label} is not a directory {}",
+            path.display()
+        ))),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            reject_existing_symlink_parent(path, label)
+        }
+        Err(error) => Err(TransactionError::Io(error.to_string())),
+    }
+}
+
+fn reject_existing_symlink_parent(path: &Path, label: &str) -> Result<(), TransactionError> {
+    for ancestor in path.ancestors().skip(1) {
+        if ancestor.as_os_str().is_empty() {
+            continue;
+        }
+        match fs::symlink_metadata(ancestor) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(TransactionError::UnsafeRestoreTarget(format!(
+                    "{label} ancestor is a symlink {}",
+                    ancestor.display()
+                )));
+            }
+            Ok(_) => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(TransactionError::Io(error.to_string())),
         }
     }
     Ok(())
@@ -847,6 +914,106 @@ mod tests {
             .any(|event| event.phase == TransactionPhase::BackingUp));
         assert!(target.is_dir());
         assert!(!root.join("backups/tx-directory-target").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn unsafe_transaction_id_fails_before_backup_or_write() {
+        let root = temp_dir("unsafe-transaction-id");
+        let target = root.join("auth.json");
+        fs::write(&target, "old").expect("write old");
+        let plan = RestorePlan {
+            transaction_id: "../escape".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "new")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction.events.iter().any(|event| {
+            event.phase == TransactionPhase::Failed
+                && event.message.contains("transaction id is not a safe path segment")
+        }));
+        assert!(!transaction
+            .events
+            .iter()
+            .any(|event| event.phase == TransactionPhase::BackingUp));
+        assert_eq!(fs::read_to_string(target).expect("read target"), "old");
+        assert!(!root.join("backups").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn file_backup_root_fails_before_backup_or_write() {
+        let root = temp_dir("file-backup-root");
+        let target = root.join("auth.json");
+        let backup_root = root.join("backups");
+        fs::write(&target, "old").expect("write old");
+        fs::write(&backup_root, "not a directory").expect("write backup root file");
+        let plan = RestorePlan {
+            transaction_id: "tx-file-backup-root".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "new")],
+        };
+        let runner = TransactionRunner::new(backup_root.clone());
+
+        let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction.events.iter().any(|event| {
+            event.phase == TransactionPhase::Failed
+                && event.message.contains("backup root is not a directory")
+        }));
+        assert!(!transaction
+            .events
+            .iter()
+            .any(|event| event.phase == TransactionPhase::BackingUp));
+        assert_eq!(fs::read_to_string(target).expect("read target"), "old");
+        assert_eq!(
+            fs::read_to_string(backup_root).expect("read backup root"),
+            "not a directory"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_backup_root_fails_before_backup_or_write() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_dir("symlink-backup-root");
+        let target = root.join("auth.json");
+        let real_backup_root = root.join("real-backups");
+        let symlink_backup_root = root.join("backup-link");
+        fs::write(&target, "old").expect("write old");
+        fs::create_dir_all(&real_backup_root).expect("create real backup root");
+        symlink(&real_backup_root, &symlink_backup_root).expect("create backup symlink");
+        let plan = RestorePlan {
+            transaction_id: "tx-symlink-backup-root".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "new")],
+        };
+        let runner = TransactionRunner::new(symlink_backup_root.clone());
+
+        let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction.events.iter().any(|event| {
+            event.phase == TransactionPhase::Failed
+                && event.message.contains("backup root is a symlink")
+        }));
+        assert!(!transaction
+            .events
+            .iter()
+            .any(|event| event.phase == TransactionPhase::BackingUp));
+        assert_eq!(fs::read_to_string(target).expect("read target"), "old");
+        assert!(!real_backup_root.join("tx-symlink-backup-root").exists());
+        assert!(fs::symlink_metadata(symlink_backup_root)
+            .expect("symlink metadata")
+            .file_type()
+            .is_symlink());
         let _ = fs::remove_dir_all(root);
     }
 
