@@ -41,7 +41,9 @@ import {
   importCurrentProfile,
   listProfiles,
   listSwitchHistory,
+  previewCurrentImport,
   ProfileMetadata,
+  ProfileImportPreflightResult,
   ProfileSwitchResult,
   RecoveryStatus,
   resolveRecoveryStatus,
@@ -449,6 +451,8 @@ function Profiles({
   const [confirmSameAccount, setConfirmSameAccount] = useState(false);
   const [makeDefault, setMakeDefault] = useState(profiles.length === 0);
   const [importing, setImporting] = useState(false);
+  const [preflightBusy, setPreflightBusy] = useState(false);
+  const [preflight, setPreflight] = useState<ProfileImportPreflightResult | null>(null);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editTags, setEditTags] = useState("");
@@ -459,6 +463,25 @@ function Profiles({
     .filter(([, enabled]) => enabled)
     .map(([environment]) => environment);
   const requiresSameAccountConfirmation = selectedEnvironments.length > 1 && !confirmSameAccount;
+
+  async function previewImportCoverage() {
+    if (selectedEnvironments.length === 0) {
+      setMessage("Preview failed: select at least one environment.");
+      return;
+    }
+    setPreflightBusy(true);
+    setMessage(null);
+    try {
+      const result = await previewCurrentImport({ environments: selectedEnvironments });
+      setPreflight(result);
+      const readyCount = result.environments.filter((environment) => environment.readiness === "ready").length;
+      setMessage(`Preview complete: ${readyCount} environment(s) have readable artifacts.`);
+    } catch (error) {
+      setMessage(`Preview failed: ${String(error)}`);
+    } finally {
+      setPreflightBusy(false);
+    }
+  }
 
   async function saveCurrentLogin() {
     if (selectedEnvironments.length === 0) {
@@ -584,10 +607,16 @@ function Profiles({
             <li>Return here and rescan so this app can inspect local state read-only.</li>
             <li>Select only environments that belong to the same account, then save the Profile.</li>
           </ol>
-          <button className="secondary-button compact" onClick={() => void onScan()} disabled={scanBusy}>
-            <FolderSearch size={14} />
-            {scanBusy ? "Scanning" : "Rescan current state"}
-          </button>
+          <div className="import-guide-actions">
+            <button className="secondary-button compact" onClick={() => void previewImportCoverage()} disabled={preflightBusy || selectedEnvironments.length === 0}>
+              <ListChecks size={14} />
+              {preflightBusy ? "Previewing" : "Preview capture"}
+            </button>
+            <button className="secondary-button compact" onClick={() => void onScan()} disabled={scanBusy}>
+              <FolderSearch size={14} />
+              {scanBusy ? "Scanning" : "Rescan current state"}
+            </button>
+          </div>
         </div>
         <div className="import-detected-grid">
           {(["cli", "vscode", "desktop"] as TargetEnvironment[]).map((environment) => {
@@ -649,6 +678,38 @@ function Profiles({
         </div>
         {requiresSameAccountConfirmation && (
           <p className="import-warning">Multi-environment imports require same-account confirmation before saving.</p>
+        )}
+        {preflight && (
+          <div className="import-preflight">
+            {preflight.environments.map((environment) => (
+              <article className={`preflight-row ${environment.readiness}`} key={environment.environment}>
+                <div>
+                  <strong>{environmentLabel(environment.environment)}</strong>
+                  <span>{preflightReadinessLabel(environment.readiness)} · {environment.accountHint}</span>
+                </div>
+                <dl>
+                  <div>
+                    <dt>Candidates</dt>
+                    <dd>{environment.existingCandidatePathCount}/{environment.candidatePathCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Capture</dt>
+                    <dd>{environment.capturedArtifactCount} files · {environment.capturedBytes} encoded bytes</dd>
+                  </div>
+                  <div>
+                    <dt>Skipped</dt>
+                    <dd>{environment.skippedArtifactCount}</dd>
+                  </div>
+                </dl>
+                {environment.skippedReasons.length > 0 && (
+                  <em>{environment.skippedReasons.map((reason) => `${reason.reason}: ${reason.count}`).join("; ")}</em>
+                )}
+              </article>
+            ))}
+            {preflight.warnings.length > 0 && (
+              <p className="import-warning">{preflight.warnings.join(" ")}</p>
+            )}
+          </div>
         )}
         {message && <p className="import-message">{message}</p>}
       </section>
@@ -752,6 +813,19 @@ function environmentLabel(environment: TargetEnvironment) {
     return "VS Code";
   }
   return "Desktop";
+}
+
+function preflightReadinessLabel(readiness: string) {
+  if (readiness === "ready") {
+    return "Ready to import";
+  }
+  if (readiness === "not_selected") {
+    return "Not selected";
+  }
+  if (readiness === "scan_missing") {
+    return "Scan missing";
+  }
+  return "No readable artifacts";
 }
 
 function scanEnvironmentForTarget(scan: EnvironmentScan, target: TargetEnvironment) {

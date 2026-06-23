@@ -33,6 +33,7 @@ Current implementation status:
 - `SecretStore` defines the secret persistence boundary.
 - `KeychainSecretStore` uses the Rust `keyring` crate for the production OS credential backend.
 - The import command returns counts and warnings only; raw captured file contents stay inside backend secret storage.
+- The import preflight command returns capture counts and skipped-reason summaries only; it does not write secrets or return captured file contents.
 - Multi-environment import fails unless the caller confirms the selected local states belong to the same account.
 - Unit tests use `MemorySecretStore` and do not touch real credentials.
 

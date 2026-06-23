@@ -1,7 +1,7 @@
 use crate::{
     profile::{EnvironmentProfileState, ProfileAuthStatus, ProfileMetadata, TargetEnvironment},
     secret_store::{SecretStore, SecretStoreError, SecretVault},
-    DiscoveredPath, EnvironmentState, PathKind,
+    DiscoveredPath, EnvironmentState, PathKind, SupportState,
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
@@ -40,6 +40,52 @@ pub struct ImportedEnvironmentSummary {
     pub captured_bytes: usize,
     pub skipped_count: usize,
     pub secret_ref: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileImportPreflightRequest {
+    pub environments: Vec<TargetEnvironment>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileImportPreflightResult {
+    pub environments: Vec<ImportPreflightEnvironment>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportPreflightEnvironment {
+    pub environment: TargetEnvironment,
+    pub selected: bool,
+    pub scan_available: bool,
+    pub support: String,
+    pub account_hint: String,
+    pub candidate_path_count: usize,
+    pub existing_candidate_path_count: usize,
+    pub captured_artifact_count: usize,
+    pub captured_bytes: usize,
+    pub skipped_artifact_count: usize,
+    pub skipped_reasons: Vec<SkippedReasonSummary>,
+    pub readiness: ImportReadiness,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkippedReasonSummary {
+    pub reason: String,
+    pub count: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportReadiness {
+    Ready,
+    NotSelected,
+    ScanMissing,
+    NoReadableArtifacts,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -228,6 +274,85 @@ pub(crate) fn import_profile_from_scan<S: SecretStore>(
     })
 }
 
+pub(crate) fn import_preflight_from_scan(
+    request: ProfileImportPreflightRequest,
+    scan_environments: &[EnvironmentState],
+) -> ProfileImportPreflightResult {
+    let mut warnings = Vec::new();
+    let environments = [
+        TargetEnvironment::Cli,
+        TargetEnvironment::Vscode,
+        TargetEnvironment::Desktop,
+    ]
+    .into_iter()
+    .map(|environment| {
+        let selected = request.environments.contains(&environment);
+        let scan_environment = scan_environments
+            .iter()
+            .find(|candidate| target_matches_scan(environment, candidate.id));
+        match (selected, scan_environment) {
+            (false, scan_environment) => preflight_unselected(environment, scan_environment),
+            (true, None) => {
+                warnings.push(format!(
+                    "No scan result available for {}",
+                    environment.key()
+                ));
+                ImportPreflightEnvironment {
+                    environment,
+                    selected,
+                    scan_available: false,
+                    support: "not-detected".to_string(),
+                    account_hint: "Unknown".to_string(),
+                    candidate_path_count: 0,
+                    existing_candidate_path_count: 0,
+                    captured_artifact_count: 0,
+                    captured_bytes: 0,
+                    skipped_artifact_count: 0,
+                    skipped_reasons: Vec::new(),
+                    readiness: ImportReadiness::ScanMissing,
+                }
+            }
+            (true, Some(scan_environment)) => {
+                let snapshot =
+                    capture_environment_snapshot(environment, scan_environment, "preflight");
+                let captured_artifact_count = captured_artifact_count(&snapshot);
+                let skipped_artifact_count = skipped_artifact_count(&snapshot);
+                let readiness = if captured_artifact_count == 0 {
+                    warnings.push(format!(
+                        "{} has no readable auth, config, or cache artifacts in the current scan",
+                        environment.key()
+                    ));
+                    ImportReadiness::NoReadableArtifacts
+                } else {
+                    ImportReadiness::Ready
+                };
+                ImportPreflightEnvironment {
+                    environment,
+                    selected,
+                    scan_available: true,
+                    support: support_key(scan_environment.support).to_string(),
+                    account_hint: scan_environment.account_hint.clone(),
+                    candidate_path_count: import_candidate_path_count(scan_environment),
+                    existing_candidate_path_count: existing_import_candidate_path_count(
+                        scan_environment,
+                    ),
+                    captured_artifact_count,
+                    captured_bytes: captured_bytes(&snapshot),
+                    skipped_artifact_count,
+                    skipped_reasons: skipped_reason_summaries(&snapshot),
+                    readiness,
+                }
+            }
+        }
+    })
+    .collect();
+
+    ProfileImportPreflightResult {
+        environments,
+        warnings,
+    }
+}
+
 fn capture_environment_snapshot(
     environment: TargetEnvironment,
     scan_environment: &EnvironmentState,
@@ -253,6 +378,106 @@ fn capture_environment_snapshot(
         environment,
         captured_at: captured_at.to_string(),
         artifacts,
+    }
+}
+
+fn preflight_unselected(
+    environment: TargetEnvironment,
+    scan_environment: Option<&EnvironmentState>,
+) -> ImportPreflightEnvironment {
+    ImportPreflightEnvironment {
+        environment,
+        selected: false,
+        scan_available: scan_environment.is_some(),
+        support: scan_environment
+            .map(|environment| support_key(environment.support).to_string())
+            .unwrap_or_else(|| "not-detected".to_string()),
+        account_hint: scan_environment
+            .map(|environment| environment.account_hint.clone())
+            .unwrap_or_else(|| "Unknown".to_string()),
+        candidate_path_count: scan_environment
+            .map(import_candidate_path_count)
+            .unwrap_or(0),
+        existing_candidate_path_count: scan_environment
+            .map(existing_import_candidate_path_count)
+            .unwrap_or(0),
+        captured_artifact_count: 0,
+        captured_bytes: 0,
+        skipped_artifact_count: 0,
+        skipped_reasons: Vec::new(),
+        readiness: ImportReadiness::NotSelected,
+    }
+}
+
+fn captured_artifact_count(snapshot: &EnvironmentSnapshot) -> usize {
+    snapshot
+        .artifacts
+        .iter()
+        .filter(|artifact| artifact.content_base64.is_some())
+        .count()
+}
+
+fn skipped_artifact_count(snapshot: &EnvironmentSnapshot) -> usize {
+    snapshot
+        .artifacts
+        .iter()
+        .filter(|artifact| artifact.content_base64.is_none())
+        .count()
+}
+
+fn captured_bytes(snapshot: &EnvironmentSnapshot) -> usize {
+    snapshot
+        .artifacts
+        .iter()
+        .filter_map(|artifact| artifact.content_base64.as_ref())
+        .map(|content| content.len())
+        .sum()
+}
+
+fn skipped_reason_summaries(snapshot: &EnvironmentSnapshot) -> Vec<SkippedReasonSummary> {
+    let mut summaries: Vec<SkippedReasonSummary> = Vec::new();
+    for reason in snapshot
+        .artifacts
+        .iter()
+        .filter_map(|artifact| artifact.skipped_reason.as_ref())
+    {
+        if let Some(summary) = summaries
+            .iter_mut()
+            .find(|summary| summary.reason == *reason)
+        {
+            summary.count += 1;
+        } else {
+            summaries.push(SkippedReasonSummary {
+                reason: reason.clone(),
+                count: 1,
+            });
+        }
+    }
+    summaries.sort_by(|left, right| left.reason.cmp(&right.reason));
+    summaries
+}
+
+fn import_candidate_path_count(scan_environment: &EnvironmentState) -> usize {
+    scan_environment
+        .discovered_paths
+        .iter()
+        .filter(|path| snapshot_kind(path.kind).is_some())
+        .count()
+}
+
+fn existing_import_candidate_path_count(scan_environment: &EnvironmentState) -> usize {
+    scan_environment
+        .discovered_paths
+        .iter()
+        .filter(|path| path.exists && snapshot_kind(path.kind).is_some())
+        .count()
+}
+
+fn support_key(support: SupportState) -> &'static str {
+    match support {
+        SupportState::Detected => "detected",
+        SupportState::Partial => "partial",
+        SupportState::NotDetected => "not-detected",
     }
 }
 
@@ -513,6 +738,66 @@ mod tests {
             String::from_utf8(decoded).expect("utf8"),
             "{\"access_token\":\"secret\"}"
         );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn import_preflight_reports_selected_capture_coverage() {
+        let root = temp_dir("preflight");
+        fs::write(root.join("auth.json"), "secret-free-test").expect("write auth");
+        let request = ProfileImportPreflightRequest {
+            environments: vec![TargetEnvironment::Cli],
+        };
+
+        let result = import_preflight_from_scan(request, &[scan_state(&root)]);
+        let cli = result
+            .environments
+            .iter()
+            .find(|environment| environment.environment == TargetEnvironment::Cli)
+            .expect("cli preflight");
+        let vscode = result
+            .environments
+            .iter()
+            .find(|environment| environment.environment == TargetEnvironment::Vscode)
+            .expect("vscode preflight");
+
+        assert_eq!(cli.readiness, ImportReadiness::Ready);
+        assert_eq!(cli.candidate_path_count, 1);
+        assert_eq!(cli.existing_candidate_path_count, 1);
+        assert_eq!(cli.captured_artifact_count, 1);
+        assert!(cli.captured_bytes > 0);
+        assert_eq!(vscode.readiness, ImportReadiness::NotSelected);
+        assert_eq!(vscode.captured_artifact_count, 0);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn import_preflight_reports_skip_reasons() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_dir("preflight-skips");
+        let real_auth = root.join("auth.json");
+        fs::write(&real_auth, "secret-free-test").expect("write auth");
+        symlink(&real_auth, root.join("auth-link.json")).expect("create symlink");
+        let request = ProfileImportPreflightRequest {
+            environments: vec![TargetEnvironment::Cli],
+        };
+
+        let result = import_preflight_from_scan(request, &[scan_state(&root)]);
+        let cli = result
+            .environments
+            .iter()
+            .find(|environment| environment.environment == TargetEnvironment::Cli)
+            .expect("cli preflight");
+
+        assert_eq!(cli.readiness, ImportReadiness::Ready);
+        assert_eq!(cli.captured_artifact_count, 1);
+        assert_eq!(cli.skipped_artifact_count, 1);
+        assert!(cli
+            .skipped_reasons
+            .iter()
+            .any(|summary| summary.reason == "Symlink skipped" && summary.count == 1));
         let _ = fs::remove_dir_all(root);
     }
 }

@@ -44,11 +44,12 @@ The current import flow:
 
 1. Directs the user to complete official Codex login outside the app before capture.
 2. Runs read-only environment detection and shows current account hints plus candidate path counts in the Profiles UI.
-3. Requires explicit same-account confirmation when importing more than one target environment into a single profile before invoking the backend command.
-4. Recursively captures readable detector artifacts for selected auth, config, and cache paths with per-environment file and byte limits.
-5. Skips symlinks and unreadable paths with non-secret skipped reasons.
-6. Stores the serialized snapshot through `SecretVault`.
-7. Saves only profile metadata and opaque `secret_ref` values to the metadata file.
+3. Lets the user run a no-write import preflight that reuses the snapshot traversal to show candidate path counts, readable artifact counts, encoded byte totals, skipped counts, and non-secret skipped-reason summaries.
+4. Requires explicit same-account confirmation when importing more than one target environment into a single profile before invoking the backend command.
+5. Recursively captures readable detector artifacts for selected auth, config, and cache paths with per-environment file and byte limits.
+6. Skips symlinks and unreadable paths with non-secret skipped reasons.
+7. Stores the serialized snapshot through `SecretVault`.
+8. Saves only profile metadata and opaque `secret_ref` values to the metadata file.
 
 Raw captured file contents are not returned to React.
 

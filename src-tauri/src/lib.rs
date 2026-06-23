@@ -15,7 +15,10 @@ use app_state::{
     default_app_state_dir, load_recovery_status, AppSettings, AppStateRepository,
     EnvironmentPathOverride, RecoveryStatus, SwitchHistoryEntry,
 };
-use importer::{import_profile_from_scan, ProfileImportRequest, ProfileImportResult};
+use importer::{
+    import_preflight_from_scan, import_profile_from_scan, ProfileImportPreflightRequest,
+    ProfileImportPreflightResult, ProfileImportRequest, ProfileImportResult,
+};
 use profile::{ProfileMetadata, TargetEnvironment};
 use profile_store::{ProfileRepository, ProfileStoreError, ProfileUpdateRequest};
 use profile_switch::{
@@ -178,6 +181,14 @@ fn import_current_profile(request: ProfileImportRequest) -> Result<ProfileImport
         .upsert_profile(result.profile.clone())
         .map_err(profile_store_error_message)?;
     Ok(result)
+}
+
+#[tauri::command]
+fn preview_current_import(
+    request: ProfileImportPreflightRequest,
+) -> Result<ProfileImportPreflightResult, String> {
+    let scan = detect_environments();
+    Ok(import_preflight_from_scan(request, &scan.environments))
 }
 
 #[tauri::command]
@@ -1043,6 +1054,7 @@ pub fn run() {
             detect_environments,
             environment_diagnostics_report,
             list_profiles,
+            preview_current_import,
             import_current_profile,
             update_profile,
             delete_profile,

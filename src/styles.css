@@ -418,6 +418,13 @@ h2 {
   margin-bottom: 4px;
 }
 
+.import-guide-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .import-detected-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -489,6 +496,63 @@ h2 {
   background: #fff7df;
   color: #6f4a0b;
   font-weight: 700;
+}
+
+.import-preflight {
+  display: grid;
+  gap: 10px;
+}
+
+.preflight-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(0, 1.2fr);
+  gap: 10px;
+  padding: 12px;
+  border-radius: 6px;
+  background: #f7f8f4;
+  border-left: 4px solid #cbd3cc;
+}
+
+.preflight-row.ready {
+  border-left-color: #276749;
+}
+
+.preflight-row.no_readable_artifacts,
+.preflight-row.scan_missing {
+  border-left-color: #8f2f2a;
+}
+
+.preflight-row.not_selected {
+  opacity: 0.72;
+}
+
+.preflight-row strong,
+.preflight-row span,
+.preflight-row em {
+  display: block;
+}
+
+.preflight-row span,
+.preflight-row em {
+  color: #647067;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.preflight-row dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.preflight-row dl div {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 6px;
+}
+
+.preflight-row em {
+  grid-column: 1 / -1;
 }
 
 .empty-state {

@@ -90,6 +90,37 @@ export type ProfileImportRequest = {
   defaultProfile: boolean;
 };
 
+export type ProfileImportPreflightRequest = {
+  environments: TargetEnvironment[];
+};
+
+export type ImportReadiness = "ready" | "not_selected" | "scan_missing" | "no_readable_artifacts";
+
+export type SkippedReasonSummary = {
+  reason: string;
+  count: number;
+};
+
+export type ImportPreflightEnvironment = {
+  environment: TargetEnvironment;
+  selected: boolean;
+  scanAvailable: boolean;
+  support: "detected" | "partial" | "not-detected";
+  accountHint: string;
+  candidatePathCount: number;
+  existingCandidatePathCount: number;
+  capturedArtifactCount: number;
+  capturedBytes: number;
+  skippedArtifactCount: number;
+  skippedReasons: SkippedReasonSummary[];
+  readiness: ImportReadiness;
+};
+
+export type ProfileImportPreflightResult = {
+  environments: ImportPreflightEnvironment[];
+  warnings: string[];
+};
+
 export type ImportedEnvironmentSummary = {
   environment: TargetEnvironment;
   artifactCount: number;
@@ -240,6 +271,10 @@ export async function listProfiles(): Promise<ProfileMetadata[]> {
 
 export async function importCurrentProfile(request: ProfileImportRequest): Promise<ProfileImportResult> {
   return await invoke<ProfileImportResult>("import_current_profile", { request });
+}
+
+export async function previewCurrentImport(request: ProfileImportPreflightRequest): Promise<ProfileImportPreflightResult> {
+  return await invoke<ProfileImportPreflightResult>("preview_current_import", { request });
 }
 
 export async function updateProfile(request: ProfileUpdateRequest): Promise<ProfileMetadata> {
