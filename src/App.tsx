@@ -104,12 +104,20 @@ export default function App() {
       return undefined;
     }
     return history.find((item) =>
-      item.toProfile === currentProfile.name && item.switchedAt === currentProfile.lastUsedAt
-    ) ?? history.find((item) => item.toProfile === currentProfile.name);
+      item.toProfileId === currentProfile.id && item.switchedAt === currentProfile.lastUsedAt
+    ) ?? history.find((item) => item.toProfileId === currentProfile.id)
+      ?? history.find((item) => item.toProfile === currentProfile.name && item.switchedAt === currentProfile.lastUsedAt)
+      ?? history.find((item) => item.toProfile === currentProfile.name);
   }, [currentProfile, history]);
   const previousProfile = useMemo(() => {
-    const previousName = history.find((item) => item.fromProfile)?.fromProfile;
-    return previousName ? profiles.find((profile) => profile.name === previousName) : undefined;
+    const previous = history.find((item) => item.fromProfileId || item.fromProfile);
+    if (!previous) {
+      return undefined;
+    }
+    if (previous.fromProfileId) {
+      return profiles.find((profile) => profile.id === previous.fromProfileId);
+    }
+    return previous.fromProfile ? profiles.find((profile) => profile.name === previous.fromProfile) : undefined;
   }, [history, profiles]);
 
   useEffect(() => {

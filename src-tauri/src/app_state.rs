@@ -69,7 +69,11 @@ pub enum SwitchHistoryStatus {
 pub struct SwitchHistoryEntry {
     pub id: String,
     pub switched_at: String,
+    #[serde(default)]
+    pub from_profile_id: Option<String>,
     pub from_profile: Option<String>,
+    #[serde(default)]
+    pub to_profile_id: Option<String>,
     pub to_profile: String,
     pub environments: Vec<TargetEnvironment>,
     pub status: SwitchHistoryStatus,
@@ -468,7 +472,9 @@ mod tests {
             .append_history(SwitchHistoryEntry {
                 id: "history-1".to_string(),
                 switched_at: "1000".to_string(),
+                from_profile_id: Some("profile-old".to_string()),
                 from_profile: Some("old".to_string()),
+                to_profile_id: Some("profile-new".to_string()),
                 to_profile: "new".to_string(),
                 environments: vec![TargetEnvironment::Cli],
                 status: SwitchHistoryStatus::Success,
@@ -483,6 +489,37 @@ mod tests {
 
         repository.clear_history().expect("clear history");
         assert!(repository.list_history().expect("list cleared").is_empty());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn legacy_history_without_profile_ids_loads_with_empty_identity_fields() {
+        let root = temp_root("legacy-history");
+        fs::write(
+            root.join("history.json"),
+            r#"{
+              "schemaVersion": 1,
+              "entries": [{
+                "id": "history-legacy",
+                "switchedAt": "1000",
+                "fromProfile": "Old",
+                "toProfile": "New",
+                "environments": ["cli"],
+                "status": "success",
+                "errorType": null
+              }]
+            }"#,
+        )
+        .expect("write legacy history");
+        let repository = AppStateRepository::new(root.clone());
+
+        let history = repository.list_history().expect("load legacy history");
+
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].from_profile_id, None);
+        assert_eq!(history[0].from_profile, Some("Old".to_string()));
+        assert_eq!(history[0].to_profile_id, None);
+        assert_eq!(history[0].to_profile, "New");
         let _ = fs::remove_dir_all(root);
     }
 

@@ -161,7 +161,7 @@ pub fn switch_saved_profile_with_runtime<S: SecretStore, R: ProfileSwitchRuntime
         .cloned()
         .find(|profile| profile.id == request.profile_id)
         .ok_or_else(|| ProfileSwitchError::ProfileNotFound(request.profile_id.clone()))?;
-    let from_profile = latest_used_profile_name(&profiles, &profile.id);
+    let from_profile = latest_used_profile(&profiles, &profile.id);
 
     let plan = restore_plan_from_profile(&profile, &request.environments, vault, &timestamp)?;
     let mut closed_processes = close_running_processes(&request, runtime)?;
@@ -208,7 +208,9 @@ pub fn switch_saved_profile_with_runtime<S: SecretStore, R: ProfileSwitchRuntime
         .append_history(SwitchHistoryEntry {
             id: format!("history-{timestamp}-{}", profile.id),
             switched_at: timestamp.clone(),
-            from_profile,
+            from_profile_id: from_profile.as_ref().map(|profile| profile.id.clone()),
+            from_profile: from_profile.map(|profile| profile.name),
+            to_profile_id: Some(profile.id.clone()),
             to_profile: profile.name.clone(),
             environments: request.environments.clone(),
             status,
@@ -522,21 +524,32 @@ fn restore_artifact_kind(kind: SnapshotPathKind) -> RestoreArtifactKind {
     }
 }
 
-fn latest_used_profile_name(
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ProfileHistoryIdentity {
+    id: String,
+    name: String,
+}
+
+fn latest_used_profile(
     profiles: &[ProfileMetadata],
     target_profile_id: &str,
-) -> Option<String> {
+) -> Option<ProfileHistoryIdentity> {
     profiles
         .iter()
         .filter(|profile| profile.id != target_profile_id)
         .filter_map(|profile| {
-            profile
-                .last_used_at
-                .as_ref()
-                .map(|used_at| (used_at.parse::<u64>().unwrap_or(0), profile.name.clone()))
+            profile.last_used_at.as_ref().map(|used_at| {
+                (
+                    used_at.parse::<u64>().unwrap_or(0),
+                    ProfileHistoryIdentity {
+                        id: profile.id.clone(),
+                        name: profile.name.clone(),
+                    },
+                )
+            })
         })
         .max_by_key(|(used_at, _)| *used_at)
-        .map(|(_, name)| name)
+        .map(|(_, profile)| profile)
 }
 
 fn manual_actions_for(request: &ProfileSwitchRequest) -> Vec<String> {
@@ -1179,7 +1192,12 @@ mod tests {
         .expect("switch profile");
 
         let history = app_state_repository.list_history().expect("history");
+        assert_eq!(
+            history[0].from_profile_id,
+            Some("profile-previous".to_string())
+        );
         assert_eq!(history[0].from_profile, Some("Previous".to_string()));
+        assert_eq!(history[0].to_profile_id, Some(profile.id.clone()));
         let _ = fs::remove_dir_all(root);
     }
 
@@ -1298,7 +1316,12 @@ mod tests {
             r#"{"email":"work@example.com"}"#
         );
         let history = app_state_repository.list_history().expect("history");
+        assert_eq!(
+            history[0].from_profile_id,
+            Some("profile-other".to_string())
+        );
         assert_eq!(history[0].from_profile, Some("Other".to_string()));
+        assert_eq!(history[0].to_profile_id, Some(default_profile.id));
         assert_eq!(history[0].to_profile, "Work");
         let _ = fs::remove_dir_all(root);
     }

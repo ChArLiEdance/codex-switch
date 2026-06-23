@@ -181,12 +181,12 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 11. Marks the target Profile with `lastUsedAt` on success.
 12. Reads restored target files with the same bounded account-hint scanner used by read-only detection.
 13. Compares discovered redacted hints with the target Profile's redacted hint and marks identity as verified, incomplete, or mismatched.
-14. Appends local switch history, including the previously most recently used Profile when known. Completed restore transactions are recorded as `success` only when the redacted identity hint matches; otherwise they are recorded as `incomplete` with an identity error category.
+14. Appends local switch history, including the previously most recently used Profile id and display name when known. Completed restore transactions are recorded as `success` only when the redacted identity hint matches; otherwise they are recorded as `incomplete` with an identity error category.
 15. Returns closed-process, restarted-app, identity-verification, warning, manual-verification details, and non-secret transaction events to the dialog.
 
 This command now makes saved Profiles switchable from the UI and coordinates process close/restart for Desktop and VS Code after explicit confirmation. The switch dialog disables unsupported target environments for the selected Profile, shows each unavailable environment's completeness reason, and maps the returned transaction events into phase rows for closing apps, backup, restore, restart, verification, and history recording. The process behavior is covered by mock process-controller tests; real Codex Desktop and VS Code extension auth-path semantics still require machine-specific validation.
 
-The Home view derives the current Profile from the latest `lastUsedAt` value, then offers quick actions to restore the default Profile or switch back to the previous Profile recorded in history. These actions reuse `switch_to_profile` and the configured default switch scope.
+The Home view derives the current Profile from the latest `lastUsedAt` value, then offers quick actions to restore the default Profile or switch back to the previous Profile recorded in history. New history entries store stable `fromProfileId` / `toProfileId` values so the Switch back target is not confused by duplicate display names; legacy history without ids falls back to the old name lookup. These actions reuse `switch_to_profile` and the configured default switch scope.
 
 The switch result dialog also exposes a direct rollback button when the previous usable Profile has captured state for at least one just-switched environment. This is still a normal `switch_to_profile` call, so process confirmation, backup, restore, restart, identity verification, and history recording stay on the same transaction path.
 

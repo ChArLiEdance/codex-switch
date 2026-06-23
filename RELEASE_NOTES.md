@@ -36,6 +36,7 @@ This developer preview implements the project foundation and the backend pieces 
 - UI-facing saved Profile switch command backed by one combined close, restore, restart, and rollback transaction
 - Switch dialog close confirmation for running Desktop/VS Code windows
 - Last-used Profile tracking and previous-Profile switch history
+- Stable from/to Profile ids in new switch history entries, with legacy history compatibility
 - Home actions for restoring the default Profile and switching back to the previous Profile
 - Switch result dialog action for rolling back to the previous usable Profile through the normal transaction path
 - Local settings persistence

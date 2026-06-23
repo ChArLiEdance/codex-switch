@@ -161,7 +161,9 @@ export type EnvironmentPathOverride = {
 export type SwitchHistoryEntry = {
   id: string;
   switchedAt: string;
+  fromProfileId: string | null;
   fromProfile: string | null;
+  toProfileId: string | null;
   toProfile: string;
   environments: TargetEnvironment[];
   status: "success" | "failed" | "rolled_back" | "incomplete";
