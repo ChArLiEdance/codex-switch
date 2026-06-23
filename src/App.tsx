@@ -687,6 +687,14 @@ function environmentLabel(environment: TargetEnvironment) {
   return "Desktop";
 }
 
+function environmentProfileState(profile: ProfileMetadata | undefined, environment: TargetEnvironment) {
+  return profile?.environments.find((state) => state.environment === environment);
+}
+
+function profileSupportsEnvironment(profile: ProfileMetadata | undefined, environment: TargetEnvironment) {
+  return environmentProfileState(profile, environment)?.status === "available";
+}
+
 function verificationClass(history?: SwitchHistoryEntry) {
   if (!history) {
     return "unknown";
@@ -953,13 +961,35 @@ function SwitchDialog({
   const [error, setError] = useState<string | null>(null);
   const [restartMessage, setRestartMessage] = useState<string | null>(null);
   const [confirmProcessClose, setConfirmProcessClose] = useState(!settings.confirmBeforeClosingApps);
+  const targetProfile = profiles.find((profile) => profile.id === profileId);
+  const supportedEnvironments = (["cli", "vscode", "desktop"] as TargetEnvironment[])
+    .filter((environment) => profileSupportsEnvironment(targetProfile, environment));
+  const selectedEnvironments = (Object.entries(scope) as Array<[TargetEnvironment, boolean]>)
+    .filter(([environment, enabled]) => enabled && supportedEnvironments.includes(environment))
+    .map(([environment]) => environment);
   const closeApprovalRequired = settings.confirmBeforeClosingApps && (scope.vscode || scope.desktop);
   const steps = switchSteps(result, busy, settings);
 
+  useEffect(() => {
+    setScope((current) => {
+      const next = { ...current };
+      for (const environment of ["cli", "vscode", "desktop"] as TargetEnvironment[]) {
+        if (!profileSupportsEnvironment(targetProfile, environment)) {
+          next[environment] = false;
+        }
+      }
+      if (!next.cli && !next.vscode && !next.desktop) {
+        for (const environment of ["cli", "vscode", "desktop"] as TargetEnvironment[]) {
+          if (settings.defaultScope.includes(environment) && profileSupportsEnvironment(targetProfile, environment)) {
+            next[environment] = true;
+          }
+        }
+      }
+      return next;
+    });
+  }, [settings.defaultScope, targetProfile]);
+
   async function startSwitch() {
-    const environments = (Object.entries(scope) as Array<[TargetEnvironment, boolean]>)
-      .filter(([, enabled]) => enabled)
-      .map(([environment]) => environment);
     setBusy(true);
     setError(null);
     setResult(null);
@@ -967,7 +997,7 @@ function SwitchDialog({
     try {
       const response = await switchToProfile({
         profileId,
-        environments,
+        environments: selectedEnvironments,
         autoRestartApps: settings.autoRestartApps,
         vscodeReloadMode: settings.vscodeReloadMode,
         confirmProcessClose,
@@ -1010,7 +1040,14 @@ function SwitchDialog({
 
         <label className="dialog-field">
           <span>Target profile</span>
-          <select value={profileId} onChange={(event) => setProfileId(event.target.value)}>
+          <select
+            value={profileId}
+            onChange={(event) => {
+              setProfileId(event.target.value);
+              setResult(null);
+              setError(null);
+            }}
+          >
             {profiles.map((profile) => (
               <option value={profile.id} key={profile.id}>{profile.name}</option>
             ))}
@@ -1018,17 +1055,27 @@ function SwitchDialog({
         </label>
 
         <div className="scope-picker">
-          {(["cli", "vscode", "desktop"] as TargetEnvironment[]).map((item) => (
-            <label key={item}>
+          {(["cli", "vscode", "desktop"] as TargetEnvironment[]).map((item) => {
+            const state = environmentProfileState(targetProfile, item);
+            const available = state?.status === "available";
+            return (
+            <label className={!available ? "disabled" : undefined} key={item}>
               <input
                 type="checkbox"
                 checked={scope[item]}
+                disabled={!available}
                 onChange={(event) => setScope((current) => ({ ...current, [item]: event.target.checked }))}
               />
               <span>{environmentLabel(item)}</span>
+              <em>{available ? "Available" : state?.completenessReason ?? "Not imported"}</em>
             </label>
-          ))}
+            );
+          })}
         </div>
+
+        {selectedEnvironments.length === 0 && (
+          <p className="dialog-error">Select at least one environment that this Profile has captured.</p>
+        )}
 
         {closeApprovalRequired && (
           <label className="dialog-confirm">
@@ -1086,7 +1133,7 @@ function SwitchDialog({
 
         <footer>
           <button className="secondary-button" onClick={onClose}>Cancel</button>
-          <button className="primary-button" onClick={startSwitch} disabled={busy || !profileId || (closeApprovalRequired && !confirmProcessClose)}>
+          <button className="primary-button" onClick={startSwitch} disabled={busy || !profileId || selectedEnvironments.length === 0 || (closeApprovalRequired && !confirmProcessClose)}>
             <RefreshCw size={18} />
             {busy ? "Switching" : "Start switch"}
           </button>

@@ -17,6 +17,7 @@ Current expected results:
 - `npm run build` succeeds.
 - `cargo test` succeeds with tests covering profile metadata, profile update/delete/last-used behavior, secret-store abstraction, redacted account-hint parsing, import, transaction backup/rollback/journaling, Desktop coordinator, CLI coordinator, VS Code coordinator, switch identity verification, manual restart retry, settings, history, restore-default-on-exit, and recovery detection/resolution state.
 - `npm run build` type-checks the switch dialog contract for transaction events, identity verification, and Home account verification status rendering.
+- `npm run build` type-checks that switch scope controls read selected Profile environment state and cannot submit unsupported targets.
 - `npm run tauri:build -- --bundles app` succeeds and produces `src-tauri/target/release/bundle/macos/Codex Switch.app`.
 
 Known packaging limitation:

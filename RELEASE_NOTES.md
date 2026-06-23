@@ -31,6 +31,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Restore-default-on-exit hook backed by the normal switch transaction path
 - Functional Settings restore-defaults button
 - Transaction-aware switch dialog progress rows and Home account verification badge
+- Profile-aware switch dialog scope selection with unavailable-environment reasons
 - Manual restart retry commands and UI buttons for Codex Desktop and VS Code
 - App-only macOS Tauri bundle
 

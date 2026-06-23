@@ -678,9 +678,21 @@ dd {
   align-items: center;
   gap: 8px;
   min-height: 38px;
-  padding: 0 12px;
+  padding: 8px 12px;
   border-radius: 6px;
   background: #f2f4ef;
+}
+
+.scope-picker label.disabled {
+  opacity: 0.65;
+}
+
+.scope-picker em {
+  max-width: 190px;
+  color: #647067;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.25;
 }
 
 .dialog-confirm {
