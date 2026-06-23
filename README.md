@@ -96,4 +96,4 @@ codex_switch/
 - Backup, restore, rollback, and per-environment switch coordinators are implemented in the backend and covered by simulated tests.
 - Saved Profile switching is wired from the UI to a combined backend transaction. With explicit user confirmation it closes running Desktop/VS Code processes, restores selected environments, restarts supported apps, records history, and rolls back if restore or restart fails.
 - Automatic Desktop/VS Code close and restart are covered by mock process-controller tests. Real Codex Desktop and VS Code extension authentication path semantics are not yet verified.
-- `npm run tauri:build -- --bundles app` succeeds. Full default bundling currently fails at the DMG packaging step on this machine.
+- `npm run tauri:build -- --bundles app` succeeds. Full default bundling currently fails at the DMG packaging step on this machine; Tauri's exposed DMG config does not provide a skip-Finder option for this environment.

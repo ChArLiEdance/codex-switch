@@ -35,7 +35,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Real VS Code Codex/OpenAI extension authentication path semantics
 - Account identity verification after switching
 - Automatic Desktop/VS Code close and restart against real running apps on this machine
-- DMG packaging on this machine
+- DMG packaging on this machine; default Tauri bundling fails during `bundle_dmg.sh`
 
 ### Verification Commands
 

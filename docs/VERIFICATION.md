@@ -21,6 +21,7 @@ Current expected results:
 Known packaging limitation:
 
 - Default Tauri bundling that includes DMG packaging has failed on this machine during `bundle_dmg.sh`.
+- Tauri's exposed `bundle.macOS.dmg` schema supports layout/background settings, but not the `create-dmg` `--skip-jenkins` or `--sandbox-safe` options needed for this non-GUI packaging path.
 - App-only bundling is the verified build target for this development pass.
 
 Real-environment limitations:

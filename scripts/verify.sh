@@ -13,4 +13,3 @@ echo "== tauri app bundle =="
 npm run tauri:build -- --bundles app
 
 echo "Verification complete."
-
