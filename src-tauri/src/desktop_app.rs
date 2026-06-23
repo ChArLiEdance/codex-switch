@@ -279,6 +279,7 @@ mod tests {
                 kind: crate::switch_transaction::RestoreArtifactKind::Config,
                 target_path: root.join("Codex/config.json"),
                 content_base64: STANDARD.encode(content.as_bytes()),
+                unix_mode: None,
             }],
         }
     }

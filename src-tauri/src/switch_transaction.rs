@@ -64,6 +64,8 @@ pub struct RestoreArtifact {
     pub kind: RestoreArtifactKind,
     pub target_path: PathBuf,
     pub content_base64: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unix_mode: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -285,7 +287,7 @@ impl TransactionRunner {
             let content = STANDARD
                 .decode(&artifact.content_base64)
                 .map_err(|error| TransactionError::InvalidBase64(error.to_string()))?;
-            atomic_write(&artifact.target_path, &content)?;
+            atomic_write(&artifact.target_path, &content, artifact.unix_mode)?;
             writes += 1;
         }
         Ok(())
@@ -309,6 +311,7 @@ impl TransactionRunner {
                     artifact.target_path.display()
                 )));
             }
+            verify_unix_mode(artifact)?;
         }
         Ok(())
     }
@@ -359,13 +362,59 @@ impl TransactionRunner {
     }
 }
 
-fn atomic_write(path: &Path, content: &[u8]) -> Result<(), TransactionError> {
+fn atomic_write(
+    path: &Path,
+    content: &[u8],
+    unix_mode: Option<u32>,
+) -> Result<(), TransactionError> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| TransactionError::Io(error.to_string()))?;
     }
     let temporary_path = path.with_extension("codex-switch.tmp");
     fs::write(&temporary_path, content).map_err(|error| TransactionError::Io(error.to_string()))?;
-    fs::rename(&temporary_path, path).map_err(|error| TransactionError::Io(error.to_string()))
+    fs::rename(&temporary_path, path).map_err(|error| TransactionError::Io(error.to_string()))?;
+    apply_unix_mode(path, unix_mode)
+}
+
+#[cfg(unix)]
+fn apply_unix_mode(path: &Path, unix_mode: Option<u32>) -> Result<(), TransactionError> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let Some(mode) = unix_mode else {
+        return Ok(());
+    };
+    let permissions = fs::Permissions::from_mode(mode);
+    fs::set_permissions(path, permissions).map_err(|error| TransactionError::Io(error.to_string()))
+}
+
+#[cfg(not(unix))]
+fn apply_unix_mode(_path: &Path, _unix_mode: Option<u32>) -> Result<(), TransactionError> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn verify_unix_mode(artifact: &RestoreArtifact) -> Result<(), TransactionError> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let Some(expected_mode) = artifact.unix_mode else {
+        return Ok(());
+    };
+    let metadata = fs::metadata(&artifact.target_path)
+        .map_err(|error| TransactionError::Verification(error.to_string()))?;
+    let actual_mode = metadata.permissions().mode() & 0o7777;
+    if actual_mode != expected_mode {
+        return Err(TransactionError::Verification(format!(
+            "restored permission mismatch for {} {}",
+            artifact.environment,
+            artifact.target_path.display()
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn verify_unix_mode(_artifact: &RestoreArtifact) -> Result<(), TransactionError> {
+    Ok(())
 }
 
 fn copy_dir_all(source: &Path, destination: &Path) -> Result<(), TransactionError> {
@@ -414,6 +463,7 @@ mod tests {
             kind: RestoreArtifactKind::Auth,
             target_path: path,
             content_base64: STANDARD.encode(content.as_bytes()),
+            unix_mode: None,
         }
     }
 
@@ -423,6 +473,7 @@ mod tests {
             kind: RestoreArtifactKind::Cache,
             target_path: path,
             content_base64: STANDARD.encode(content.as_bytes()),
+            unix_mode: None,
         }
     }
 
@@ -491,7 +542,7 @@ mod tests {
         };
         let runner = TransactionRunner::new(root.join("backups"));
         let manifest = runner.backup(&plan).expect("backup");
-        atomic_write(&target, b"created").expect("write target");
+        atomic_write(&target, b"created", None).expect("write target");
 
         runner.rollback(&manifest).expect("rollback");
 
@@ -522,7 +573,9 @@ mod tests {
         assert_eq!(transaction.phase, TransactionPhase::Completed);
         assert_eq!(fs::read_to_string(auth).expect("read auth"), "new-auth");
         assert!(!cache.exists());
-        assert!(root.join("backups/tx-cache-refresh/artifact-1.bak").exists());
+        assert!(root
+            .join("backups/tx-cache-refresh/artifact-1.bak")
+            .exists());
         let _ = fs::remove_dir_all(root);
     }
 
@@ -573,6 +626,79 @@ mod tests {
                 && event.message.contains("File verification failed")
         }));
         assert_eq!(fs::read_to_string(target).expect("read target"), "old");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn successful_transaction_restores_unix_mode() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = temp_dir("mode-restore");
+        let target = root.join("auth.json");
+        fs::write(&target, "old").expect("write old");
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o644)).expect("set old mode");
+        let plan = RestorePlan {
+            transaction_id: "tx-mode-restore".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![RestoreArtifact {
+                environment: "cli".to_string(),
+                kind: RestoreArtifactKind::Auth,
+                target_path: target.clone(),
+                content_base64: STANDARD.encode("new".as_bytes()),
+                unix_mode: Some(0o600),
+            }],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Completed);
+        let mode = fs::metadata(&target)
+            .expect("metadata")
+            .permissions()
+            .mode()
+            & 0o7777;
+        assert_eq!(mode, 0o600);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn permission_verification_failure_rolls_back_restored_files() {
+        let root = temp_dir("mode-rollback");
+        let target = root.join("auth.json");
+        fs::write(&target, "old").expect("write old");
+        let plan = RestorePlan {
+            transaction_id: "tx-mode-rollback".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![
+                RestoreArtifact {
+                    environment: "cli".to_string(),
+                    kind: RestoreArtifactKind::Auth,
+                    target_path: target.clone(),
+                    content_base64: STANDARD.encode("same".as_bytes()),
+                    unix_mode: Some(0o600),
+                },
+                RestoreArtifact {
+                    environment: "cli".to_string(),
+                    kind: RestoreArtifactKind::Auth,
+                    target_path: target.clone(),
+                    content_base64: STANDARD.encode("same".as_bytes()),
+                    unix_mode: Some(0o644),
+                },
+            ],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert_eq!(fs::read_to_string(target).expect("read target"), "old");
+        assert!(transaction.events.iter().any(|event| {
+            event.phase == TransactionPhase::Failed
+                && event.message.contains("File verification failed")
+        }));
         let _ = fs::remove_dir_all(root);
     }
 

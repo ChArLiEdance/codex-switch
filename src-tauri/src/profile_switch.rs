@@ -497,6 +497,7 @@ pub fn restore_plan_from_profile<S: SecretStore>(
                     kind: restore_artifact_kind(artifact.kind),
                     target_path: PathBuf::from(artifact.source_path),
                     content_base64,
+                    unix_mode: artifact.unix_mode,
                 });
             }
         }
@@ -914,6 +915,7 @@ mod tests {
                 source_path: target.to_string_lossy().to_string(),
                 relative_path: "auth.json".to_string(),
                 content_base64: Some(STANDARD.encode(content.as_bytes())),
+                unix_mode: None,
                 skipped_reason: None,
             }],
         };

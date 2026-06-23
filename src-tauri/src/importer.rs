@@ -58,6 +58,8 @@ pub struct CapturedArtifact {
     pub source_path: String,
     pub relative_path: String,
     pub content_base64: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unix_mode: Option<u32>,
     pub skipped_reason: Option<String>,
 }
 
@@ -319,6 +321,7 @@ fn capture_path(
                 source_path: current.to_string_lossy().to_string(),
                 relative_path: relative_path(root, current),
                 content_base64: Some(STANDARD.encode(bytes)),
+                unix_mode: file_unix_mode(&metadata),
                 skipped_reason: None,
             });
         }
@@ -342,8 +345,21 @@ fn skipped_artifact(
         source_path: path.to_string_lossy().to_string(),
         relative_path: relative_path(root, path),
         content_base64: None,
+        unix_mode: None,
         skipped_reason: Some(reason.to_string()),
     }
+}
+
+#[cfg(unix)]
+fn file_unix_mode(metadata: &fs::Metadata) -> Option<u32> {
+    use std::os::unix::fs::PermissionsExt;
+
+    Some(metadata.permissions().mode() & 0o7777)
+}
+
+#[cfg(not(unix))]
+fn file_unix_mode(_metadata: &fs::Metadata) -> Option<u32> {
+    None
 }
 
 fn relative_path(root: &Path, path: &Path) -> String {

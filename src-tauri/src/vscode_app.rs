@@ -293,6 +293,7 @@ mod tests {
                 kind: crate::switch_transaction::RestoreArtifactKind::Config,
                 target_path: root.join("Code/User/globalStorage/openai.codex/state.json"),
                 content_base64: STANDARD.encode(content.as_bytes()),
+                unix_mode: None,
             }],
         }
     }

@@ -267,6 +267,7 @@ mod tests {
                 kind: crate::switch_transaction::RestoreArtifactKind::Auth,
                 target_path: root.join(".codex/auth.json"),
                 content_base64: STANDARD.encode(content.as_bytes()),
+                unix_mode: None,
             }],
         }
     }
