@@ -10,7 +10,7 @@ pub mod secret_store;
 pub mod switch_transaction;
 pub mod vscode_app;
 
-use account_hint::redacted_account_hint_from_path;
+use account_hint::{redact_email_like_text, redacted_account_hint_from_path};
 use app_state::{
     default_app_state_dir, load_recovery_status, AppSettings, AppStateRepository,
     EnvironmentPathOverride, RecoveryStatus, SwitchHistoryEntry,
@@ -39,6 +39,41 @@ pub(crate) struct EnvironmentScan {
     pub(crate) scanned_at: String,
     pub(crate) read_only: bool,
     pub(crate) environments: Vec<EnvironmentState>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EnvironmentDiagnosticsReport {
+    pub(crate) schema_version: &'static str,
+    pub(crate) generated_at: String,
+    pub(crate) os: &'static str,
+    pub(crate) read_only: bool,
+    pub(crate) environments: Vec<EnvironmentDiagnosticsEntry>,
+    pub(crate) notes: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct EnvironmentDiagnosticsEntry {
+    pub(crate) id: &'static str,
+    pub(crate) installed: bool,
+    pub(crate) executable_path: Option<String>,
+    pub(crate) running: bool,
+    pub(crate) running_processes: Vec<String>,
+    pub(crate) permission: PermissionState,
+    pub(crate) account_hint: String,
+    pub(crate) support: SupportState,
+    pub(crate) status_message: String,
+    pub(crate) discovered_paths: Vec<DiagnosticPathSummary>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DiagnosticPathSummary {
+    pub(crate) kind: PathKind,
+    pub(crate) path: String,
+    pub(crate) exists: bool,
+    pub(crate) permission: PermissionState,
 }
 
 #[derive(Debug, Serialize)]
@@ -118,6 +153,11 @@ fn detect_environments() -> EnvironmentScan {
         read_only: true,
         environments,
     }
+}
+
+#[tauri::command]
+fn environment_diagnostics_report() -> EnvironmentDiagnosticsReport {
+    diagnostics_report_from_scan(detect_environments())
 }
 
 #[tauri::command]
@@ -684,6 +724,83 @@ fn unix_timestamp_string() -> String {
     }
 }
 
+fn diagnostics_report_from_scan(scan: EnvironmentScan) -> EnvironmentDiagnosticsReport {
+    EnvironmentDiagnosticsReport {
+        schema_version: "environment-diagnostics/v1",
+        generated_at: scan.scanned_at.clone(),
+        os: scan.os,
+        read_only: scan.read_only,
+        environments: scan
+            .environments
+            .into_iter()
+            .map(diagnostics_entry_from_environment)
+            .collect(),
+        notes: vec![
+            "Generated from read-only environment detection.".to_string(),
+            "Does not include token values, cookies, API keys, file contents, or unredacted account emails.".to_string(),
+            "Home-directory paths are shortened to ~ when they match the current user home.".to_string(),
+            "Desktop and VS Code auth path candidates remain unverified until tested on real signed-in installations.".to_string(),
+        ],
+    }
+}
+
+fn diagnostics_entry_from_environment(
+    environment: EnvironmentState,
+) -> EnvironmentDiagnosticsEntry {
+    EnvironmentDiagnosticsEntry {
+        id: environment.id,
+        installed: environment.installed,
+        executable_path: environment
+            .executable_path
+            .map(|path| sanitize_diagnostic_text(&path)),
+        running: environment.running,
+        running_processes: environment
+            .running_processes
+            .into_iter()
+            .map(|process| sanitize_diagnostic_text(&process))
+            .collect(),
+        permission: environment.permission,
+        account_hint: sanitize_diagnostic_text(&environment.account_hint),
+        support: environment.support,
+        status_message: sanitize_diagnostic_text(&environment.status_message),
+        discovered_paths: environment
+            .discovered_paths
+            .into_iter()
+            .map(|path| DiagnosticPathSummary {
+                kind: path.kind,
+                path: sanitize_diagnostic_text(&path.path),
+                exists: path.exists,
+                permission: path.permission,
+            })
+            .collect(),
+    }
+}
+
+fn sanitize_diagnostic_text(value: &str) -> String {
+    redact_diagnostic_text(value, home_dir().as_deref())
+}
+
+fn redact_diagnostic_text(value: &str, home: Option<&Path>) -> String {
+    let shortened = if let Some(home) = home {
+        shorten_home_path(value, home)
+    } else {
+        value.to_string()
+    };
+    redact_email_like_text(&shortened)
+}
+
+fn shorten_home_path(value: &str, home: &Path) -> String {
+    let path = Path::new(value);
+    if path == home {
+        return "~".to_string();
+    }
+    match path.strip_prefix(home) {
+        Ok(stripped) if stripped.as_os_str().is_empty() => "~".to_string(),
+        Ok(stripped) => format!("~/{}", stripped.to_string_lossy()),
+        Err(_) => value.to_string(),
+    }
+}
+
 fn profile_repository() -> ProfileRepository {
     ProfileRepository::new(profile_metadata_path())
 }
@@ -802,6 +919,56 @@ mod tests {
     }
 
     #[test]
+    fn diagnostic_text_redacts_home_and_email_like_segments() {
+        let home = PathBuf::from("/Users/person@example.com");
+        let value = "/Users/person@example.com/.codex/auth.json";
+
+        assert_eq!(
+            redact_diagnostic_text(value, Some(&home)),
+            "~/.codex/auth.json"
+        );
+        assert_eq!(
+            redact_diagnostic_text("/tmp/other.user@example.org/auth.json", Some(&home)),
+            "/tmp/o***@example.org/auth.json"
+        );
+    }
+
+    #[test]
+    fn diagnostics_report_contains_redacted_read_only_scan_evidence() {
+        let scan = EnvironmentScan {
+            os: "macos",
+            scanned_at: "1234".to_string(),
+            read_only: true,
+            environments: vec![EnvironmentState {
+                id: "CLI",
+                installed: true,
+                executable_path: Some("/tmp/user@example.com/bin/codex".to_string()),
+                discovered_paths: vec![DiscoveredPath {
+                    kind: PathKind::Auth,
+                    path: "/tmp/user@example.com/.codex/auth.json".to_string(),
+                    exists: true,
+                    permission: PermissionState::ReadWrite,
+                }],
+                running: true,
+                running_processes: vec!["codex-user@example.com".to_string()],
+                permission: PermissionState::ReadWrite,
+                account_hint: "u***@example.com".to_string(),
+                support: SupportState::Detected,
+                status_message: "detected for user@example.com".to_string(),
+            }],
+        };
+
+        let report = diagnostics_report_from_scan(scan);
+        let json = serde_json::to_string(&report).expect("serialize diagnostics report");
+
+        assert_eq!(report.schema_version, "environment-diagnostics/v1");
+        assert!(report.read_only);
+        assert!(json.contains("u***@example.com"));
+        assert!(!json.contains("user@example.com"));
+        assert!(json.contains("/tmp/u***@example.com/.codex/auth.json"));
+    }
+
+    #[test]
     fn custom_paths_are_added_to_matching_environment_detection() {
         let root = env::temp_dir().join(format!(
             "codex-switch-custom-path-{}",
@@ -874,6 +1041,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             backend_health,
             detect_environments,
+            environment_diagnostics_report,
             list_profiles,
             import_current_profile,
             update_profile,

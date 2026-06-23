@@ -68,6 +68,8 @@ Detection returns installed path, config paths, cache paths, running state, perm
 
 The macOS detector seeds explicit candidates for known VS Code extension storage (`openai.chatgpt`, `openai.codex`) and Codex Desktop browser-support locations such as local storage, session storage, network, partition, cache, and bundle-support directories. These are still read-only discovery records; auth contents remain bounded by the account-hint scanner and are not logged.
 
+The backend can also produce an `environment-diagnostics/v1` report from the same detection pass. That report is a redacted, copyable evidence bundle for validating candidate paths on real machines: home-directory paths are shortened, email-like path and process segments are redacted, and no token values, cookies, API keys, file contents, or unredacted emails are included.
+
 Settings may add custom detector paths per environment and path kind. These overrides are stored as non-secret path metadata in `settings.json`, are expanded for leading `~/`, and are appended to read-only detection before import snapshots are captured. This keeps unknown real-world VS Code or Desktop auth locations configurable without treating a guessed path as universally verified.
 
 ## Switch Transaction

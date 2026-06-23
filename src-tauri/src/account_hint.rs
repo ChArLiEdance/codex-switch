@@ -55,6 +55,33 @@ pub fn redacted_account_hint_from_content(content: &str) -> Option<String> {
     first_email_like(content).map(|email| redact_email(&email))
 }
 
+pub fn redact_email_like_text(content: &str) -> String {
+    let mut redacted = String::with_capacity(content.len());
+    let mut candidate = String::new();
+    for character in content.chars() {
+        if character.is_ascii_alphanumeric() || matches!(character, '@' | '.' | '_' | '-' | '+') {
+            candidate.push(character);
+        } else {
+            push_redacted_candidate(&mut redacted, &mut candidate);
+            redacted.push(character);
+        }
+    }
+    push_redacted_candidate(&mut redacted, &mut candidate);
+    redacted
+}
+
+fn push_redacted_candidate(output: &mut String, candidate: &mut String) {
+    if candidate.is_empty() {
+        return;
+    }
+    if is_email_like(candidate) {
+        output.push_str(&redact_email(candidate));
+    } else {
+        output.push_str(candidate);
+    }
+    candidate.clear();
+}
+
 fn email_from_json_value(value: &Value) -> Option<String> {
     match value {
         Value::Object(map) => {
@@ -160,6 +187,16 @@ mod tests {
         assert_eq!(
             redacted_account_hint_from_content(content),
             Some("u***@example.org".to_string())
+        );
+    }
+
+    #[test]
+    fn redacts_email_like_tokens_in_diagnostic_text() {
+        let content = "path=/Users/person@example.com/.codex owner <other.user@example.org>";
+
+        assert_eq!(
+            redact_email_like_text(content),
+            "path=/Users/p***@example.com/.codex owner <o***@example.org>"
         );
     }
 

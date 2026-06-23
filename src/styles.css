@@ -313,6 +313,46 @@ h2 {
   font-weight: 700;
 }
 
+.diagnostics-panel {
+  padding: 16px;
+  margin-bottom: 18px;
+  border: 1px solid #dde2da;
+  border-radius: 8px;
+  background: #ffffff;
+  display: grid;
+  gap: 12px;
+}
+
+.diagnostics-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.diagnostics-heading span {
+  display: inline-block;
+  margin-top: 6px;
+  color: #647067;
+  font-size: 13px;
+}
+
+.diagnostics-output {
+  width: 100%;
+  min-height: 280px;
+  max-height: 480px;
+  resize: vertical;
+  border: 1px solid #cbd3cc;
+  border-radius: 6px;
+  padding: 12px;
+  color: #18211d;
+  background: #f7f8f4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre;
+}
+
 .panel-title {
   display: flex;
   align-items: center;

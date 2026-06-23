@@ -31,6 +31,35 @@ export type EnvironmentScan = {
   environments: EnvironmentState[];
 };
 
+export type DiagnosticPathSummary = {
+  kind: "app" | "auth" | "config" | "cache";
+  path: string;
+  exists: boolean;
+  permission: "read-write" | "read-only" | "missing" | "unknown";
+};
+
+export type EnvironmentDiagnosticsEntry = {
+  id: EnvironmentId;
+  installed: boolean;
+  executablePath: string | null;
+  running: boolean;
+  runningProcesses: string[];
+  permission: "read-write" | "read-only" | "missing" | "unknown";
+  accountHint: string;
+  support: "detected" | "partial" | "not-detected";
+  statusMessage: string;
+  discoveredPaths: DiagnosticPathSummary[];
+};
+
+export type EnvironmentDiagnosticsReport = {
+  schemaVersion: "environment-diagnostics/v1";
+  generatedAt: string;
+  os: string;
+  readOnly: boolean;
+  environments: EnvironmentDiagnosticsEntry[];
+  notes: string[];
+};
+
 export type ProfileAuthStatus = "available" | "possibly_expired" | "expired" | "not_detected";
 
 export type EnvironmentProfileState = {
@@ -195,6 +224,10 @@ export async function detectEnvironments(): Promise<EnvironmentScan> {
       }))
     };
   }
+}
+
+export async function environmentDiagnosticsReport(): Promise<EnvironmentDiagnosticsReport> {
+  return await invoke<EnvironmentDiagnosticsReport>("environment_diagnostics_report");
 }
 
 export async function listProfiles(): Promise<ProfileMetadata[]> {

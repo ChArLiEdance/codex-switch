@@ -2,6 +2,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock3,
+  ClipboardList,
+  Copy,
   Database,
   FolderSearch,
   History,
@@ -30,6 +32,7 @@ import {
   deleteProfile,
   detectEnvironments,
   emptyEnvironmentScan,
+  environmentDiagnosticsReport,
   EnvironmentId,
   EnvironmentPathKind,
   EnvironmentScan,
@@ -804,6 +807,8 @@ function verificationLabel(history?: SwitchHistoryEntry) {
 
 function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: boolean; onScan: () => void }) {
   const [restartMessage, setRestartMessage] = useState<string | null>(null);
+  const [diagnosticsText, setDiagnosticsText] = useState<string | null>(null);
+  const [diagnosticsMessage, setDiagnosticsMessage] = useState<string | null>(null);
 
   async function restartEnvironment(environment: EnvironmentState) {
     setRestartMessage(`Restarting ${environment.id}.`);
@@ -818,6 +823,29 @@ function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: bool
     }
   }
 
+  async function generateDiagnostics() {
+    setDiagnosticsMessage("Generating read-only diagnostics.");
+    try {
+      const report = await environmentDiagnosticsReport();
+      setDiagnosticsText(JSON.stringify(report, null, 2));
+      setDiagnosticsMessage(`Diagnostics generated at ${report.generatedAt}.`);
+    } catch (error) {
+      setDiagnosticsMessage(`Diagnostics failed: ${String(error)}`);
+    }
+  }
+
+  async function copyDiagnostics() {
+    if (!diagnosticsText) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(diagnosticsText);
+      setDiagnosticsMessage("Diagnostics copied to clipboard.");
+    } catch (error) {
+      setDiagnosticsMessage(`Clipboard copy failed: ${String(error)}`);
+    }
+  }
+
   return (
     <section className="view">
       <header className="view-header">
@@ -826,16 +854,55 @@ function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: bool
           <h1>Environment status</h1>
           <span className="scan-meta">{scan.os} · {scan.scannedAt} · {scan.readOnly ? "read-only" : "write-enabled"}</span>
         </div>
-        <button className="secondary-button" onClick={onScan} disabled={busy}>
-          <FolderSearch size={18} />
-          {busy ? "Scanning" : "Rescan"}
-        </button>
+        <div className="header-actions">
+          <button className="secondary-button" onClick={() => void generateDiagnostics()}>
+            <ClipboardList size={18} />
+            Diagnostics
+          </button>
+          <button className="secondary-button" onClick={onScan} disabled={busy}>
+            <FolderSearch size={18} />
+            {busy ? "Scanning" : "Rescan"}
+          </button>
+        </div>
       </header>
 
       {restartMessage && (
         <section className="recovery-banner">
           <RefreshCw size={18} />
           <span>{restartMessage}</span>
+        </section>
+      )}
+
+      {(diagnosticsText || diagnosticsMessage) && (
+        <section className="diagnostics-panel">
+          <div className="diagnostics-heading">
+            <div>
+              <p className="eyebrow">Read-only report</p>
+              <h2>Detection diagnostics</h2>
+              {diagnosticsMessage && <span>{diagnosticsMessage}</span>}
+            </div>
+            <div className="header-actions">
+              <button className="secondary-button compact" onClick={() => void copyDiagnostics()} disabled={!diagnosticsText}>
+                <Copy size={14} />
+                Copy
+              </button>
+              <button className="secondary-button compact" onClick={() => {
+                setDiagnosticsText(null);
+                setDiagnosticsMessage(null);
+              }}>
+                <X size={14} />
+                Clear
+              </button>
+            </div>
+          </div>
+          {diagnosticsText && (
+            <textarea
+              className="diagnostics-output"
+              readOnly
+              spellCheck={false}
+              value={diagnosticsText}
+            />
+          )}
         </section>
       )}
 

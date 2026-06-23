@@ -14,6 +14,19 @@ For each target environment, the backend returns:
 - Redacted account hint, currently `Unknown`
 - Support status: `detected`, `partial`, or `not-detected`
 
+## Diagnostics Export
+
+The Environment page can generate a copyable `environment-diagnostics/v1` JSON report from the same read-only scan. The report includes:
+
+- OS and scan timestamp
+- Installed/running/support status for CLI, VS Code, and Desktop
+- Candidate app/auth/config/cache paths with home-directory shortening and email-like segment redaction
+- Redacted account hints only
+- Local permission summaries
+- Notes that the report is read-only and does not include tokens, cookies, API keys, file contents, or unredacted emails
+
+The diagnostics export is intended to help validate real-world Codex Desktop and VS Code candidate paths without adding hard-coded assumptions.
+
 ## Codex CLI
 
 Signals:
@@ -49,4 +62,3 @@ Signals:
 - Running process names containing `codex` or `codex desktop`
 
 Known limitation: real Codex Desktop authentication paths have not been verified on this machine. The detector records candidates and unknowns without hard-coding a single auth-file assumption.
-

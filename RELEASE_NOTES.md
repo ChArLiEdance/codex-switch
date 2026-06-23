@@ -12,6 +12,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Typed VS Code and Codex Desktop auth/cache/config path candidates for known OpenAI/Codex support locations
 - Settings-managed custom detector path overrides for machine-specific auth/config/cache/app locations
 - Redacted account-hint extraction from bounded read-only auth/config scans
+- Copyable redacted `environment-diagnostics/v1` report for real-machine candidate path validation
 - Profile metadata model
 - OS keychain-backed secret-store abstraction
 - Current local state import into profiles
