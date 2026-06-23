@@ -34,6 +34,8 @@ Secret payload:
 - Never exposed to React as raw auth content
 - Never logged
 
+The backend models this split with `ProfileMetadata`, `EnvironmentProfileState`, and `SecretVault`. Metadata stores only `secret_ref` identifiers. Secret payloads are written through the `SecretStore` trait, whose production implementation uses the OS keychain through the Rust `keyring` crate.
+
 ## Environment Adapter Contract
 
 Each adapter is expected to support:
@@ -89,4 +91,3 @@ Adapters must distinguish:
 - Restore failure
 
 Unknown or inconclusive account identity must be reported as "configuration switched, identity verification incomplete" rather than as verified support.
-

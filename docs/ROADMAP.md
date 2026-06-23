@@ -18,7 +18,7 @@
 
 - Add profile metadata model
 - Add secure credential-store abstraction
-- Add unit tests for profile metadata and encryption interface behavior
+- Add unit tests for profile metadata and secret-store interface behavior
 
 ## Milestone 4
 

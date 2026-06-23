@@ -1,3 +1,6 @@
+pub mod profile;
+pub mod secret_store;
+
 use serde::Serialize;
 use std::{
     env,

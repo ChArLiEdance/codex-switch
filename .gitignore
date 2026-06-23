@@ -19,10 +19,13 @@ transactions/
 *.pem
 *.p12
 *.token
-*token*
-*secret*
-*credential*
-*cookie*
+*.secret
+*.credential
+*.cookie
+token.*
+secret.*
+credential.*
+cookie.*
 auth.json
 
 # Logs and diagnostics

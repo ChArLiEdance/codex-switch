@@ -25,6 +25,14 @@ The backend will use a credential-store abstraction with these platform targets:
 
 Profile metadata can be stored locally if it contains only redacted account hints, labels, notes, support state, and timestamps. Secret profile payloads must be encrypted or stored through the system secure credential store.
 
+Current implementation status:
+
+- `ProfileMetadata` rejects unredacted email-style account hints.
+- Available environment states must reference an opaque secret key, not inline auth content.
+- `SecretStore` defines the secret persistence boundary.
+- `KeychainSecretStore` uses the Rust `keyring` crate for the production OS credential backend.
+- Unit tests use `MemorySecretStore` and do not touch real credentials.
+
 ## Threat Model
 
 Primary risks:
@@ -66,4 +74,3 @@ Forbidden:
 - Prompt content
 - Code file content
 - Full auth payloads
-
