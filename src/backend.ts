@@ -179,6 +179,12 @@ export type RecoveryStatus = {
   latestEventMessage: string | null;
 };
 
+export type RecoveryRollbackResult = {
+  transaction: SwitchTransaction;
+  status: RecoveryStatus;
+  message: string;
+};
+
 export type ProfileSwitchRequest = {
   profileId: string;
   environments: TargetEnvironment[];
@@ -328,6 +334,10 @@ export async function checkRecoveryStatus(): Promise<RecoveryStatus> {
 
 export async function resolveRecoveryStatus(): Promise<RecoveryStatus> {
   return await invoke<RecoveryStatus>("resolve_recovery_status");
+}
+
+export async function rollbackUnfinishedTransaction(): Promise<RecoveryRollbackResult> {
+  return await invoke<RecoveryRollbackResult>("rollback_unfinished_transaction");
 }
 
 export async function switchToProfile(request: ProfileSwitchRequest): Promise<ProfileSwitchResult> {

@@ -41,7 +41,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Local settings persistence
 - Settings UI for adding and removing custom detector paths
 - Local switch history persistence and clearing
-- Switch transaction journal persistence plus backup-manifest-aware startup recovery inspection and Mark reviewed handling
+- Switch transaction journal persistence plus backup-manifest-aware startup recovery inspection, manual recovery rollback, and Mark reviewed handling
 - Post-switch redacted account-hint comparison with verified, incomplete, or mismatched identity status
 - Restore-default-on-exit hook backed by the normal switch transaction path
 - Functional Settings restore-defaults button

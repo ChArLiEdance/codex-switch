@@ -47,6 +47,7 @@ import {
   ProfileSwitchResult,
   RecoveryStatus,
   resolveRecoveryStatus,
+  rollbackUnfinishedTransaction,
   restoreDefaultOnExit,
   restartDesktopApp,
   restartVscodeApp,
@@ -186,6 +187,23 @@ export default function App() {
     setQuickSwitchMessage("Recovery journal marked reviewed. Use Restore default or Switch back if the local account state still needs correction.");
   }
 
+  async function rollbackRecovery() {
+    if (!window.confirm("Rollback the unfinished transaction from its persisted backup manifest?")) {
+      return;
+    }
+    setQuickSwitchMessage("Manual recovery rollback started.");
+    try {
+      const result = await rollbackUnfinishedTransaction();
+      setRecovery(result.status);
+      await refreshProfiles();
+      await refreshHistory();
+      await runScan();
+      setQuickSwitchMessage(`${result.message}: ${result.transaction.phase}.`);
+    } catch (error) {
+      setQuickSwitchMessage(`Manual recovery rollback failed: ${String(error)}`);
+    }
+  }
+
   async function updateSettings(next: AppSettings) {
     setSettings(await saveSettings(next));
   }
@@ -260,6 +278,7 @@ export default function App() {
             quickSwitchMessage={quickSwitchMessage}
             onSwitch={() => setSwitchOpen(true)}
             onResolveRecovery={() => void resolveRecovery()}
+            onRollbackRecovery={() => void rollbackRecovery()}
             onRestoreDefault={() => {
               if (defaultProfile) {
                 void quickSwitchProfile(defaultProfile, "Restore default account");
@@ -339,6 +358,7 @@ function Home({
   quickSwitchMessage,
   onSwitch,
   onResolveRecovery,
+  onRollbackRecovery,
   onRestoreDefault,
   onSwitchPrevious
 }: {
@@ -352,6 +372,7 @@ function Home({
   quickSwitchMessage: string | null;
   onSwitch: () => void;
   onResolveRecovery: () => void;
+  onRollbackRecovery: () => void;
   onRestoreDefault: () => void;
   onSwitchPrevious: () => void;
 }) {
@@ -402,6 +423,9 @@ function Home({
               {recovery.latestEventMessage ? ` · ${recovery.latestEventMessage}` : ""}
             </em>
           </span>
+          <button className="secondary-button compact" onClick={onRollbackRecovery} disabled={!recovery.rollbackAvailable}>
+            Roll back
+          </button>
           <button className="secondary-button compact" onClick={onResolveRecovery}>Mark reviewed</button>
         </section>
       )}

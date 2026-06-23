@@ -1,5 +1,6 @@
 use crate::{
     profile::TargetEnvironment,
+    switch_transaction::TransactionRunner,
     switch_transaction::{BackupManifest, SwitchTransaction, TransactionEvent, TransactionPhase},
     PathKind,
 };
@@ -88,6 +89,14 @@ pub struct RecoveryStatus {
     pub latest_event_message: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecoveryRollbackResult {
+    pub transaction: SwitchTransaction,
+    pub status: RecoveryStatus,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct HistoryDocument {
@@ -108,6 +117,7 @@ impl Default for HistoryDocument {
 pub enum AppStateError {
     Io(String),
     Json(String),
+    Recovery(String),
 }
 
 pub struct AppStateRepository {
@@ -188,6 +198,89 @@ impl AppStateRepository {
         load_recovery_status(self)
     }
 
+    pub fn rollback_unfinished_transaction_from_backup(
+        &self,
+    ) -> Result<RecoveryRollbackResult, AppStateError> {
+        let mut transaction = self.load_current_transaction()?;
+        if is_terminal_phase(transaction.phase) {
+            return Err(AppStateError::Recovery(format!(
+                "Transaction is already terminal: {:?}",
+                transaction.phase
+            )));
+        }
+        let manifest = self.load_backup_manifest(&transaction.id)?;
+        if manifest.transaction_id != transaction.id {
+            return Err(AppStateError::Recovery(format!(
+                "Backup manifest transaction id mismatch: expected {}, found {}",
+                transaction.id, manifest.transaction_id
+            )));
+        }
+
+        transaction.transition(
+            TransactionPhase::RollingBack,
+            "Manual recovery rollback from persisted backup manifest",
+        );
+        self.save_current_transaction(&transaction)?;
+        let runner = TransactionRunner::new(self.root.join("backups"));
+        match runner.rollback(&manifest) {
+            Ok(()) => {
+                transaction.transition(
+                    TransactionPhase::RolledBack,
+                    "Manual recovery rollback complete",
+                );
+                self.save_current_transaction(&transaction)?;
+                Ok(RecoveryRollbackResult {
+                    status: load_recovery_status(self)?,
+                    transaction,
+                    message: "Manual recovery rollback completed".to_string(),
+                })
+            }
+            Err(error) => {
+                transaction.transition(
+                    TransactionPhase::Failed,
+                    format!("Manual recovery rollback failed: {error:?}"),
+                );
+                self.save_current_transaction(&transaction)?;
+                Ok(RecoveryRollbackResult {
+                    status: load_recovery_status(self)?,
+                    transaction,
+                    message: format!("Manual recovery rollback failed: {error:?}"),
+                })
+            }
+        }
+    }
+
+    fn load_current_transaction(&self) -> Result<SwitchTransaction, AppStateError> {
+        let path = self.current_transaction_path();
+        if !path.exists() {
+            return Err(AppStateError::Recovery(
+                "No transaction journal found".to_string(),
+            ));
+        }
+        let content =
+            fs::read_to_string(path).map_err(|error| AppStateError::Io(error.to_string()))?;
+        serde_json::from_str(&content).map_err(|error| AppStateError::Json(error.to_string()))
+    }
+
+    fn load_backup_manifest(&self, transaction_id: &str) -> Result<BackupManifest, AppStateError> {
+        let path = self.backup_manifest_path(transaction_id);
+        if !path.exists() {
+            return Err(AppStateError::Recovery(format!(
+                "Backup manifest not found for transaction {transaction_id}"
+            )));
+        }
+        let content =
+            fs::read_to_string(path).map_err(|error| AppStateError::Io(error.to_string()))?;
+        serde_json::from_str(&content).map_err(|error| AppStateError::Json(error.to_string()))
+    }
+
+    fn backup_manifest_path(&self, transaction_id: &str) -> PathBuf {
+        self.root
+            .join("backups")
+            .join(transaction_id)
+            .join("manifest.json")
+    }
+
     fn load_history(&self) -> Result<HistoryDocument, AppStateError> {
         let path = self.history_path();
         if !path.exists() {
@@ -233,12 +326,7 @@ pub fn load_recovery_status(
         serde_json::from_str(&content).map_err(|error| AppStateError::Json(error.to_string()))?;
     let phase = format!("{:?}", transaction.phase);
     let latest_event_message = transaction.events.last().map(|event| event.message.clone());
-    let complete = matches!(
-        transaction.phase,
-        crate::switch_transaction::TransactionPhase::Completed
-            | crate::switch_transaction::TransactionPhase::RolledBack
-            | crate::switch_transaction::TransactionPhase::Failed
-    );
+    let complete = is_terminal_phase(transaction.phase);
     let backup_summary = load_backup_manifest_summary(repository, &transaction.id);
     let rollback_available = !complete && backup_summary.entry_count.unwrap_or(0) > 0;
 
@@ -256,6 +344,13 @@ pub fn load_recovery_status(
         rollback_available,
         latest_event_message,
     })
+}
+
+fn is_terminal_phase(phase: TransactionPhase) -> bool {
+    matches!(
+        phase,
+        TransactionPhase::Completed | TransactionPhase::RolledBack | TransactionPhase::Failed
+    )
 }
 
 struct BackupManifestSummary {
@@ -304,7 +399,7 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), AppStat
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::switch_transaction::{BackupEntry, SwitchTransaction};
+    use crate::switch_transaction::{BackupEntry, BackupManifest, SwitchTransaction};
 
     fn temp_root(name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
@@ -489,6 +584,88 @@ mod tests {
             .events
             .iter()
             .any(|event| event.message.contains("user review")));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn manual_recovery_rollback_restores_from_backup_manifest() {
+        let root = temp_root("recovery-rollback");
+        let repository = AppStateRepository::new(root.clone());
+        let target = root.join("auth.json");
+        let backup = root.join("backups/tx-rollback/artifact-0.bak");
+        fs::write(&target, "new").expect("write new target");
+        fs::create_dir_all(backup.parent().expect("backup parent")).expect("create backup parent");
+        fs::write(&backup, "old").expect("write backup");
+        let manifest = BackupManifest {
+            transaction_id: "tx-rollback".to_string(),
+            entries: vec![BackupEntry {
+                original_path: target.clone(),
+                backup_path: Some(backup),
+                existed: true,
+            }],
+        };
+        let manifest_path = root.join("backups/tx-rollback/manifest.json");
+        fs::write(
+            &manifest_path,
+            serde_json::to_string_pretty(&manifest).expect("manifest json"),
+        )
+        .expect("write manifest");
+        let transaction =
+            SwitchTransaction::new("tx-rollback".to_string(), "profile-1".to_string());
+        repository
+            .save_current_transaction(&transaction)
+            .expect("write transaction");
+
+        let result = repository
+            .rollback_unfinished_transaction_from_backup()
+            .expect("rollback from backup");
+
+        assert_eq!(result.transaction.phase, TransactionPhase::RolledBack);
+        assert!(!result.status.needs_recovery);
+        assert_eq!(fs::read_to_string(target).expect("read target"), "old");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn manual_recovery_rollback_requires_backup_manifest() {
+        let root = temp_root("recovery-rollback-missing-manifest");
+        let repository = AppStateRepository::new(root.clone());
+        let transaction =
+            SwitchTransaction::new("tx-missing-manifest".to_string(), "profile-1".to_string());
+        repository
+            .save_current_transaction(&transaction)
+            .expect("write transaction");
+
+        let error = repository
+            .rollback_unfinished_transaction_from_backup()
+            .expect_err("rollback should require manifest");
+
+        assert!(matches!(
+            error,
+            AppStateError::Recovery(message) if message.contains("Backup manifest not found")
+        ));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn manual_recovery_rollback_rejects_terminal_transaction() {
+        let root = temp_root("recovery-rollback-terminal");
+        let repository = AppStateRepository::new(root.clone());
+        let mut transaction =
+            SwitchTransaction::new("tx-terminal".to_string(), "profile-1".to_string());
+        transaction.phase = TransactionPhase::Completed;
+        repository
+            .save_current_transaction(&transaction)
+            .expect("write transaction");
+
+        let error = repository
+            .rollback_unfinished_transaction_from_backup()
+            .expect_err("terminal transaction should not rollback");
+
+        assert!(matches!(
+            error,
+            AppStateError::Recovery(message) if message.contains("already terminal")
+        ));
         let _ = fs::remove_dir_all(root);
     }
 }

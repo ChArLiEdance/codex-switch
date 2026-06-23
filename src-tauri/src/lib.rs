@@ -13,7 +13,7 @@ pub mod vscode_app;
 use account_hint::{redact_email_like_text, redacted_account_hint_from_path};
 use app_state::{
     default_app_state_dir, load_recovery_status, AppSettings, AppStateRepository,
-    EnvironmentPathOverride, RecoveryStatus, SwitchHistoryEntry,
+    EnvironmentPathOverride, RecoveryRollbackResult, RecoveryStatus, SwitchHistoryEntry,
 };
 use importer::{
     import_preflight_from_scan, import_profile_from_scan, ProfileImportPreflightRequest,
@@ -264,6 +264,13 @@ fn check_recovery_status() -> Result<RecoveryStatus, String> {
 fn resolve_recovery_status() -> Result<RecoveryStatus, String> {
     app_state_repository()
         .resolve_unfinished_transaction()
+        .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
+fn rollback_unfinished_transaction() -> Result<RecoveryRollbackResult, String> {
+    app_state_repository()
+        .rollback_unfinished_transaction_from_backup()
         .map_err(|error| format!("{error:?}"))
 }
 
@@ -1064,6 +1071,7 @@ pub fn run() {
             clear_switch_history,
             check_recovery_status,
             resolve_recovery_status,
+            rollback_unfinished_transaction,
             switch_to_profile,
             restore_default_on_exit,
             restart_desktop_app,

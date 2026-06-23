@@ -58,7 +58,7 @@ Controls:
 - Read-only real-environment detection mode
 - Explicit user confirmation before process shutdown
 
-The transaction runner stores backup manifests and transaction events without raw file contents. Restored contents are written only to the target filesystem paths supplied by a backend restore plan.
+The transaction runner stores backup manifests and transaction events without raw file contents. Restored contents are written only to the target filesystem paths supplied by a backend restore plan. Manual recovery rollback reads the persisted manifest for the unfinished transaction and writes only the backed-up local files described there.
 
 Desktop process handling prefers graceful application quit before restore. If the app cannot be confirmed stopped, restore does not proceed and the error includes the still-running process names.
 

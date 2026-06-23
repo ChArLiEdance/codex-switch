@@ -51,7 +51,7 @@ impl SwitchTransaction {
         transaction
     }
 
-    fn transition(&mut self, phase: TransactionPhase, message: impl Into<String>) {
+    pub(crate) fn transition(&mut self, phase: TransactionPhase, message: impl Into<String>) {
         self.phase = phase;
         self.events.push(TransactionEvent {
             phase,
