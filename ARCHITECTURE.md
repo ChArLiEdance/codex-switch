@@ -121,6 +121,16 @@ The macOS process controller uses application-level quit and open commands. Test
 
 The current system validator runs `codex --version` or the detected executable path with `--version`. This proves the CLI responds after restore, but it does not prove account identity. The report therefore marks this as inconclusive until a real identity check is available.
 
+## VS Code Adapter
+
+`VscodeSwitchCoordinator` restores VS Code profile artifacts and then performs the configured post-switch action:
+
+- `manual_reload_window`: returns an explicit "Developer: Reload Window" instruction without closing VS Code.
+- `restart_app`: asks VS Code to quit, waits until it is stopped, then reopens the configured app path.
+- `none`: records that reload/restart was skipped.
+
+Restore failures skip all reload or restart actions. Timeout errors include the still-running process names. Tests use a mock controller and do not operate on a real VS Code instance.
+
 ## Atomic Restore Strategy
 
 Restores should write into temporary staging paths, verify permissions and checksums, then atomically rename into place where the platform supports it. If any target fails, completed targets are restored from the timestamped backup.

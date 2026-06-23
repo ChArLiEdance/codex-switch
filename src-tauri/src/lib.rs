@@ -5,6 +5,7 @@ pub mod profile;
 pub mod profile_store;
 pub mod secret_store;
 pub mod switch_transaction;
+pub mod vscode_app;
 
 use importer::{import_profile_from_scan, ProfileImportRequest, ProfileImportResult};
 use profile::ProfileMetadata;

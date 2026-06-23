@@ -62,6 +62,8 @@ Desktop process handling prefers graceful application quit before restore. If th
 
 CLI switching refuses to restore while matching Codex CLI processes are active. CLI validation reports availability separately from account identity so the app does not claim a verified account without evidence.
 
+VS Code switching defaults to a manual Reload Window instruction to avoid closing unsaved editor work. Automatic restart is available through the adapter but remains an explicit configuration choice.
+
 ## Logging Policy
 
 Allowed:

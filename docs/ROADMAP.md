@@ -55,3 +55,11 @@
 - Restore CLI artifacts through the transaction runner
 - Return an immediate validation result and manual verification command
 - Treat CLI account identity as inconclusive until a real identity endpoint is available
+
+## Milestone 8
+
+- Add VS Code switch coordinator
+- Restore VS Code artifacts through the transaction runner
+- Return a manual Developer: Reload Window instruction by default
+- Support explicit VS Code app restart with quit timeout handling
+- Skip reload or restart if restore fails
