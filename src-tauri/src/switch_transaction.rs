@@ -384,7 +384,7 @@ impl TransactionRunner {
 fn validate_unique_restore_targets(plan: &RestorePlan) -> Result<(), TransactionError> {
     let mut seen = HashSet::new();
     for artifact in &plan.artifacts {
-        if let Err(error) = reject_symlink_target(&artifact.target_path) {
+        if let Err(error) = reject_symlink_target_or_ancestor(&artifact.target_path) {
             return Err(error);
         }
         let normalized = normalize_restore_path(&artifact.target_path);
@@ -398,16 +398,36 @@ fn validate_unique_restore_targets(plan: &RestorePlan) -> Result<(), Transaction
     Ok(())
 }
 
-fn reject_symlink_target(path: &Path) -> Result<(), TransactionError> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() => {
-            Err(TransactionError::UnsafeRestoreTarget(format!(
-                "restore target is a symlink {}",
-                path.display()
-            )))
+fn reject_symlink_target_or_ancestor(path: &Path) -> Result<(), TransactionError> {
+    if path_is_symlink(path)? {
+        return Err(TransactionError::UnsafeRestoreTarget(format!(
+            "restore target is a symlink {}",
+            path.display()
+        )));
+    }
+    for ancestor in path.ancestors().skip(1) {
+        if ancestor.as_os_str().is_empty() {
+            continue;
         }
-        Ok(_) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        match fs::symlink_metadata(ancestor) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(TransactionError::UnsafeRestoreTarget(format!(
+                    "restore target ancestor is a symlink {}",
+                    ancestor.display()
+                )));
+            }
+            Ok(_) => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(TransactionError::Io(error.to_string())),
+        }
+    }
+    Ok(())
+}
+
+fn path_is_symlink(path: &Path) -> Result<bool, TransactionError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => Ok(metadata.file_type().is_symlink()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(TransactionError::Io(error.to_string())),
     }
 }
@@ -736,6 +756,64 @@ mod tests {
             .file_type()
             .is_symlink());
         assert!(!root.join("backups/tx-symlink-target").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_restore_target_ancestor_fails_before_backup_or_write() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_dir("symlink-parent");
+        let real_parent = root.join("real-parent");
+        let symlink_parent = root.join("auth-parent-link");
+        fs::create_dir_all(&real_parent).expect("create real parent");
+        symlink(&real_parent, &symlink_parent).expect("create parent symlink");
+        let target = symlink_parent.join("auth.json");
+        let plan = RestorePlan {
+            transaction_id: "tx-symlink-parent".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "new")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction.events.iter().any(|event| {
+            event.phase == TransactionPhase::Failed
+                && event
+                    .message
+                    .contains("restore target ancestor is a symlink")
+        }));
+        assert!(!transaction
+            .events
+            .iter()
+            .any(|event| event.phase == TransactionPhase::BackingUp));
+        assert!(!real_parent.join("auth.json").exists());
+        assert!(fs::symlink_metadata(symlink_parent)
+            .expect("symlink metadata")
+            .file_type()
+            .is_symlink());
+        assert!(!root.join("backups/tx-symlink-parent").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn missing_restore_target_parent_is_created() {
+        let root = temp_dir("missing-parent");
+        let target = root.join("missing/auth.json");
+        let plan = RestorePlan {
+            transaction_id: "tx-missing-parent".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "new")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Completed);
+        assert_eq!(fs::read_to_string(target).expect("read target"), "new");
         let _ = fs::remove_dir_all(root);
     }
 
