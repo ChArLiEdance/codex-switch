@@ -20,6 +20,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Profile edit, delete, and set-default actions from the Profiles UI
 - Keychain payload cleanup when a saved Profile is deleted
 - Switch transaction core with backup, atomic restore, and rollback
+- Duplicate restore-target rejection before backup or writes begin
 - Transactional cache refresh for captured cache artifacts during profile restore
 - Readback verification for restored auth/config artifact bytes and Unix file modes before post-restore app restarts
 - Desktop App switch coordinator with graceful quit and optional restart

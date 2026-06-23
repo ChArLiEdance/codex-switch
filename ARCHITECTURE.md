@@ -94,6 +94,7 @@ Every transition records only non-secret metadata. If the app exits during a tra
 The current `TransactionRunner` implements the filesystem core of this model for restore plans:
 
 - Creates a per-transaction backup manifest before writing target files
+- Rejects restore plans with duplicate normalized target paths before backup or writes begin
 - Writes restored files through a temporary file followed by rename
 - Removes restored cache artifacts after restore so target apps refresh volatile cache state on next launch
 - Reads restored non-cache auth/config artifacts back from disk and compares their bytes and captured Unix file modes with the target Profile snapshot before post-restore actions run
@@ -165,7 +166,7 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 4. Checks for active CLI tasks and blocks switching while a Codex CLI task is running.
 5. Detects running Desktop and VS Code processes and requires explicit UI confirmation before asking them to quit.
 6. Persists a planned transaction journal before filesystem restore begins.
-7. Runs one `TransactionRunner` backup/restore/cache-refresh/readback-verification/rollback transaction.
+7. Runs one `TransactionRunner` target-validation/backup/restore/cache-refresh/readback-verification/rollback transaction.
 8. Runs Desktop restart and VS Code restart, when enabled, inside a post-restore transaction hook, then verifies that the restarted process is observed.
 9. Persists the terminal transaction journal returned by the runner.
 10. Rolls back restored files and refreshed cache paths if restore, cache refresh, restored-file readback verification, post-restore restart, or post-restart process verification fails.

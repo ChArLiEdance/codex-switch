@@ -1,8 +1,9 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashSet,
     fs,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -102,6 +103,7 @@ pub struct BackupManifest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransactionError {
     EmptyRestorePlan,
+    ConflictingRestoreTarget(String),
     InvalidBase64(String),
     Io(String),
     InjectedFailure,
@@ -119,18 +121,18 @@ impl TransactionRunner {
     }
 
     pub fn run(&self, plan: &RestorePlan) -> Result<SwitchTransaction, TransactionError> {
-        self.run_inner(plan, None, None::<fn() -> Result<(), TransactionError>>)
+        self.run_inner(plan, None, None, None)
     }
 
     pub fn run_with_post_restore<F>(
         &self,
         plan: &RestorePlan,
-        post_restore: F,
+        mut post_restore: F,
     ) -> Result<SwitchTransaction, TransactionError>
     where
         F: FnMut() -> Result<(), TransactionError>,
     {
-        self.run_inner(plan, None, Some(post_restore))
+        self.run_inner(plan, None, None, Some(&mut post_restore))
     }
 
     #[cfg(test)]
@@ -139,28 +141,41 @@ impl TransactionRunner {
         plan: &RestorePlan,
         writes_before_failure: usize,
     ) -> Result<SwitchTransaction, TransactionError> {
-        self.run_inner(
-            plan,
-            Some(writes_before_failure),
-            None::<fn() -> Result<(), TransactionError>>,
-        )
+        self.run_inner(plan, Some(writes_before_failure), None, None)
     }
 
-    fn run_inner<F>(
+    #[cfg(test)]
+    fn run_with_tamper_after_restore<F>(
         &self,
         plan: &RestorePlan,
-        fail_after_writes: Option<usize>,
-        mut post_restore: Option<F>,
+        mut tamper_after_restore: F,
     ) -> Result<SwitchTransaction, TransactionError>
     where
         F: FnMut() -> Result<(), TransactionError>,
     {
+        self.run_inner(plan, None, Some(&mut tamper_after_restore), None)
+    }
+
+    fn run_inner(
+        &self,
+        plan: &RestorePlan,
+        fail_after_writes: Option<usize>,
+        mut tamper_after_restore: Option<&mut dyn FnMut() -> Result<(), TransactionError>>,
+        mut post_restore: Option<&mut dyn FnMut() -> Result<(), TransactionError>>,
+    ) -> Result<SwitchTransaction, TransactionError> {
         if plan.artifacts.is_empty() {
             return Err(TransactionError::EmptyRestorePlan);
         }
 
         let mut transaction =
             SwitchTransaction::new(plan.transaction_id.clone(), plan.target_profile_id.clone());
+        if let Err(error) = validate_unique_restore_targets(plan) {
+            transaction.transition(
+                TransactionPhase::Failed,
+                format!("Restore plan rejected: {error:?}"),
+            );
+            return Ok(transaction);
+        }
         transaction.transition(TransactionPhase::BackingUp, "Backing up current state");
         let manifest = self.backup(plan)?;
         transaction.transition(TransactionPhase::BackupComplete, "Backup complete");
@@ -197,6 +212,9 @@ impl TransactionRunner {
                 format!("Cache refresh failed: {error:?}"),
             );
             return Ok(transaction);
+        }
+        if let Some(tamper_after_restore) = tamper_after_restore.as_mut() {
+            tamper_after_restore()?;
         }
         transaction.transition(
             TransactionPhase::Verifying,
@@ -360,6 +378,35 @@ impl TransactionRunner {
         }
         Ok(())
     }
+}
+
+fn validate_unique_restore_targets(plan: &RestorePlan) -> Result<(), TransactionError> {
+    let mut seen = HashSet::new();
+    for artifact in &plan.artifacts {
+        let normalized = normalize_restore_path(&artifact.target_path);
+        if !seen.insert(normalized.clone()) {
+            return Err(TransactionError::ConflictingRestoreTarget(format!(
+                "duplicate restore target {}",
+                normalized.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn normalize_restore_path(path: &Path) -> PathBuf {
+    let mut normalized = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
+            }
+            Component::Normal(part) => normalized.push(part),
+            Component::RootDir | Component::Prefix(_) => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
 }
 
 fn atomic_write(
@@ -604,12 +651,12 @@ mod tests {
     }
 
     #[test]
-    fn verification_failure_rolls_back_restored_files() {
-        let root = temp_dir("verification-rollback");
+    fn duplicate_restore_targets_fail_before_backup_or_write() {
+        let root = temp_dir("duplicate-target");
         let target = root.join("auth.json");
         fs::write(&target, "old").expect("write old");
         let plan = RestorePlan {
-            transaction_id: "tx-verification-rollback".to_string(),
+            transaction_id: "tx-duplicate-target".to_string(),
             target_profile_id: "profile-1".to_string(),
             artifacts: vec![
                 artifact(target.clone(), "expected-one"),
@@ -619,6 +666,39 @@ mod tests {
         let runner = TransactionRunner::new(root.join("backups"));
 
         let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction.events.iter().any(|event| {
+            event.phase == TransactionPhase::Failed
+                && event.message.contains("duplicate restore target")
+        }));
+        assert!(!transaction
+            .events
+            .iter()
+            .any(|event| event.phase == TransactionPhase::BackingUp));
+        assert_eq!(fs::read_to_string(target).expect("read target"), "old");
+        assert!(!root.join("backups/tx-duplicate-target").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn verification_failure_rolls_back_restored_files() {
+        let root = temp_dir("verification-rollback");
+        let target = root.join("auth.json");
+        fs::write(&target, "old").expect("write old");
+        let plan = RestorePlan {
+            transaction_id: "tx-verification-rollback".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "expected")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner
+            .run_with_tamper_after_restore(&plan, || {
+                fs::write(&target, "tampered")
+                    .map_err(|error| TransactionError::Io(error.to_string()))
+            })
+            .expect("run transaction");
 
         assert_eq!(transaction.phase, TransactionPhase::Failed);
         assert!(transaction.events.iter().any(|event| {
@@ -666,32 +746,30 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn permission_verification_failure_rolls_back_restored_files() {
+        use std::os::unix::fs::PermissionsExt;
+
         let root = temp_dir("mode-rollback");
         let target = root.join("auth.json");
         fs::write(&target, "old").expect("write old");
         let plan = RestorePlan {
             transaction_id: "tx-mode-rollback".to_string(),
             target_profile_id: "profile-1".to_string(),
-            artifacts: vec![
-                RestoreArtifact {
-                    environment: "cli".to_string(),
-                    kind: RestoreArtifactKind::Auth,
-                    target_path: target.clone(),
-                    content_base64: STANDARD.encode("same".as_bytes()),
-                    unix_mode: Some(0o600),
-                },
-                RestoreArtifact {
-                    environment: "cli".to_string(),
-                    kind: RestoreArtifactKind::Auth,
-                    target_path: target.clone(),
-                    content_base64: STANDARD.encode("same".as_bytes()),
-                    unix_mode: Some(0o644),
-                },
-            ],
+            artifacts: vec![RestoreArtifact {
+                environment: "cli".to_string(),
+                kind: RestoreArtifactKind::Auth,
+                target_path: target.clone(),
+                content_base64: STANDARD.encode("same".as_bytes()),
+                unix_mode: Some(0o600),
+            }],
         };
         let runner = TransactionRunner::new(root.join("backups"));
 
-        let transaction = runner.run(&plan).expect("run transaction");
+        let transaction = runner
+            .run_with_tamper_after_restore(&plan, || {
+                fs::set_permissions(&target, fs::Permissions::from_mode(0o644))
+                    .map_err(|error| TransactionError::Io(error.to_string()))
+            })
+            .expect("run transaction");
 
         assert_eq!(transaction.phase, TransactionPhase::Failed);
         assert_eq!(fs::read_to_string(target).expect("read target"), "old");
