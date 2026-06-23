@@ -155,6 +155,7 @@ export default function App() {
         <SwitchDialog
           profiles={profiles}
           settings={settings}
+          scan={scan}
           onSwitched={async () => {
             await refreshProfiles();
             await refreshHistory();
@@ -583,11 +584,13 @@ function StatusBadge({ status }: { status: EnvironmentState["support"] }) {
 function SwitchDialog({
   profiles,
   settings,
+  scan,
   onSwitched,
   onClose
 }: {
   profiles: ProfileMetadata[];
   settings: AppSettings;
+  scan: EnvironmentScan;
   onSwitched: () => Promise<void>;
   onClose: () => void;
 }) {
@@ -601,7 +604,9 @@ function SwitchDialog({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const steps = ["Checking profile", "Backing up", "Restoring profile", "Recording history", "Post-switch guidance"];
+  const [confirmProcessClose, setConfirmProcessClose] = useState(!settings.confirmBeforeClosingApps);
+  const closeApprovalRequired = settings.confirmBeforeClosingApps && (scope.vscode || scope.desktop);
+  const steps = ["Checking profile", "Closing apps", "Backing up", "Restoring profile", "Restarting apps", "Recording history"];
 
   async function startSwitch() {
     const environments = (Object.entries(scope) as Array<[TargetEnvironment, boolean]>)
@@ -615,10 +620,16 @@ function SwitchDialog({
         profileId,
         environments,
         autoRestartApps: settings.autoRestartApps,
-        vscodeReloadMode: settings.vscodeReloadMode
+        vscodeReloadMode: settings.vscodeReloadMode,
+        confirmProcessClose,
+        desktopAppPath: scan.environments.find((environment) => environment.id === "Desktop")?.executablePath ?? null,
+        vscodeAppPath: scan.environments.find((environment) => environment.id === "VS Code")?.executablePath ?? null,
+        quitTimeoutMs: 8000
       });
       setResult([
         `Transaction ${response.transaction.id}: ${response.transaction.phase}`,
+        response.closedProcesses.length > 0 ? `Closed: ${response.closedProcesses.join(", ")}` : "No running GUI apps closed",
+        response.restartedApps.length > 0 ? `Restarted: ${response.restartedApps.join(", ")}` : "No app restart performed",
         ...response.warnings,
         ...response.manualActions
       ]);
@@ -663,6 +674,17 @@ function SwitchDialog({
           ))}
         </div>
 
+        {closeApprovalRequired && (
+          <label className="dialog-confirm">
+            <input
+              type="checkbox"
+              checked={confirmProcessClose}
+              onChange={(event) => setConfirmProcessClose(event.target.checked)}
+            />
+            <span>I saved work and approve closing running Desktop / VS Code windows for this switch</span>
+          </label>
+        )}
+
         <ol className="step-list">
           {steps.map((step) => (
             <li key={step}>
@@ -682,7 +704,7 @@ function SwitchDialog({
 
         <footer>
           <button className="secondary-button" onClick={onClose}>Cancel</button>
-          <button className="primary-button" onClick={startSwitch} disabled={busy || !profileId}>
+          <button className="primary-button" onClick={startSwitch} disabled={busy || !profileId || (closeApprovalRequired && !confirmProcessClose)}>
             <RefreshCw size={18} />
             {busy ? "Switching" : "Start switch"}
           </button>

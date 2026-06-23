@@ -17,7 +17,8 @@ This developer preview implements the project foundation and the backend pieces 
 - Desktop App switch coordinator with graceful quit and optional restart
 - Codex CLI switch coordinator with running-task detection and availability validation
 - VS Code switch coordinator with manual reload or explicit restart behavior
-- UI-facing saved Profile switch command backed by one combined restore transaction
+- UI-facing saved Profile switch command backed by one combined close, restore, restart, and rollback transaction
+- Switch dialog close confirmation for running Desktop/VS Code windows
 - Local settings persistence
 - Local switch history persistence and clearing
 - Startup recovery inspection for unfinished transaction journals
@@ -28,7 +29,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Real Codex Desktop authentication path semantics
 - Real VS Code Codex/OpenAI extension authentication path semantics
 - Account identity verification after switching
-- Automatic Desktop/VS Code close and restart from the combined UI switch command
+- Automatic Desktop/VS Code close and restart against real running apps on this machine
 - DMG packaging on this machine
 
 ### Verification Commands

@@ -148,11 +148,15 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 1. Loads the selected Profile metadata.
 2. Loads selected environment snapshots from the secret vault.
 3. Builds a combined restore plan from captured artifact source paths.
-4. Runs one `TransactionRunner` backup/restore/rollback transaction.
-5. Appends local switch history.
-6. Returns warnings and post-switch manual actions to the dialog.
+4. Checks for active CLI tasks and blocks switching while a Codex CLI task is running.
+5. Detects running Desktop and VS Code processes and requires explicit UI confirmation before asking them to quit.
+6. Runs one `TransactionRunner` backup/restore/rollback transaction.
+7. Runs Desktop restart and VS Code restart, when enabled, inside a post-restore transaction hook.
+8. Rolls back restored files if either restore or post-restore restart fails.
+9. Appends local switch history.
+10. Returns closed-process, restarted-app, warning, and manual-verification details to the dialog.
 
-This command now makes saved Profiles switchable from the UI. It is still conservative about process automation: Desktop and VS Code process coordinators exist and are tested, but the combined UI command currently returns guidance instead of silently closing apps without a richer confirmation surface.
+This command now makes saved Profiles switchable from the UI and coordinates process close/restart for Desktop and VS Code after explicit confirmation. The process behavior is covered by mock process-controller tests; real Codex Desktop and VS Code extension auth-path semantics still require machine-specific validation.
 
 ## Atomic Restore Strategy
 

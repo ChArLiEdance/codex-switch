@@ -94,6 +94,7 @@ pub enum TransactionError {
     InvalidBase64(String),
     Io(String),
     InjectedFailure,
+    PostRestore(String),
 }
 
 pub struct TransactionRunner {
@@ -106,7 +107,18 @@ impl TransactionRunner {
     }
 
     pub fn run(&self, plan: &RestorePlan) -> Result<SwitchTransaction, TransactionError> {
-        self.run_inner(plan, None)
+        self.run_inner(plan, None, None::<fn() -> Result<(), TransactionError>>)
+    }
+
+    pub fn run_with_post_restore<F>(
+        &self,
+        plan: &RestorePlan,
+        post_restore: F,
+    ) -> Result<SwitchTransaction, TransactionError>
+    where
+        F: FnMut() -> Result<(), TransactionError>,
+    {
+        self.run_inner(plan, None, Some(post_restore))
     }
 
     #[cfg(test)]
@@ -115,14 +127,22 @@ impl TransactionRunner {
         plan: &RestorePlan,
         writes_before_failure: usize,
     ) -> Result<SwitchTransaction, TransactionError> {
-        self.run_inner(plan, Some(writes_before_failure))
+        self.run_inner(
+            plan,
+            Some(writes_before_failure),
+            None::<fn() -> Result<(), TransactionError>>,
+        )
     }
 
-    fn run_inner(
+    fn run_inner<F>(
         &self,
         plan: &RestorePlan,
         fail_after_writes: Option<usize>,
-    ) -> Result<SwitchTransaction, TransactionError> {
+        mut post_restore: Option<F>,
+    ) -> Result<SwitchTransaction, TransactionError>
+    where
+        F: FnMut() -> Result<(), TransactionError>,
+    {
         if plan.artifacts.is_empty() {
             return Err(TransactionError::EmptyRestorePlan);
         }
@@ -132,19 +152,46 @@ impl TransactionRunner {
         transaction.transition(TransactionPhase::BackingUp, "Backing up current state");
         let manifest = self.backup(plan)?;
         transaction.transition(TransactionPhase::BackupComplete, "Backup complete");
-        transaction.transition(TransactionPhase::Restoring, "Restoring target profile state");
+        transaction.transition(
+            TransactionPhase::Restoring,
+            "Restoring target profile state",
+        );
 
         let restore_result = self.restore(plan, fail_after_writes);
         if let Err(error) = restore_result {
-            transaction.transition(TransactionPhase::RollingBack, "Restore failed; rolling back");
+            transaction.transition(
+                TransactionPhase::RollingBack,
+                "Restore failed; rolling back",
+            );
             self.rollback(&manifest)?;
             transaction.transition(TransactionPhase::RolledBack, "Rollback complete");
-            transaction.transition(TransactionPhase::Failed, format!("Restore failed: {error:?}"));
+            transaction.transition(
+                TransactionPhase::Failed,
+                format!("Restore failed: {error:?}"),
+            );
             return Ok(transaction);
         }
 
         transaction.transition(TransactionPhase::RestoreComplete, "Restore complete");
-        transaction.transition(TransactionPhase::Verifying, "File restore verification complete");
+        if let Some(post_restore) = post_restore.as_mut() {
+            if let Err(error) = post_restore() {
+                transaction.transition(
+                    TransactionPhase::RollingBack,
+                    "Post-restore action failed; rolling back",
+                );
+                self.rollback(&manifest)?;
+                transaction.transition(TransactionPhase::RolledBack, "Rollback complete");
+                transaction.transition(
+                    TransactionPhase::Failed,
+                    format!("Post-restore failed: {error:?}"),
+                );
+                return Ok(transaction);
+            }
+        }
+        transaction.transition(
+            TransactionPhase::Verifying,
+            "File restore verification complete",
+        );
         transaction.transition(TransactionPhase::Completed, "Transaction complete");
         Ok(transaction)
     }
@@ -255,7 +302,8 @@ fn copy_dir_all(source: &Path, destination: &Path) -> Result<(), TransactionErro
         if file_type.is_dir() {
             copy_dir_all(&entry.path(), &target)?;
         } else if file_type.is_file() {
-            fs::copy(entry.path(), target).map_err(|error| TransactionError::Io(error.to_string()))?;
+            fs::copy(entry.path(), target)
+                .map_err(|error| TransactionError::Io(error.to_string()))?;
         }
     }
     Ok(())
@@ -321,7 +369,10 @@ mod tests {
         let plan = RestorePlan {
             transaction_id: "tx-rollback".to_string(),
             target_profile_id: "profile-1".to_string(),
-            artifacts: vec![artifact(first.clone(), "new-first"), artifact(second.clone(), "new-second")],
+            artifacts: vec![
+                artifact(first.clone(), "new-first"),
+                artifact(second.clone(), "new-second"),
+            ],
         };
         let runner = TransactionRunner::new(root.join("backups"));
 
@@ -335,7 +386,10 @@ mod tests {
             .iter()
             .any(|event| event.phase == TransactionPhase::RolledBack));
         assert_eq!(fs::read_to_string(first).expect("read first"), "old-first");
-        assert_eq!(fs::read_to_string(second).expect("read second"), "old-second");
+        assert_eq!(
+            fs::read_to_string(second).expect("read second"),
+            "old-second"
+        );
         let _ = fs::remove_dir_all(root);
     }
 
@@ -371,5 +425,31 @@ mod tests {
         assert_eq!(runner.run(&plan), Err(TransactionError::EmptyRestorePlan));
         let _ = fs::remove_dir_all(root);
     }
-}
 
+    #[test]
+    fn post_restore_failure_rolls_back_restored_files() {
+        let root = temp_dir("post-restore");
+        let target = root.join("auth.json");
+        fs::write(&target, "old").expect("write old");
+        let plan = RestorePlan {
+            transaction_id: "tx-post-restore".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(target.clone(), "new")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner
+            .run_with_post_restore(&plan, || {
+                Err(TransactionError::PostRestore("restart failed".to_string()))
+            })
+            .expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction
+            .events
+            .iter()
+            .any(|event| event.phase == TransactionPhase::RolledBack));
+        assert_eq!(fs::read_to_string(target).expect("read target"), "old");
+        let _ = fs::remove_dir_all(root);
+    }
+}

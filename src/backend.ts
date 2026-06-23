@@ -104,6 +104,10 @@ export type ProfileSwitchRequest = {
   environments: TargetEnvironment[];
   autoRestartApps: boolean;
   vscodeReloadMode: AppSettings["vscodeReloadMode"];
+  confirmProcessClose: boolean;
+  desktopAppPath: string | null;
+  vscodeAppPath: string | null;
+  quitTimeoutMs: number;
 };
 
 export type SwitchTransactionEvent = {
@@ -124,6 +128,8 @@ export type ProfileSwitchResult = {
   switchedEnvironments: TargetEnvironment[];
   manualActions: string[];
   warnings: string[];
+  closedProcesses: string[];
+  restartedApps: string[];
 };
 
 export const emptyEnvironmentScan: EnvironmentScan = {

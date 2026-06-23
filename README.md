@@ -91,6 +91,6 @@ codex_switch/
 - Current environment import is implemented for selected CLI, VS Code, and Desktop detector results. Multi-environment import requires explicit same-account confirmation.
 - Account identity verification is not implemented yet; detector account hints are `Unknown`.
 - Backup, restore, rollback, and per-environment switch coordinators are implemented in the backend and covered by simulated tests.
-- Saved Profile switching is wired from the UI to a combined backend restore transaction, with warnings and manual post-switch actions returned to the dialog.
-- The combined UI switch command does not yet automatically close/restart Desktop or VS Code; it uses the restore transaction and returns guidance. The lower-level process coordinators are implemented and tested separately.
+- Saved Profile switching is wired from the UI to a combined backend transaction. With explicit user confirmation it closes running Desktop/VS Code processes, restores selected environments, restarts supported apps, records history, and rolls back if restore or restart fails.
+- Automatic Desktop/VS Code close and restart are covered by mock process-controller tests. Real Codex Desktop and VS Code extension authentication path semantics are not yet verified.
 - `npm run tauri:build -- --bundles app` succeeds. Full default bundling currently fails at the DMG packaging step on this machine.
