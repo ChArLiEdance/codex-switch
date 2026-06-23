@@ -33,6 +33,7 @@ import {
   RecoveryStatus,
   saveSettings,
   SwitchHistoryEntry,
+  switchToProfile,
   TargetEnvironment
 } from "./backend";
 
@@ -62,11 +63,6 @@ export default function App() {
   const [history, setHistory] = useState<SwitchHistoryEntry[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [recovery, setRecovery] = useState<RecoveryStatus>(defaultRecoveryStatus);
-  const [scope, setScope] = useState<Record<EnvironmentId, boolean>>({
-    CLI: true,
-    "VS Code": true,
-    Desktop: true
-  });
 
   const activeProfile = useMemo(() => profiles.find((profile) => profile.defaultProfile), [profiles]);
 
@@ -157,8 +153,14 @@ export default function App() {
 
       {switchOpen && (
         <SwitchDialog
-          scope={scope}
-          setScope={setScope}
+          profiles={profiles}
+          settings={settings}
+          onSwitched={async () => {
+            await refreshProfiles();
+            await refreshHistory();
+            await refreshRecovery();
+            await runScan();
+          }}
           onClose={() => setSwitchOpen(false)}
         />
       )}
@@ -579,15 +581,54 @@ function StatusBadge({ status }: { status: EnvironmentState["support"] }) {
 }
 
 function SwitchDialog({
-  scope,
-  setScope,
+  profiles,
+  settings,
+  onSwitched,
   onClose
 }: {
-  scope: Record<EnvironmentId, boolean>;
-  setScope: React.Dispatch<React.SetStateAction<Record<EnvironmentId, boolean>>>;
+  profiles: ProfileMetadata[];
+  settings: AppSettings;
+  onSwitched: () => Promise<void>;
   onClose: () => void;
 }) {
-  const steps = ["Closing processes", "Backing up", "Restoring profile", "Restarting", "Verifying"];
+  const defaultProfile = profiles.find((profile) => profile.defaultProfile) ?? profiles[0];
+  const [profileId, setProfileId] = useState(defaultProfile?.id ?? "");
+  const [scope, setScope] = useState<Record<TargetEnvironment, boolean>>({
+    cli: settings.defaultScope.includes("cli"),
+    vscode: settings.defaultScope.includes("vscode"),
+    desktop: settings.defaultScope.includes("desktop")
+  });
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const steps = ["Checking profile", "Backing up", "Restoring profile", "Recording history", "Post-switch guidance"];
+
+  async function startSwitch() {
+    const environments = (Object.entries(scope) as Array<[TargetEnvironment, boolean]>)
+      .filter(([, enabled]) => enabled)
+      .map(([environment]) => environment);
+    setBusy(true);
+    setError(null);
+    setResult([]);
+    try {
+      const response = await switchToProfile({
+        profileId,
+        environments,
+        autoRestartApps: settings.autoRestartApps,
+        vscodeReloadMode: settings.vscodeReloadMode
+      });
+      setResult([
+        `Transaction ${response.transaction.id}: ${response.transaction.phase}`,
+        ...response.warnings,
+        ...response.manualActions
+      ]);
+      await onSwitched();
+    } catch (switchError) {
+      setError(String(switchError));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="dialog-backdrop" role="presentation">
@@ -600,15 +641,24 @@ function SwitchDialog({
           <button className="icon-button" onClick={onClose} aria-label="Close">x</button>
         </header>
 
+        <label className="dialog-field">
+          <span>Target profile</span>
+          <select value={profileId} onChange={(event) => setProfileId(event.target.value)}>
+            {profiles.map((profile) => (
+              <option value={profile.id} key={profile.id}>{profile.name}</option>
+            ))}
+          </select>
+        </label>
+
         <div className="scope-picker">
-          {(["CLI", "VS Code", "Desktop"] as EnvironmentId[]).map((item) => (
+          {(["cli", "vscode", "desktop"] as TargetEnvironment[]).map((item) => (
             <label key={item}>
               <input
                 type="checkbox"
                 checked={scope[item]}
                 onChange={(event) => setScope((current) => ({ ...current, [item]: event.target.checked }))}
               />
-              <span>{item}</span>
+              <span>{environmentLabel(item)}</span>
             </label>
           ))}
         </div>
@@ -623,11 +673,18 @@ function SwitchDialog({
           ))}
         </ol>
 
+        {error && <p className="dialog-error">{error}</p>}
+        {result.length > 0 && (
+          <ul className="dialog-result">
+            {result.map((item) => <li key={item}>{item}</li>)}
+          </ul>
+        )}
+
         <footer>
           <button className="secondary-button" onClick={onClose}>Cancel</button>
-          <button className="primary-button">
+          <button className="primary-button" onClick={startSwitch} disabled={busy || !profileId}>
             <RefreshCw size={18} />
-            Start simulated flow
+            {busy ? "Switching" : "Start switch"}
           </button>
         </footer>
       </section>

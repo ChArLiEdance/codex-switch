@@ -99,6 +99,33 @@ export type RecoveryStatus = {
   message: string;
 };
 
+export type ProfileSwitchRequest = {
+  profileId: string;
+  environments: TargetEnvironment[];
+  autoRestartApps: boolean;
+  vscodeReloadMode: AppSettings["vscodeReloadMode"];
+};
+
+export type SwitchTransactionEvent = {
+  phase: string;
+  message: string;
+};
+
+export type SwitchTransaction = {
+  id: string;
+  targetProfileId: string;
+  phase: string;
+  events: SwitchTransactionEvent[];
+};
+
+export type ProfileSwitchResult = {
+  profile: ProfileMetadata;
+  transaction: SwitchTransaction;
+  switchedEnvironments: TargetEnvironment[];
+  manualActions: string[];
+  warnings: string[];
+};
+
 export const emptyEnvironmentScan: EnvironmentScan = {
   os: "unknown",
   scannedAt: "Not scanned",
@@ -168,6 +195,10 @@ export async function checkRecoveryStatus(): Promise<RecoveryStatus> {
       message: `Recovery check unavailable in this runtime: ${String(error)}`
     };
   }
+}
+
+export async function switchToProfile(request: ProfileSwitchRequest): Promise<ProfileSwitchResult> {
+  return await invoke<ProfileSwitchResult>("switch_to_profile", { request });
 }
 
 function emptyEnvironment(id: EnvironmentId): EnvironmentState {

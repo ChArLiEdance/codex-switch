@@ -4,6 +4,7 @@ pub mod desktop_app;
 pub mod importer;
 pub mod profile;
 pub mod profile_store;
+pub mod profile_switch;
 pub mod secret_store;
 pub mod switch_transaction;
 pub mod vscode_app;
@@ -14,6 +15,7 @@ use app_state::{
 };
 use importer::{import_profile_from_scan, ProfileImportRequest, ProfileImportResult};
 use profile::ProfileMetadata;
+use profile_switch::{switch_saved_profile, ProfileSwitchRequest, ProfileSwitchResult};
 use profile_store::{ProfileRepository, ProfileStoreError};
 use secret_store::{KeychainSecretStore, SecretVault};
 use serde::Serialize;
@@ -159,6 +161,21 @@ fn clear_switch_history() -> Result<(), String> {
 #[tauri::command]
 fn check_recovery_status() -> Result<RecoveryStatus, String> {
     load_recovery_status(&app_state_repository()).map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
+fn switch_to_profile(request: ProfileSwitchRequest) -> Result<ProfileSwitchResult, String> {
+    let profile_repository = profile_repository();
+    let app_state_repository = app_state_repository();
+    let vault = SecretVault::new(KeychainSecretStore::new());
+    switch_saved_profile(
+        request,
+        &profile_repository,
+        &app_state_repository,
+        &vault,
+        unix_timestamp_string(),
+    )
+    .map_err(|error| format!("{error:?}"))
 }
 
 fn detect_cli(processes: &[String]) -> EnvironmentState {
@@ -528,7 +545,8 @@ pub fn run() {
             save_settings,
             list_switch_history,
             clear_switch_history,
-            check_recovery_status
+            check_recovery_status,
+            switch_to_profile
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Codex Switch");

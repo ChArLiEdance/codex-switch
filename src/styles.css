@@ -564,6 +564,22 @@ dd {
   margin: 18px 0;
 }
 
+.dialog-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 16px;
+  color: #3b463f;
+  font-weight: 700;
+}
+
+.dialog-field select {
+  min-height: 38px;
+  border-radius: 6px;
+  border: 1px solid #cbd3cc;
+  padding: 0 10px;
+  background: #ffffff;
+}
+
 .scope-picker label {
   display: inline-flex;
   align-items: center;
@@ -596,6 +612,23 @@ dd {
 .step-list em {
   color: #647067;
   font-style: normal;
+}
+
+.dialog-error {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f8e2df;
+  color: #80322f;
+  font-weight: 700;
+}
+
+.dialog-result {
+  margin: 0 0 14px;
+  padding: 10px 12px 10px 30px;
+  border-radius: 6px;
+  background: #eef7ef;
+  color: #244f36;
 }
 
 @media (max-width: 860px) {

@@ -44,26 +44,26 @@ pub struct ImportedEnvironmentSummary {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct EnvironmentSnapshot {
-    schema_version: u32,
-    environment: TargetEnvironment,
-    captured_at: String,
-    artifacts: Vec<CapturedArtifact>,
+pub struct EnvironmentSnapshot {
+    pub schema_version: u32,
+    pub environment: TargetEnvironment,
+    pub captured_at: String,
+    pub artifacts: Vec<CapturedArtifact>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct CapturedArtifact {
-    kind: SnapshotPathKind,
-    source_path: String,
-    relative_path: String,
-    content_base64: Option<String>,
-    skipped_reason: Option<String>,
+pub struct CapturedArtifact {
+    pub kind: SnapshotPathKind,
+    pub source_path: String,
+    pub relative_path: String,
+    pub content_base64: Option<String>,
+    pub skipped_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum SnapshotPathKind {
+pub enum SnapshotPathKind {
     Auth,
     Config,
     Cache,

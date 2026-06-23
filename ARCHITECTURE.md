@@ -141,6 +141,19 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 
 `check_recovery_status` reports whether a transaction journal is unfinished. It does not read auth payloads or secret snapshots.
 
+## Saved Profile Switch Command
+
+`switch_to_profile` is the current UI-facing bridge from saved Profile metadata to restore execution:
+
+1. Loads the selected Profile metadata.
+2. Loads selected environment snapshots from the secret vault.
+3. Builds a combined restore plan from captured artifact source paths.
+4. Runs one `TransactionRunner` backup/restore/rollback transaction.
+5. Appends local switch history.
+6. Returns warnings and post-switch manual actions to the dialog.
+
+This command now makes saved Profiles switchable from the UI. It is still conservative about process automation: Desktop and VS Code process coordinators exist and are tested, but the combined UI command currently returns guidance instead of silently closing apps without a richer confirmation surface.
+
 ## Atomic Restore Strategy
 
 Restores should write into temporary staging paths, verify permissions and checksums, then atomically rename into place where the platform supports it. If any target fails, completed targets are restored from the timestamped backup.
