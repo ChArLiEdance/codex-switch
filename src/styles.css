@@ -348,6 +348,51 @@ h2 {
   gap: 14px;
 }
 
+.import-guide {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.3fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 12px;
+  border-radius: 6px;
+  background: #f7f8f4;
+}
+
+.import-guide h2 {
+  font-size: 17px;
+}
+
+.import-guide ol {
+  margin: 0;
+  padding-left: 18px;
+  color: #3b463f;
+}
+
+.import-guide li {
+  margin-bottom: 4px;
+}
+
+.import-detected-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.import-detected-grid article {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #f2f4ef;
+}
+
+.import-detected-grid span,
+.import-detected-grid em {
+  color: #647067;
+  font-size: 12px;
+  font-style: normal;
+}
+
 .import-fields {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -389,6 +434,15 @@ h2 {
 .import-message {
   margin: 0;
   color: #395344;
+}
+
+.import-warning {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #fff7df;
+  color: #6f4a0b;
+  font-weight: 700;
 }
 
 .empty-state {
@@ -806,6 +860,8 @@ dd {
   .nav-list,
   .status-grid,
   .profile-grid,
+  .import-guide,
+  .import-detected-grid,
   .import-fields,
   .environment-row,
   .history-row {

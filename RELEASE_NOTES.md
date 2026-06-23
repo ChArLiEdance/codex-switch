@@ -13,6 +13,7 @@ This developer preview implements the project foundation and the backend pieces 
 - Profile metadata model
 - OS keychain-backed secret-store abstraction
 - Current local state import into profiles
+- Guided official-login-first Profile import flow with read-only current account evidence
 - Metadata persistence at `~/.codex-switch/profiles.json`
 - Profile edit, delete, and set-default actions from the Profiles UI
 - Keychain payload cleanup when a saved Profile is deleted

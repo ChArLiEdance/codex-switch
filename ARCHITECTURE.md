@@ -42,12 +42,13 @@ Profile metadata is persisted by `ProfileRepository` as `~/.codex-switch/profile
 
 The current import flow:
 
-1. Runs read-only environment detection.
-2. Requires explicit same-account confirmation when importing more than one target environment into a single profile.
-3. Recursively captures readable detector artifacts for selected auth, config, and cache paths with per-environment file and byte limits.
-4. Skips symlinks and unreadable paths with non-secret skipped reasons.
-5. Stores the serialized snapshot through `SecretVault`.
-6. Saves only profile metadata and opaque `secret_ref` values to the metadata file.
+1. Directs the user to complete official Codex login outside the app before capture.
+2. Runs read-only environment detection and shows current account hints plus candidate path counts in the Profiles UI.
+3. Requires explicit same-account confirmation when importing more than one target environment into a single profile before invoking the backend command.
+4. Recursively captures readable detector artifacts for selected auth, config, and cache paths with per-environment file and byte limits.
+5. Skips symlinks and unreadable paths with non-secret skipped reasons.
+6. Stores the serialized snapshot through `SecretVault`.
+7. Saves only profile metadata and opaque `secret_ref` values to the metadata file.
 
 Raw captured file contents are not returned to React.
 

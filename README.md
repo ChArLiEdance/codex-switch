@@ -64,9 +64,10 @@ scripts/verify.sh
 
 1. Sign in through the official Codex login flow outside this app.
 2. Open Codex Switch and run environment detection.
-3. Save the current authorized local state as a named profile.
-4. Select a target profile and choose which environments to switch.
-5. The app stops relevant processes, backs up the current state, restores the target profile, restarts supported apps, verifies the result, and rolls back on failure.
+3. Review the read-only current-state evidence, including detected account hints and candidate paths.
+4. Save the current authorized local state as a named profile.
+5. Select a target profile and choose which environments to switch.
+6. The app stops relevant processes, backs up the current state, restores the target profile, restarts supported apps, verifies the result, and rolls back on failure.
 
 ## Privacy Rules
 
@@ -88,7 +89,7 @@ codex_switch/
 ## Known Limits
 
 - Read-only environment detection code is present in the Tauri backend and is wired into the UI.
-- Current environment import is implemented for selected CLI, VS Code, and Desktop detector results. Multi-environment import requires explicit same-account confirmation.
+- Current environment import is implemented for selected CLI, VS Code, and Desktop detector results. The Profiles UI now guides the official-login-first workflow, shows read-only current account evidence beside the import controls, and blocks multi-environment imports until same-account confirmation is checked.
 - Profile management supports editing names, tags, notes, setting a default Profile, and deleting Profile metadata with associated keychain payload cleanup.
 - Successful restore transactions update Profile `lastUsedAt`, record the previous Profile in local history, and expose Home actions for restoring the default Profile or switching back to the previous Profile.
 - Recovery detection surfaces unfinished transaction journals and lets the user mark a reviewed journal failed before using Restore default or Switch back for an explicit corrective switch.

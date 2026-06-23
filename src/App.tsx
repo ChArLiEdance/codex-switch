@@ -260,7 +260,15 @@ export default function App() {
             }}
           />
         )}
-        {tab === "profiles" && <Profiles profiles={profiles} onProfilesChanged={refreshProfiles} />}
+        {tab === "profiles" && (
+          <Profiles
+            profiles={profiles}
+            scan={scan}
+            scanBusy={scanBusy}
+            onScan={runScan}
+            onProfilesChanged={refreshProfiles}
+          />
+        )}
         {tab === "environment" && <Environment scan={scan} busy={scanBusy} onScan={runScan} />}
         {tab === "settings" && (
           <SettingsView
@@ -411,7 +419,19 @@ function Home({
   );
 }
 
-function Profiles({ profiles, onProfilesChanged }: { profiles: ProfileMetadata[]; onProfilesChanged: () => Promise<void> }) {
+function Profiles({
+  profiles,
+  scan,
+  scanBusy,
+  onScan,
+  onProfilesChanged
+}: {
+  profiles: ProfileMetadata[];
+  scan: EnvironmentScan;
+  scanBusy: boolean;
+  onScan: () => Promise<void>;
+  onProfilesChanged: () => Promise<void>;
+}) {
   const [name, setName] = useState("Imported Profile");
   const [tags, setTags] = useState("current");
   const [note, setNote] = useState("Imported from current local Codex state.");
@@ -429,19 +449,28 @@ function Profiles({ profiles, onProfilesChanged }: { profiles: ProfileMetadata[]
   const [editNote, setEditNote] = useState("");
   const [busyProfileId, setBusyProfileId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const selectedEnvironments = (Object.entries(selected) as Array<[TargetEnvironment, boolean]>)
+    .filter(([, enabled]) => enabled)
+    .map(([environment]) => environment);
+  const requiresSameAccountConfirmation = selectedEnvironments.length > 1 && !confirmSameAccount;
 
   async function saveCurrentLogin() {
+    if (selectedEnvironments.length === 0) {
+      setMessage("Import failed: select at least one environment.");
+      return;
+    }
+    if (requiresSameAccountConfirmation) {
+      setMessage("Import blocked: confirm the selected environments belong to the same authorized account.");
+      return;
+    }
     setImporting(true);
     setMessage(null);
     try {
-      const environments = (Object.entries(selected) as Array<[TargetEnvironment, boolean]>)
-        .filter(([, enabled]) => enabled)
-        .map(([environment]) => environment);
       const result = await importCurrentProfile({
         name,
         tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
         note,
-        environments,
+        environments: selectedEnvironments,
         confirmSameAccount,
         defaultProfile: makeDefault
       });
@@ -539,6 +568,34 @@ function Profiles({ profiles, onProfilesChanged }: { profiles: ProfileMetadata[]
       </header>
 
       <section className="import-panel">
+        <div className="import-guide">
+          <div>
+            <p className="eyebrow">New account workflow</p>
+            <h2>Use official login first, then capture local state</h2>
+          </div>
+          <ol>
+            <li>Sign in through Codex CLI, VS Code, or Codex Desktop using their official login flows.</li>
+            <li>Return here and rescan so this app can inspect local state read-only.</li>
+            <li>Select only environments that belong to the same account, then save the Profile.</li>
+          </ol>
+          <button className="secondary-button compact" onClick={() => void onScan()} disabled={scanBusy}>
+            <FolderSearch size={14} />
+            {scanBusy ? "Scanning" : "Rescan current state"}
+          </button>
+        </div>
+        <div className="import-detected-grid">
+          {(["cli", "vscode", "desktop"] as TargetEnvironment[]).map((environment) => {
+            const detected = scanEnvironmentForTarget(scan, environment);
+            const existingPaths = detected?.discoveredPaths.filter((path) => path.exists).length ?? 0;
+            return (
+              <article key={environment}>
+                <strong>{environmentLabel(environment)}</strong>
+                <span>{detected?.support ?? "not-detected"} - {detected?.accountHint ?? "Unknown"}</span>
+                <em>{existingPaths} existing candidate paths</em>
+              </article>
+            );
+          })}
+        </div>
         <div className="import-fields">
           <label>
             <span>Profile name</span>
@@ -562,6 +619,7 @@ function Profiles({ profiles, onProfilesChanged }: { profiles: ProfileMetadata[]
                 onChange={(event) => setSelected((current) => ({ ...current, [environment]: event.target.checked }))}
               />
               <span>{environmentLabel(environment)}</span>
+              <em>{scanEnvironmentForTarget(scan, environment)?.accountHint ?? "Unknown"}</em>
             </label>
           ))}
         </div>
@@ -583,6 +641,9 @@ function Profiles({ profiles, onProfilesChanged }: { profiles: ProfileMetadata[]
             <span>Set as default profile</span>
           </label>
         </div>
+        {requiresSameAccountConfirmation && (
+          <p className="import-warning">Multi-environment imports require same-account confirmation before saving.</p>
+        )}
         {message && <p className="import-message">{message}</p>}
       </section>
 
@@ -685,6 +746,11 @@ function environmentLabel(environment: TargetEnvironment) {
     return "VS Code";
   }
   return "Desktop";
+}
+
+function scanEnvironmentForTarget(scan: EnvironmentScan, target: TargetEnvironment) {
+  const id: EnvironmentId = target === "cli" ? "CLI" : target === "vscode" ? "VS Code" : "Desktop";
+  return scan.environments.find((environment) => environment.id === id);
 }
 
 function environmentProfileState(profile: ProfileMetadata | undefined, environment: TargetEnvironment) {
