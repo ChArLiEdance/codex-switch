@@ -107,6 +107,7 @@ pub enum TransactionError {
     InvalidBase64(String),
     Io(String),
     InjectedFailure,
+    UnsafeRestoreTarget(String),
     Verification(String),
     PostRestore(String),
 }
@@ -383,6 +384,9 @@ impl TransactionRunner {
 fn validate_unique_restore_targets(plan: &RestorePlan) -> Result<(), TransactionError> {
     let mut seen = HashSet::new();
     for artifact in &plan.artifacts {
+        if let Err(error) = reject_symlink_target(&artifact.target_path) {
+            return Err(error);
+        }
         let normalized = normalize_restore_path(&artifact.target_path);
         if !seen.insert(normalized.clone()) {
             return Err(TransactionError::ConflictingRestoreTarget(format!(
@@ -392,6 +396,20 @@ fn validate_unique_restore_targets(plan: &RestorePlan) -> Result<(), Transaction
         }
     }
     Ok(())
+}
+
+fn reject_symlink_target(path: &Path) -> Result<(), TransactionError> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            Err(TransactionError::UnsafeRestoreTarget(format!(
+                "restore target is a symlink {}",
+                path.display()
+            )))
+        }
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(TransactionError::Io(error.to_string())),
+    }
 }
 
 fn normalize_restore_path(path: &Path) -> PathBuf {
@@ -678,6 +696,46 @@ mod tests {
             .any(|event| event.phase == TransactionPhase::BackingUp));
         assert_eq!(fs::read_to_string(target).expect("read target"), "old");
         assert!(!root.join("backups/tx-duplicate-target").exists());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_restore_target_fails_before_backup_or_write() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_dir("symlink-target");
+        let real_target = root.join("real-auth.json");
+        let symlink_target = root.join("auth-link.json");
+        fs::write(&real_target, "old").expect("write real target");
+        symlink(&real_target, &symlink_target).expect("create symlink");
+        let plan = RestorePlan {
+            transaction_id: "tx-symlink-target".to_string(),
+            target_profile_id: "profile-1".to_string(),
+            artifacts: vec![artifact(symlink_target.clone(), "new")],
+        };
+        let runner = TransactionRunner::new(root.join("backups"));
+
+        let transaction = runner.run(&plan).expect("run transaction");
+
+        assert_eq!(transaction.phase, TransactionPhase::Failed);
+        assert!(transaction.events.iter().any(|event| {
+            event.phase == TransactionPhase::Failed
+                && event.message.contains("restore target is a symlink")
+        }));
+        assert!(!transaction
+            .events
+            .iter()
+            .any(|event| event.phase == TransactionPhase::BackingUp));
+        assert_eq!(
+            fs::read_to_string(real_target).expect("read real target"),
+            "old"
+        );
+        assert!(fs::symlink_metadata(symlink_target)
+            .expect("symlink metadata")
+            .file_type()
+            .is_symlink());
+        assert!(!root.join("backups/tx-symlink-target").exists());
         let _ = fs::remove_dir_all(root);
     }
 
