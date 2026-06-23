@@ -1,7 +1,7 @@
 use crate::{
     profile::TargetEnvironment,
+    switch_transaction::{BackupManifest, SwitchTransaction, TransactionEvent, TransactionPhase},
     PathKind,
-    switch_transaction::{SwitchTransaction, TransactionEvent, TransactionPhase},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -82,6 +82,10 @@ pub struct RecoveryStatus {
     pub transaction_id: Option<String>,
     pub phase: Option<String>,
     pub message: String,
+    pub backup_manifest_found: bool,
+    pub backup_entry_count: Option<usize>,
+    pub rollback_available: bool,
+    pub latest_event_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,6 +221,10 @@ pub fn load_recovery_status(
             transaction_id: None,
             phase: None,
             message: "No unfinished transaction journal found".to_string(),
+            backup_manifest_found: false,
+            backup_entry_count: None,
+            rollback_available: false,
+            latest_event_message: None,
         });
     }
 
@@ -224,12 +232,15 @@ pub fn load_recovery_status(
     let transaction: SwitchTransaction =
         serde_json::from_str(&content).map_err(|error| AppStateError::Json(error.to_string()))?;
     let phase = format!("{:?}", transaction.phase);
+    let latest_event_message = transaction.events.last().map(|event| event.message.clone());
     let complete = matches!(
         transaction.phase,
         crate::switch_transaction::TransactionPhase::Completed
             | crate::switch_transaction::TransactionPhase::RolledBack
             | crate::switch_transaction::TransactionPhase::Failed
     );
+    let backup_summary = load_backup_manifest_summary(repository, &transaction.id);
+    let rollback_available = !complete && backup_summary.entry_count.unwrap_or(0) > 0;
 
     Ok(RecoveryStatus {
         needs_recovery: !complete,
@@ -240,7 +251,43 @@ pub fn load_recovery_status(
         } else {
             format!("Unfinished transaction found in phase: {phase}")
         },
+        backup_manifest_found: backup_summary.found,
+        backup_entry_count: backup_summary.entry_count,
+        rollback_available,
+        latest_event_message,
     })
+}
+
+struct BackupManifestSummary {
+    found: bool,
+    entry_count: Option<usize>,
+}
+
+fn load_backup_manifest_summary(
+    repository: &AppStateRepository,
+    transaction_id: &str,
+) -> BackupManifestSummary {
+    let path = repository
+        .root()
+        .join("backups")
+        .join(transaction_id)
+        .join("manifest.json");
+    let Ok(content) = fs::read_to_string(path) else {
+        return BackupManifestSummary {
+            found: false,
+            entry_count: None,
+        };
+    };
+    let Ok(manifest) = serde_json::from_str::<BackupManifest>(&content) else {
+        return BackupManifestSummary {
+            found: true,
+            entry_count: None,
+        };
+    };
+    BackupManifestSummary {
+        found: true,
+        entry_count: Some(manifest.entries.len()),
+    }
 }
 
 fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), AppStateError> {
@@ -257,7 +304,7 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<(), AppStat
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::switch_transaction::SwitchTransaction;
+    use crate::switch_transaction::{BackupEntry, SwitchTransaction};
 
     fn temp_root(name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
@@ -357,6 +404,48 @@ mod tests {
 
         assert!(status.needs_recovery);
         assert_eq!(status.transaction_id, Some("tx-1".to_string()));
+        assert!(!status.backup_manifest_found);
+        assert_eq!(status.backup_entry_count, None);
+        assert!(!status.rollback_available);
+        assert_eq!(
+            status.latest_event_message,
+            Some("Transaction planned".to_string())
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn recovery_status_reports_backup_manifest_summary() {
+        let root = temp_root("recovery-manifest");
+        let repository = AppStateRepository::new(root.clone());
+        let transaction =
+            SwitchTransaction::new("tx-manifest".to_string(), "profile-1".to_string());
+        repository
+            .save_current_transaction(&transaction)
+            .expect("write transaction");
+        let manifest = BackupManifest {
+            transaction_id: "tx-manifest".to_string(),
+            entries: vec![BackupEntry {
+                original_path: root.join("auth.json"),
+                backup_path: Some(root.join("state/backups/tx-manifest/artifact-0.bak")),
+                existed: true,
+            }],
+        };
+        let manifest_path = root.join("backups/tx-manifest/manifest.json");
+        fs::create_dir_all(manifest_path.parent().expect("manifest parent"))
+            .expect("create manifest parent");
+        fs::write(
+            &manifest_path,
+            serde_json::to_string_pretty(&manifest).expect("manifest json"),
+        )
+        .expect("write manifest");
+
+        let status = load_recovery_status(&repository).expect("recovery status");
+
+        assert!(status.needs_recovery);
+        assert!(status.backup_manifest_found);
+        assert_eq!(status.backup_entry_count, Some(1));
+        assert!(status.rollback_available);
         let _ = fs::remove_dir_all(root);
     }
 
@@ -374,6 +463,7 @@ mod tests {
 
         assert!(!status.needs_recovery);
         assert_eq!(status.transaction_id, Some("tx-2".to_string()));
+        assert!(!status.rollback_available);
         let _ = fs::remove_dir_all(root);
     }
 

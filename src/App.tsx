@@ -72,7 +72,11 @@ const defaultRecoveryStatus: RecoveryStatus = {
   needsRecovery: false,
   transactionId: null,
   phase: null,
-  message: "Recovery check has not run"
+  message: "Recovery check has not run",
+  backupManifestFound: false,
+  backupEntryCount: null,
+  rollbackAvailable: false,
+  latestEventMessage: null
 };
 
 export default function App() {
@@ -389,7 +393,15 @@ function Home({
       {recovery.needsRecovery && (
         <section className="recovery-banner">
           <AlertTriangle size={18} />
-          <span>{recovery.message}</span>
+          <span>
+            {recovery.message}
+            <em>
+              {recovery.backupManifestFound
+                ? `Backup manifest found${recovery.backupEntryCount === null ? "" : ` · ${recovery.backupEntryCount} entries`}${recovery.rollbackAvailable ? " · rollback evidence available" : ""}`
+                : "Backup manifest not found yet"}
+              {recovery.latestEventMessage ? ` · ${recovery.latestEventMessage}` : ""}
+            </em>
+          </span>
           <button className="secondary-button compact" onClick={onResolveRecovery}>Mark reviewed</button>
         </section>
       )}

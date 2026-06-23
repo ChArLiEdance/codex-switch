@@ -313,6 +313,15 @@ h2 {
   font-weight: 700;
 }
 
+.recovery-banner em {
+  display: block;
+  margin-top: 3px;
+  color: #7a5b22;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+}
+
 .diagnostics-panel {
   padding: 16px;
   margin-bottom: 18px;

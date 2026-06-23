@@ -173,6 +173,10 @@ export type RecoveryStatus = {
   transactionId: string | null;
   phase: string | null;
   message: string;
+  backupManifestFound: boolean;
+  backupEntryCount: number | null;
+  rollbackAvailable: boolean;
+  latestEventMessage: string | null;
 };
 
 export type ProfileSwitchRequest = {
@@ -313,7 +317,11 @@ export async function checkRecoveryStatus(): Promise<RecoveryStatus> {
       needsRecovery: false,
       transactionId: null,
       phase: null,
-      message: `Recovery check unavailable in this runtime: ${String(error)}`
+      message: `Recovery check unavailable in this runtime: ${String(error)}`,
+      backupManifestFound: false,
+      backupEntryCount: null,
+      rollbackAvailable: false,
+      latestEventMessage: null
     };
   }
 }
