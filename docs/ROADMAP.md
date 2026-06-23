@@ -71,3 +71,10 @@
 - Inspect unfinished transaction journals on startup
 - Wire Home history and Settings controls to backend state commands
 - Keep logs and recovery status free of auth content
+
+## Milestone 10
+
+- Add repeatable verification script
+- Document verified test/build commands
+- Add release notes with current supported behavior and remaining gaps
+- Keep release status conservative until real environment switching is validated end to end

@@ -48,6 +48,18 @@ npm run build
 npm run tauri:build
 ```
 
+Verified app-only bundle:
+
+```bash
+npm run tauri:build -- --bundles app
+```
+
+Full local verification:
+
+```bash
+scripts/verify.sh
+```
+
 ## Usage Model
 
 1. Sign in through the official Codex login flow outside this app.
@@ -78,5 +90,6 @@ codex_switch/
 - Read-only environment detection code is present in the Tauri backend and is wired into the UI.
 - Current environment import is implemented for selected CLI, VS Code, and Desktop detector results. Multi-environment import requires explicit same-account confirmation.
 - Account identity verification is not implemented yet; detector account hints are `Unknown`.
-- Backup, restore, process control, switching, and rollback are not implemented yet.
+- Backup, restore, rollback, and per-environment switch coordinators are implemented in the backend and covered by simulated tests.
+- End-to-end one-click switching from a saved profile through all three environments is not fully wired in the UI yet.
 - `npm run tauri:build -- --bundles app` succeeds. Full default bundling currently fails at the DMG packaging step on this machine.
