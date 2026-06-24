@@ -2693,6 +2693,16 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   margin-left: 0 !important;
 }
 
+.mac-settings-button {
+  width: 42px !important;
+  height: 42px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
 @media (max-width: 680px) {
   .mac-brand-cluster {
     justify-self: start !important;
