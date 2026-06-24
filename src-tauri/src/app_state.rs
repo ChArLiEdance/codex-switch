@@ -19,6 +19,8 @@ pub struct AppSettings {
     pub restore_default_on_exit: bool,
     pub vscode_reload_mode: VscodeReloadMode,
     #[serde(default)]
+    pub ui_language: UiLanguage,
+    #[serde(default)]
     pub custom_paths: Vec<EnvironmentPathOverride>,
 }
 
@@ -34,6 +36,7 @@ impl Default for AppSettings {
             auto_restart_apps: true,
             restore_default_on_exit: false,
             vscode_reload_mode: VscodeReloadMode::ManualReloadWindow,
+            ui_language: UiLanguage::En,
             custom_paths: Vec::new(),
         }
     }
@@ -53,6 +56,20 @@ pub enum VscodeReloadMode {
     ManualReloadWindow,
     RestartApp,
     None,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiLanguage {
+    #[serde(rename = "en")]
+    En,
+    #[serde(rename = "zh-CN")]
+    ZhCn,
+}
+
+impl Default for UiLanguage {
+    fn default() -> Self {
+        Self::En
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -461,6 +478,7 @@ mod tests {
         let settings = repository.load_settings().expect("load legacy settings");
 
         assert!(settings.custom_paths.is_empty());
+        assert_eq!(settings.ui_language, UiLanguage::En);
         let _ = fs::remove_dir_all(root);
     }
 

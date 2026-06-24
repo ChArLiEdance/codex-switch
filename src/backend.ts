@@ -143,12 +143,15 @@ export type ProfileUpdateRequest = {
   defaultProfile: boolean;
 };
 
+export type UiLanguage = "en" | "zh-CN";
+
 export type AppSettings = {
   defaultScope: TargetEnvironment[];
   confirmBeforeClosingApps: boolean;
   autoRestartApps: boolean;
   restoreDefaultOnExit: boolean;
   vscodeReloadMode: "manual_reload_window" | "restart_app" | "none";
+  uiLanguage: UiLanguage;
   customPaths: EnvironmentPathOverride[];
 };
 

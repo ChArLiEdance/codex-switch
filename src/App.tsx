@@ -67,6 +67,7 @@ import {
   UsageTokenTotals,
   updateProfile
 } from "./backend";
+import { createTranslator, type Translate } from "./i18n";
 
 type Tab = "home" | "profiles" | "environment" | "usage" | "settings";
 
@@ -76,6 +77,7 @@ const defaultSettings: AppSettings = {
   autoRestartApps: true,
   restoreDefaultOnExit: false,
   vscodeReloadMode: "manual_reload_window",
+  uiLanguage: "en",
   customPaths: []
 };
 
@@ -121,6 +123,7 @@ export default function App() {
   const [usageMessage, setUsageMessage] = useState<string | null>(null);
   const [quickSwitchMessage, setQuickSwitchMessage] = useState<string | null>(null);
   const closeAfterExitRestore = useRef(false);
+  const t = useMemo(() => createTranslator(settings.uiLanguage), [settings.uiLanguage]);
 
   const defaultProfile = useMemo(() => profiles.find((profile) => profile.defaultProfile), [profiles]);
   const currentProfile = useMemo(() => {
@@ -307,15 +310,15 @@ export default function App() {
           <ShieldCheck size={24} />
           <div>
             <strong>Codex Switch</strong>
-            <span>Local profile manager</span>
+            <span>{t("brandSubtitle")}</span>
           </div>
         </div>
         <nav className="nav-list" aria-label="Primary">
-          <NavButton icon={<Laptop size={18} />} label="Home" active={tab === "home"} onClick={() => setTab("home")} />
-          <NavButton icon={<KeyRound size={18} />} label="Profiles" active={tab === "profiles"} onClick={() => setTab("profiles")} />
-          <NavButton icon={<FolderSearch size={18} />} label="Environment" active={tab === "environment"} onClick={() => setTab("environment")} />
-          <NavButton icon={<BarChart3 size={18} />} label="Usage" active={tab === "usage"} onClick={() => setTab("usage")} />
-          <NavButton icon={<Settings size={18} />} label="Settings" active={tab === "settings"} onClick={() => setTab("settings")} />
+          <NavButton icon={<Laptop size={18} />} label={t("navHome")} active={tab === "home"} onClick={() => setTab("home")} />
+          <NavButton icon={<KeyRound size={18} />} label={t("navProfiles")} active={tab === "profiles"} onClick={() => setTab("profiles")} />
+          <NavButton icon={<FolderSearch size={18} />} label={t("navEnvironment")} active={tab === "environment"} onClick={() => setTab("environment")} />
+          <NavButton icon={<BarChart3 size={18} />} label={t("navUsage")} active={tab === "usage"} onClick={() => setTab("usage")} />
+          <NavButton icon={<Settings size={18} />} label={t("navSettings")} active={tab === "settings"} onClick={() => setTab("settings")} />
         </nav>
       </aside>
 
@@ -330,6 +333,7 @@ export default function App() {
             history={history}
             recovery={recovery}
             quickSwitchMessage={quickSwitchMessage}
+            t={t}
             onSwitch={() => setSwitchOpen(true)}
             onResolveRecovery={() => void resolveRecovery()}
             onRollbackRecovery={() => void rollbackRecovery()}
@@ -346,23 +350,26 @@ export default function App() {
             profiles={profiles}
             scan={scan}
             scanBusy={scanBusy}
+            t={t}
             onScan={runScan}
             onProfilesChanged={refreshProfiles}
           />
         )}
-        {tab === "environment" && <Environment scan={scan} busy={scanBusy} onScan={runScan} />}
+        {tab === "environment" && <Environment scan={scan} busy={scanBusy} t={t} onScan={runScan} />}
         {tab === "usage" && (
           <UsageHistoryView
             report={usageHistory}
             busy={usageBusy}
             message={usageMessage}
             switchHistory={history}
+            t={t}
             onRefresh={() => void refreshUsageHistory()}
           />
         )}
         {tab === "settings" && (
           <SettingsView
             settings={settings}
+            t={t}
             onChange={updateSettings}
             onClearHistory={clearHistory}
           />
@@ -374,6 +381,7 @@ export default function App() {
           profiles={profiles}
           settings={settings}
           scan={scan}
+          t={t}
           onSwitched={async () => {
             await refreshProfiles();
             await refreshHistory();
@@ -415,6 +423,7 @@ function Home({
   history,
   recovery,
   quickSwitchMessage,
+  t,
   onSwitch,
   onResolveRecovery,
   onRollbackRecovery,
@@ -429,6 +438,7 @@ function Home({
   history: SwitchHistoryEntry[];
   recovery: RecoveryStatus;
   quickSwitchMessage: string | null;
+  t: Translate;
   onSwitch: () => void;
   onResolveRecovery: () => void;
   onRollbackRecovery: () => void;
@@ -439,34 +449,38 @@ function Home({
     <section className="view">
       <header className="view-header">
         <div>
-          <p className="eyebrow">Current account</p>
-          <h1>{currentProfile?.accountHint ?? "No verified account"}</h1>
-          <span className="scan-meta">{currentProfile ? `${currentProfile.name}${currentProfile.lastUsedAt ? ` · last used ${currentProfile.lastUsedAt}` : ""}` : "No profile has been switched yet"}</span>
+          <p className="eyebrow">{t("currentAccount")}</p>
+          <h1>{currentProfile?.accountHint ?? t("noVerifiedAccount")}</h1>
+          <span className="scan-meta">
+            {currentProfile
+              ? `${currentProfile.name}${currentProfile.lastUsedAt ? ` · ${t("lastUsed", { value: currentProfile.lastUsedAt })}` : ""}`
+              : t("noProfileSwitched")}
+          </span>
           {currentProfile && (
             <span className={`account-verification ${verificationClass(currentSwitchHistory)}`}>
-              {verificationLabel(currentSwitchHistory)}
+              {verificationLabel(currentSwitchHistory, t)}
             </span>
           )}
         </div>
         <div className="header-actions">
           <button className="primary-button" onClick={onSwitch}>
             <RefreshCw size={18} />
-            One-click switch
+            {t("oneClickSwitch")}
           </button>
           <button className="secondary-button" onClick={onRestoreDefault} disabled={!defaultProfile}>
             <RotateCcw size={18} />
-            Restore default
+            {t("restoreDefault")}
           </button>
           <button className="secondary-button" onClick={onSwitchPrevious} disabled={!previousSwitchCandidateAvailable}>
             <History size={18} />
-            Switch back
+            {t("switchBack")}
           </button>
         </div>
       </header>
 
       <div className="status-grid">
         {scan.environments.map((environment) => (
-          <EnvironmentSummary key={environment.id} environment={environment} />
+          <EnvironmentSummary key={environment.id} environment={environment} t={t} />
         ))}
       </div>
 
@@ -477,15 +491,15 @@ function Home({
             {recovery.message}
             <em>
               {recovery.backupManifestFound
-                ? `Backup manifest found${recovery.backupEntryCount === null ? "" : ` · ${recovery.backupEntryCount} entries`}${recovery.rollbackAvailable ? " · rollback evidence available" : ""}`
-                : "Backup manifest not found yet"}
+                ? `${t("backupManifestFound")}${recovery.backupEntryCount === null ? "" : ` · ${t("backupEntries", { count: recovery.backupEntryCount })}`}${recovery.rollbackAvailable ? ` · ${t("rollbackEvidenceAvailable")}` : ""}`
+                : t("backupManifestMissing")}
               {recovery.latestEventMessage ? ` · ${recovery.latestEventMessage}` : ""}
             </em>
           </span>
           <button className="secondary-button compact" onClick={onRollbackRecovery} disabled={!recovery.rollbackAvailable}>
-            Roll back
+            {t("rollBack")}
           </button>
-          <button className="secondary-button compact" onClick={onResolveRecovery}>Mark reviewed</button>
+          <button className="secondary-button compact" onClick={onResolveRecovery}>{t("markReviewed")}</button>
         </section>
       )}
 
@@ -499,14 +513,14 @@ function Home({
       <section className="panel">
         <div className="panel-title">
           <History size={18} />
-          <h2>Recent switch history</h2>
+          <h2>{t("recentSwitchHistory")}</h2>
         </div>
         <div className="history-list">
           {history.length === 0 && (
             <div className="history-row">
-              <span>No switch history</span>
+              <span>{t("noSwitchHistory")}</span>
               <strong>- {"->"} -</strong>
-              <em>Waiting for first verified transaction</em>
+              <em>{t("waitingFirstTransaction")}</em>
             </div>
           )}
           {history.map((item) => (
@@ -526,12 +540,14 @@ function Profiles({
   profiles,
   scan,
   scanBusy,
+  t,
   onScan,
   onProfilesChanged
 }: {
   profiles: ProfileMetadata[];
   scan: EnvironmentScan;
   scanBusy: boolean;
+  t: Translate;
   onScan: () => Promise<void>;
   onProfilesChanged: () => Promise<void>;
 }) {
@@ -682,34 +698,34 @@ function Profiles({
     <section className="view">
       <header className="view-header">
         <div>
-          <p className="eyebrow">Profile management</p>
-          <h1>Authorized local profiles</h1>
+          <p className="eyebrow">{t("profileManagement")}</p>
+          <h1>{t("authorizedProfiles")}</h1>
         </div>
         <button className="secondary-button" onClick={saveCurrentLogin} disabled={importing}>
           <UserPlus size={18} />
-          {importing ? "Saving" : "Save current login"}
+          {importing ? t("saving") : t("saveCurrentLogin")}
         </button>
       </header>
 
       <section className="import-panel">
         <div className="import-guide">
           <div>
-            <p className="eyebrow">New account workflow</p>
-            <h2>Use official login first, then capture local state</h2>
+            <p className="eyebrow">{t("newAccountWorkflow")}</p>
+            <h2>{t("officialLoginFirst")}</h2>
           </div>
           <ol>
-            <li>Sign in through Codex CLI, VS Code, or Codex Desktop using their official login flows.</li>
-            <li>Return here and rescan so this app can inspect local state read-only.</li>
-            <li>Select only environments that belong to the same account, then save the Profile.</li>
+            <li>{t("importStepOfficial")}</li>
+            <li>{t("importStepRescan")}</li>
+            <li>{t("importStepSameAccount")}</li>
           </ol>
           <div className="import-guide-actions">
             <button className="secondary-button compact" onClick={() => void previewImportCoverage()} disabled={preflightBusy || selectedEnvironments.length === 0}>
               <ListChecks size={14} />
-              {preflightBusy ? "Previewing" : "Preview capture"}
+              {preflightBusy ? t("previewing") : t("previewCapture")}
             </button>
             <button className="secondary-button compact" onClick={() => void onScan()} disabled={scanBusy}>
               <FolderSearch size={14} />
-              {scanBusy ? "Scanning" : "Rescan current state"}
+              {scanBusy ? t("scanning") : t("rescanCurrentState")}
             </button>
           </div>
         </div>
@@ -720,23 +736,23 @@ function Profiles({
             return (
               <article key={environment}>
                 <strong>{environmentLabel(environment)}</strong>
-                <span>{detected?.support ?? "not-detected"} - {detected?.accountHint ?? "Unknown"}</span>
-                <em>{existingPaths} existing candidate paths</em>
+                <span>{detected?.support ?? "not-detected"} - {detected?.accountHint ?? t("unknown")}</span>
+                <em>{t("existingCandidatePaths", { count: existingPaths })}</em>
               </article>
             );
           })}
         </div>
         <div className="import-fields">
           <label>
-            <span>Profile name</span>
+            <span>{t("profileName")}</span>
             <input value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
-            <span>Tags</span>
+            <span>{t("tags")}</span>
             <input value={tags} onChange={(event) => setTags(event.target.value)} />
           </label>
           <label>
-            <span>Note</span>
+            <span>{t("note")}</span>
             <input value={note} onChange={(event) => setNote(event.target.value)} />
           </label>
         </div>
@@ -749,7 +765,7 @@ function Profiles({
                 onChange={(event) => setSelected((current) => ({ ...current, [environment]: event.target.checked }))}
               />
               <span>{environmentLabel(environment)}</span>
-              <em>{scanEnvironmentForTarget(scan, environment)?.accountHint ?? "Unknown"}</em>
+              <em>{scanEnvironmentForTarget(scan, environment)?.accountHint ?? t("unknown")}</em>
             </label>
           ))}
         </div>
@@ -760,7 +776,7 @@ function Profiles({
               checked={confirmSameAccount}
               onChange={(event) => setConfirmSameAccount(event.target.checked)}
             />
-            <span>Selected environments belong to the same authorized account</span>
+            <span>{t("sameAuthorizedAccount")}</span>
           </label>
           <label>
             <input
@@ -768,11 +784,11 @@ function Profiles({
               checked={makeDefault}
               onChange={(event) => setMakeDefault(event.target.checked)}
             />
-            <span>Set as default profile</span>
+            <span>{t("setAsDefaultProfile")}</span>
           </label>
         </div>
         {requiresSameAccountConfirmation && (
-          <p className="import-warning">Multi-environment imports require same-account confirmation before saving.</p>
+          <p className="import-warning">{t("sameAccountRequired")}</p>
         )}
         {preflight && (
           <div className="import-preflight">
@@ -780,19 +796,19 @@ function Profiles({
               <article className={`preflight-row ${environment.readiness}`} key={environment.environment}>
                 <div>
                   <strong>{environmentLabel(environment.environment)}</strong>
-                  <span>{preflightReadinessLabel(environment.readiness)} · {environment.accountHint}</span>
+                  <span>{preflightReadinessLabel(environment.readiness, t)} · {environment.accountHint}</span>
                 </div>
                 <dl>
                   <div>
-                    <dt>Candidates</dt>
+                    <dt>{t("candidates")}</dt>
                     <dd>{environment.existingCandidatePathCount}/{environment.candidatePathCount}</dd>
                   </div>
                   <div>
-                    <dt>Capture</dt>
-                    <dd>{environment.capturedArtifactCount} files · {environment.capturedBytes} encoded bytes</dd>
+                    <dt>{t("capture")}</dt>
+                    <dd>{t("filesEncodedBytes", { files: environment.capturedArtifactCount, bytes: environment.capturedBytes })}</dd>
                   </div>
                   <div>
-                    <dt>Skipped</dt>
+                    <dt>{t("skipped")}</dt>
                     <dd>{environment.skippedArtifactCount}</dd>
                   </div>
                 </dl>
@@ -812,8 +828,8 @@ function Profiles({
       <div className="profile-grid">
         {profiles.length === 0 && (
           <article className="empty-state">
-            <h2>No saved profiles</h2>
-            <p>Run read-only detection, confirm the selected environments belong to the same account, then save the current login.</p>
+            <h2>{t("noSavedProfiles")}</h2>
+            <p>{t("noSavedProfilesHint")}</p>
           </article>
         )}
         {profiles.map((profile) => {
@@ -824,15 +840,15 @@ function Profiles({
             {editing ? (
               <div className="profile-edit">
                 <label>
-                  <span>Name</span>
+                  <span>{t("name")}</span>
                   <input value={editName} onChange={(event) => setEditName(event.target.value)} />
                 </label>
                 <label>
-                  <span>Tags</span>
+                  <span>{t("tags")}</span>
                   <input value={editTags} onChange={(event) => setEditTags(event.target.value)} />
                 </label>
                 <label>
-                  <span>Note</span>
+                  <span>{t("note")}</span>
                   <textarea value={editNote} onChange={(event) => setEditNote(event.target.value)} />
                 </label>
               </div>
@@ -842,9 +858,9 @@ function Profiles({
                   <div>
                     <h2>{profile.name}</h2>
                     <span>{profile.accountHint}</span>
-                    <span>{profile.lastUsedAt ? `Last used ${profile.lastUsedAt}` : "Never switched"}</span>
+                    <span>{profile.lastUsedAt ? t("lastUsed", { value: profile.lastUsedAt }) : t("neverSwitched")}</span>
                   </div>
-                  {profile.defaultProfile && <strong className="pill">Default</strong>}
+                  {profile.defaultProfile && <strong className="pill">{t("default")}</strong>}
                 </div>
                 <p>{profile.note}</p>
               </>
@@ -866,28 +882,28 @@ function Profiles({
                 <>
                   <button onClick={() => void saveProfileEdit(profile)} disabled={busy || editName.trim().length === 0}>
                     <Save size={14} />
-                    Save
+                    {t("save")}
                   </button>
                   <button onClick={() => setEditingProfileId(null)} disabled={busy}>
                     <X size={14} />
-                    Cancel
+                    {t("cancel")}
                   </button>
                 </>
               ) : (
                 <>
                   <button onClick={() => startEdit(profile)} disabled={busy}>
                     <Pencil size={14} />
-                    Edit
+                    {t("edit")}
                   </button>
                   {!profile.defaultProfile && (
                     <button onClick={() => void setDefaultProfile(profile)} disabled={busy}>
                       <Star size={14} />
-                      Set default
+                      {t("setDefault")}
                     </button>
                   )}
                   <button onClick={() => void removeProfile(profile)} disabled={busy} className="danger-card-button">
                     <Trash2 size={14} />
-                    Delete
+                    {t("delete")}
                   </button>
                 </>
               )}
@@ -910,17 +926,17 @@ function environmentLabel(environment: TargetEnvironment) {
   return "Desktop";
 }
 
-function preflightReadinessLabel(readiness: string) {
+function preflightReadinessLabel(readiness: string, t: Translate) {
   if (readiness === "ready") {
-    return "Ready to import";
+    return t("readyToImport");
   }
   if (readiness === "not_selected") {
-    return "Not selected";
+    return t("notSelected");
   }
   if (readiness === "scan_missing") {
-    return "Scan missing";
+    return t("scanMissing");
   }
-  return "No readable artifacts";
+  return t("noReadableArtifacts");
 }
 
 function scanEnvironmentForTarget(scan: EnvironmentScan, target: TargetEnvironment) {
@@ -956,22 +972,22 @@ function verificationClass(history?: SwitchHistoryEntry) {
   return "failed";
 }
 
-function verificationLabel(history?: SwitchHistoryEntry) {
+function verificationLabel(history: SwitchHistoryEntry | undefined, t: Translate) {
   if (!history) {
-    return "No switch verification recorded";
+    return t("noSwitchVerification");
   }
   if (history.status === "success") {
-    return "Verified by post-switch account hint";
+    return t("verifiedByHint");
   }
   if (history.status === "incomplete") {
     return history.errorType === "IdentityMismatch"
-      ? "Account hint mismatch after switch"
-      : "Identity verification incomplete";
+      ? t("accountHintMismatch")
+      : t("identityIncomplete");
   }
   if (history.status === "rolled_back") {
-    return "Last switch rolled back";
+    return t("lastSwitchRolledBack");
   }
-  return "Last switch failed";
+  return t("lastSwitchFailed");
 }
 
 function UsageHistoryView({
@@ -979,12 +995,14 @@ function UsageHistoryView({
   busy,
   message,
   switchHistory,
+  t,
   onRefresh
 }: {
   report: UsageHistoryReport;
   busy: boolean;
   message: string | null;
   switchHistory: SwitchHistoryEntry[];
+  t: Translate;
   onRefresh: () => void;
 }) {
   const recentSessions = report.sessions.slice(0, 12);
@@ -992,16 +1010,16 @@ function UsageHistoryView({
     <section className="view">
       <header className="view-header">
         <div>
-          <p className="eyebrow">Usage and history</p>
-          <h1>Local Codex activity</h1>
+          <p className="eyebrow">{t("usageAndHistory")}</p>
+          <h1>{t("localCodexActivity")}</h1>
           <span className="scan-meta">
-            {report.codexHome || "Codex home not scanned"} · {report.scannedAt}
+            {report.codexHome || t("codexHomeNotScanned")} · {report.scannedAt}
           </span>
         </div>
         <div className="header-actions">
           <button className="secondary-button" onClick={onRefresh} disabled={busy}>
             <RefreshCw size={18} />
-            {busy ? "Scanning" : "Refresh usage"}
+            {busy ? t("scanning") : t("refreshUsage")}
           </button>
         </div>
       </header>
@@ -1014,23 +1032,23 @@ function UsageHistoryView({
       )}
 
       <div className="usage-hero-grid">
-        <UsageMetricCard title="Total tokens" value={formatTokenCount(report.totals.totalTokens)} detail="Input + cached input + output" />
-        <UsageMetricCard title="Input" value={formatTokenCount(report.totals.inputTokens)} detail={`${formatTokenCount(report.totals.cachedInputTokens)} cached`} />
-        <UsageMetricCard title="Output" value={formatTokenCount(report.totals.outputTokens)} detail={`${report.sessions.length} sessions`} />
-        <UsageMetricCard title="Files scanned" value={String(report.filesScanned)} detail={`${report.parseErrors.length} parse issue(s)`} />
+        <UsageMetricCard title={t("totalTokens")} value={formatTokenCount(report.totals.totalTokens)} detail={t("inputCachedOutput")} />
+        <UsageMetricCard title={t("input")} value={formatTokenCount(report.totals.inputTokens)} detail={t("cached", { value: formatTokenCount(report.totals.cachedInputTokens) })} />
+        <UsageMetricCard title={t("output")} value={formatTokenCount(report.totals.outputTokens)} detail={t("sessions", { count: report.sessions.length })} />
+        <UsageMetricCard title={t("filesScanned")} value={String(report.filesScanned)} detail={t("parseIssues", { count: report.parseErrors.length })} />
       </div>
 
       <section className="panel">
         <div className="panel-title">
           <BarChart3 size={18} />
-          <h2>Current usage status</h2>
+          <h2>{t("currentUsageStatus")}</h2>
         </div>
         {report.latestQuota ? (
-          <QuotaPanel quota={report.latestQuota} />
+          <QuotaPanel quota={report.latestQuota} t={t} />
         ) : (
           <div className="empty-state compact">
-            <h2>No quota snapshot found</h2>
-            <p>Run Codex CLI until it writes token_count rate limit events, then refresh this page.</p>
+            <h2>{t("noQuotaSnapshot")}</h2>
+            <p>{t("noQuotaSnapshotHint")}</p>
           </div>
         )}
       </section>
@@ -1038,18 +1056,18 @@ function UsageHistoryView({
       <section className="panel">
         <div className="panel-title">
           <History size={18} />
-          <h2>Codex session history</h2>
+          <h2>{t("codexSessionHistory")}</h2>
         </div>
         <div className="usage-session-list">
           {recentSessions.length === 0 && (
             <div className="history-row">
-              <span>No sessions</span>
+              <span>{t("noSessions")}</span>
               <strong>-</strong>
-              <em>No token_count events found under the scanned Codex session roots</em>
+              <em>{t("noTokenEvents")}</em>
             </div>
           )}
           {recentSessions.map((session) => (
-            <UsageSessionRow key={`${session.sourcePath}-${session.latestEventAt ?? session.modifiedAt ?? "unknown"}`} session={session} />
+            <UsageSessionRow key={`${session.sourcePath}-${session.latestEventAt ?? session.modifiedAt ?? "unknown"}`} session={session} t={t} />
           ))}
         </div>
       </section>
@@ -1057,14 +1075,14 @@ function UsageHistoryView({
       <section className="panel">
         <div className="panel-title">
           <Database size={18} />
-          <h2>Switch history</h2>
+          <h2>{t("switchHistory")}</h2>
         </div>
         <div className="history-list">
           {switchHistory.length === 0 && (
             <div className="history-row">
-              <span>No switch history</span>
+              <span>{t("noSwitchHistory")}</span>
               <strong>- {"->"} -</strong>
-              <em>No account switch transaction has been recorded</em>
+              <em>{t("noSwitchTransaction")}</em>
             </div>
           )}
           {switchHistory.slice(0, 20).map((item) => (
@@ -1080,15 +1098,15 @@ function UsageHistoryView({
       <section className="panel">
         <div className="panel-title">
           <FolderSearch size={18} />
-          <h2>Scanned locations</h2>
+          <h2>{t("scannedLocations")}</h2>
         </div>
         <div className="usage-path-grid">
           <div>
-            <span>Sessions</span>
+            <span>{t("navUsage")}</span>
             <strong>{report.sessionsRoot || "-"}</strong>
           </div>
           <div>
-            <span>Archived sessions</span>
+            <span>{t("archivedSessions")}</span>
             <strong>{report.archivedSessionsRoot || "-"}</strong>
           </div>
         </div>
@@ -1112,23 +1130,23 @@ function UsageMetricCard({ title, value, detail }: { title: string; value: strin
   );
 }
 
-function QuotaPanel({ quota }: { quota: UsageQuotaSummary }) {
+function QuotaPanel({ quota, t }: { quota: UsageQuotaSummary; t: Translate }) {
   return (
     <div className="quota-grid">
-      <QuotaWindow title="5 hour window" window={quota.fiveHour} />
-      <QuotaWindow title="Weekly window" window={quota.weekly} />
+      <QuotaWindow title={t("fiveHourWindow")} window={quota.fiveHour} t={t} />
+      <QuotaWindow title={t("weeklyWindow")} window={quota.weekly} t={t} />
     </div>
   );
 }
 
-function QuotaWindow({ title, window }: { title: string; window: UsageQuotaSummary["fiveHour"] }) {
+function QuotaWindow({ title, window, t }: { title: string; window: UsageQuotaSummary["fiveHour"]; t: Translate }) {
   const percent = window.remainingPercent ?? 0;
   return (
     <article className={`quota-window ${window.remainingPercent === null ? "unknown" : ""}`}>
       <div>
         <span>{title}</span>
-        <strong>{window.remainingPercent === null ? "Unknown" : `${window.remainingPercent}% remaining`}</strong>
-        <em>{window.resetAt ? `Resets ${formatDisplayTime(window.resetAt)}` : "No reset time recorded"}</em>
+        <strong>{window.remainingPercent === null ? t("quotaUnknown") : t("quotaRemaining", { value: window.remainingPercent })}</strong>
+        <em>{window.resetAt ? t("quotaResets", { value: formatDisplayTime(window.resetAt) }) : t("noResetTime")}</em>
       </div>
       <div className="quota-track" aria-hidden="true">
         <div className="quota-fill" style={{ width: `${percent}%` }} />
@@ -1137,32 +1155,32 @@ function QuotaWindow({ title, window }: { title: string; window: UsageQuotaSumma
   );
 }
 
-function UsageSessionRow({ session }: { session: UsageSessionSummary }) {
+function UsageSessionRow({ session, t }: { session: UsageSessionSummary; t: Translate }) {
   return (
     <article className="usage-session-row">
       <div>
-        <strong>{session.sessionId ?? "Unknown session"}</strong>
+        <strong>{session.sessionId ?? t("unknownSession")}</strong>
         <span>{session.model} · {formatDisplayTime(session.latestEventAt ?? session.modifiedAt)}</span>
       </div>
       <dl>
         <div>
-          <dt>Total</dt>
+          <dt>{t("total")}</dt>
           <dd>{formatTokenCount(session.tokens.totalTokens)}</dd>
         </div>
         <div>
-          <dt>Input</dt>
+          <dt>{t("input")}</dt>
           <dd>{formatTokenCount(session.tokens.inputTokens)}</dd>
         </div>
         <div>
-          <dt>Cached</dt>
+          <dt>{t("cached", { value: "" }).trim()}</dt>
           <dd>{formatTokenCount(session.tokens.cachedInputTokens)}</dd>
         </div>
         <div>
-          <dt>Output</dt>
+          <dt>{t("output")}</dt>
           <dd>{formatTokenCount(session.tokens.outputTokens)}</dd>
         </div>
       </dl>
-      <em>{session.tokenEvents} token event(s)</em>
+      <em>{t("tokenEvents", { count: session.tokenEvents })}</em>
     </article>
   );
 }
@@ -1184,7 +1202,7 @@ function formatDisplayTime(value: string | null | undefined) {
   return Number.isNaN(parsed) ? value : new Date(parsed).toLocaleString();
 }
 
-function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: boolean; onScan: () => void }) {
+function Environment({ scan, busy, t, onScan }: { scan: EnvironmentScan; busy: boolean; t: Translate; onScan: () => void }) {
   const [restartMessage, setRestartMessage] = useState<string | null>(null);
   const [diagnosticsText, setDiagnosticsText] = useState<string | null>(null);
   const [diagnosticsMessage, setDiagnosticsMessage] = useState<string | null>(null);
@@ -1229,18 +1247,18 @@ function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: bool
     <section className="view">
       <header className="view-header">
         <div>
-          <p className="eyebrow">Read-only detection</p>
-          <h1>Environment status</h1>
-          <span className="scan-meta">{scan.os} · {scan.scannedAt} · {scan.readOnly ? "read-only" : "write-enabled"}</span>
+          <p className="eyebrow">{t("readOnlyDetection")}</p>
+          <h1>{t("environmentStatus")}</h1>
+          <span className="scan-meta">{scan.os} · {scan.scannedAt} · {scan.readOnly ? t("readOnly") : t("writeEnabled")}</span>
         </div>
         <div className="header-actions">
           <button className="secondary-button" onClick={() => void generateDiagnostics()}>
             <ClipboardList size={18} />
-            Diagnostics
+            {t("diagnostics")}
           </button>
           <button className="secondary-button" onClick={onScan} disabled={busy}>
             <FolderSearch size={18} />
-            {busy ? "Scanning" : "Rescan"}
+            {busy ? t("scanning") : t("rescan")}
           </button>
         </div>
       </header>
@@ -1256,21 +1274,21 @@ function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: bool
         <section className="diagnostics-panel">
           <div className="diagnostics-heading">
             <div>
-              <p className="eyebrow">Read-only report</p>
-              <h2>Detection diagnostics</h2>
+              <p className="eyebrow">{t("readOnlyReport")}</p>
+              <h2>{t("detectionDiagnostics")}</h2>
               {diagnosticsMessage && <span>{diagnosticsMessage}</span>}
             </div>
             <div className="header-actions">
               <button className="secondary-button compact" onClick={() => void copyDiagnostics()} disabled={!diagnosticsText}>
                 <Copy size={14} />
-                Copy
+                {t("copy")}
               </button>
               <button className="secondary-button compact" onClick={() => {
                 setDiagnosticsText(null);
                 setDiagnosticsMessage(null);
               }}>
                 <X size={14} />
-                Clear
+                {t("clear")}
               </button>
             </div>
           </div>
@@ -1289,7 +1307,7 @@ function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: bool
         {scan.environments.map((environment) => (
           <article className="environment-row" key={environment.id}>
             <div className="environment-row-heading">
-              <EnvironmentSummary environment={environment} />
+              <EnvironmentSummary environment={environment} t={t} />
               {(environment.id === "Desktop" || environment.id === "VS Code") && (
                 <button
                   className="secondary-button compact"
@@ -1297,39 +1315,39 @@ function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: bool
                   disabled={!environment.executablePath}
                 >
                   <RefreshCw size={14} />
-                  Restart
+                  {t("restart")}
                 </button>
               )}
             </div>
             <dl>
               <div>
-                <dt>App path</dt>
-                <dd>{environment.executablePath ?? "Not detected"}</dd>
+                <dt>{t("appPath")}</dt>
+                <dd>{environment.executablePath ?? t("notDetected")}</dd>
               </div>
               <div>
-                <dt>Running</dt>
-                <dd>{environment.runningProcesses.length > 0 ? environment.runningProcesses.join(", ") : "No matching process"}</dd>
+                <dt>{t("running")}</dt>
+                <dd>{environment.runningProcesses.length > 0 ? environment.runningProcesses.join(", ") : t("noMatchingProcess")}</dd>
               </div>
               <div>
-                <dt>Status</dt>
+                <dt>{t("status")}</dt>
                 <dd>{environment.statusMessage}</dd>
               </div>
               <div>
-                <dt>Permission</dt>
+                <dt>{t("permission")}</dt>
                 <dd>{environment.permission}</dd>
               </div>
               <div className="path-list">
-                <dt>Discovered paths</dt>
+                <dt>{t("discoveredPaths")}</dt>
                 <dd>
                   {environment.discoveredPaths.length === 0 ? (
-                    "No candidate paths found"
+                    t("noCandidatePaths")
                   ) : (
                     <ul>
                       {environment.discoveredPaths.map((item) => (
                         <li key={`${item.kind}-${item.path}`}>
                           <strong>{item.kind}</strong>
                           <span>{item.path}</span>
-                          <em>{item.exists ? item.permission : "missing"}</em>
+                          <em>{item.exists ? item.permission : t("missing")}</em>
                         </li>
                       ))}
                     </ul>
@@ -1346,10 +1364,12 @@ function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: bool
 
 function SettingsView({
   settings,
+  t,
   onChange,
   onClearHistory
 }: {
   settings: AppSettings;
+  t: Translate;
   onChange: (settings: AppSettings) => Promise<void>;
   onClearHistory: () => Promise<void>;
 }) {
@@ -1398,18 +1418,28 @@ function SettingsView({
     <section className="view">
       <header className="view-header">
         <div>
-          <p className="eyebrow">Switch policy</p>
-          <h1>Settings</h1>
+          <p className="eyebrow">{t("switchPolicy")}</p>
+          <h1>{t("settings")}</h1>
         </div>
-        <button className="secondary-button" onClick={() => void onChange(defaultSettings)}>
+        <button className="secondary-button" onClick={() => void onChange({ ...defaultSettings, uiLanguage: settings.uiLanguage })}>
           <RotateCcw size={18} />
-          Restore defaults
+          {t("restoreDefaults")}
         </button>
       </header>
 
       <section className="settings-grid">
+        <label className="setting-row">
+          <span>{t("interfaceLanguage")}</span>
+          <select
+            value={settings.uiLanguage}
+            onChange={(event) => void onChange({ ...settings, uiLanguage: event.target.value as AppSettings["uiLanguage"] })}
+          >
+            <option value="en">{t("english")}</option>
+            <option value="zh-CN">{t("chinese")}</option>
+          </select>
+        </label>
         <div className="setting-row stacked">
-          <span>Default switch scope</span>
+          <span>{t("defaultSwitchScope")}</span>
           <div className="scope-picker inline">
             {(["cli", "vscode", "desktop"] as TargetEnvironment[]).map((environment) => (
               <label key={environment}>
@@ -1424,18 +1454,18 @@ function SettingsView({
           </div>
         </div>
         <label className="setting-row">
-          <span>VS Code post-switch action</span>
+          <span>{t("vscodePostSwitchAction")}</span>
           <select
             value={settings.vscodeReloadMode}
             onChange={(event) => void onChange({ ...settings, vscodeReloadMode: event.target.value as AppSettings["vscodeReloadMode"] })}
           >
-            <option value="manual_reload_window">Manual Reload Window</option>
-            <option value="restart_app">Restart VS Code</option>
-            <option value="none">No reload</option>
+            <option value="manual_reload_window">{t("manualReloadWindow")}</option>
+            <option value="restart_app">{t("restartVscode")}</option>
+            <option value="none">{t("noReload")}</option>
           </select>
         </label>
         <label className="setting-row">
-          <span>Confirm before closing apps</span>
+          <span>{t("confirmBeforeClosingApps")}</span>
           <input
             type="checkbox"
             checked={settings.confirmBeforeClosingApps}
@@ -1443,7 +1473,7 @@ function SettingsView({
           />
         </label>
         <label className="setting-row">
-          <span>Auto-restart supported apps</span>
+          <span>{t("autoRestartApps")}</span>
           <input
             type="checkbox"
             checked={settings.autoRestartApps}
@@ -1451,7 +1481,7 @@ function SettingsView({
           />
         </label>
         <label className="setting-row">
-          <span>Restore default account on exit</span>
+          <span>{t("restoreDefaultOnExit")}</span>
           <input
             type="checkbox"
             checked={settings.restoreDefaultOnExit}
@@ -1460,15 +1490,15 @@ function SettingsView({
         </label>
         <div className="setting-row stacked path-overrides">
           <div className="setting-section-title">
-            <span>Custom detector paths</span>
+            <span>{t("customDetectorPaths")}</span>
             <button className="secondary-button compact" onClick={addCustomPath}>
               <Plus size={14} />
-              Add path
+              {t("addPath")}
             </button>
           </div>
           <div className="path-override-list">
             {customPaths.length === 0 ? (
-              <p>No custom paths configured.</p>
+              <p>{t("noCustomPaths")}</p>
             ) : customPaths.map((override, index) => (
               <div className="path-override-row" key={`${override.environment}-${override.kind}-${index}`}>
                 <select
@@ -1483,10 +1513,10 @@ function SettingsView({
                   value={override.kind}
                   onChange={(event) => updateCustomPath(index, "kind", event.target.value as EnvironmentPathKind)}
                 >
-                  <option value="auth">Auth</option>
-                  <option value="config">Config</option>
-                  <option value="cache">Cache</option>
-                  <option value="app">App</option>
+                  <option value="auth">{t("auth")}</option>
+                  <option value="config">{t("config")}</option>
+                  <option value="cache">{t("cache")}</option>
+                  <option value="app">{t("app")}</option>
                 </select>
                 <input
                   value={override.path}
@@ -1496,7 +1526,7 @@ function SettingsView({
                 <button
                   className="secondary-button compact icon-only"
                   onClick={() => removeCustomPath(index)}
-                  aria-label="Remove custom detector path"
+                  aria-label={t("removeCustomPath")}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -1504,13 +1534,13 @@ function SettingsView({
             ))}
           </div>
         </div>
-        <button className="danger-button" onClick={() => void onClearHistory()}>Clear local history</button>
+        <button className="danger-button" onClick={() => void onClearHistory()}>{t("clearLocalHistory")}</button>
       </section>
     </section>
   );
 }
 
-function EnvironmentSummary({ environment }: { environment: EnvironmentState }) {
+function EnvironmentSummary({ environment, t }: { environment: EnvironmentState; t: Translate }) {
   const Icon = environment.id === "CLI" ? SquareTerminal : environment.id === "VS Code" ? Database : Laptop;
 
   return (
@@ -1520,34 +1550,36 @@ function EnvironmentSummary({ environment }: { environment: EnvironmentState }) 
       </div>
       <div>
         <h2>{environment.id}</h2>
-        <p>{environment.installed ? "Installed" : "Not detected"}</p>
-        <span>{environment.running ? "Running" : "Not running"} · {environment.accountHint}</span>
+        <p>{environment.installed ? t("installed") : t("notDetected")}</p>
+        <span>{environment.running ? t("runningState") : t("notRunning")} · {environment.accountHint}</span>
       </div>
-      <StatusBadge status={environment.support} />
+      <StatusBadge status={environment.support} t={t} />
     </article>
   );
 }
 
-function StatusBadge({ status }: { status: EnvironmentState["support"] }) {
+function StatusBadge({ status, t }: { status: EnvironmentState["support"]; t: Translate }) {
   if (status === "detected") {
-    return <span className="status detected"><CheckCircle2 size={14} />Detected</span>;
+    return <span className="status detected"><CheckCircle2 size={14} />{t("detected")}</span>;
   }
   if (status === "partial") {
-    return <span className="status partial"><AlertTriangle size={14} />Partial</span>;
+    return <span className="status partial"><AlertTriangle size={14} />{t("partial")}</span>;
   }
-  return <span className="status missing"><Clock3 size={14} />Pending</span>;
+  return <span className="status missing"><Clock3 size={14} />{t("pending")}</span>;
 }
 
 function SwitchDialog({
   profiles,
   settings,
   scan,
+  t,
   onSwitched,
   onClose
 }: {
   profiles: ProfileMetadata[];
   settings: AppSettings;
   scan: EnvironmentScan;
+  t: Translate;
   onSwitched: () => Promise<void>;
   onClose: () => void;
 }) {
@@ -1577,7 +1609,7 @@ function SwitchDialog({
     .filter(([environment, enabled]) => enabled && supportedEnvironments.includes(environment))
     .map(([environment]) => environment);
   const closeApprovalRequired = settings.confirmBeforeClosingApps && (scope.vscode || scope.desktop);
-  const steps = switchSteps(result, busy, settings);
+  const steps = switchSteps(result, busy, settings, t);
 
   useEffect(() => {
     setScope((current) => {
@@ -1678,17 +1710,17 @@ function SwitchDialog({
 
   return (
     <div className="dialog-backdrop" role="presentation">
-      <section className="dialog" role="dialog" aria-modal="true" aria-label="Switch progress">
+      <section className="dialog" role="dialog" aria-modal="true" aria-label={t("switchProgress")}>
         <header>
           <div>
-            <p className="eyebrow">Switch transaction</p>
-            <h2>Prepare profile switch</h2>
+            <p className="eyebrow">{t("switchTransaction")}</p>
+            <h2>{t("prepareProfileSwitch")}</h2>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close">x</button>
+          <button className="icon-button" onClick={onClose} aria-label={t("close")}>x</button>
         </header>
 
         <label className="dialog-field">
-          <span>Target profile</span>
+          <span>{t("targetProfile")}</span>
           <select
             value={profileId}
             onChange={(event) => {
@@ -1716,14 +1748,14 @@ function SwitchDialog({
                 onChange={(event) => setScope((current) => ({ ...current, [item]: event.target.checked }))}
               />
               <span>{environmentLabel(item)}</span>
-              <em>{available ? "Available" : state?.completenessReason ?? "Not imported"}</em>
+              <em>{available ? t("available") : state?.completenessReason ?? t("notImported")}</em>
             </label>
             );
           })}
         </div>
 
         {selectedEnvironments.length === 0 && (
-          <p className="dialog-error">Select at least one environment that this Profile has captured.</p>
+          <p className="dialog-error">{t("selectCapturedEnvironment")}</p>
         )}
 
         {closeApprovalRequired && (
@@ -1733,7 +1765,7 @@ function SwitchDialog({
               checked={confirmProcessClose}
               onChange={(event) => setConfirmProcessClose(event.target.checked)}
             />
-            <span>I saved work and approve closing running Desktop / VS Code windows for this switch</span>
+            <span>{t("closeApproval")}</span>
           </label>
         )}
 
@@ -1751,10 +1783,10 @@ function SwitchDialog({
         {restartMessage && <p className="dialog-info">{restartMessage}</p>}
         {result && (
           <ul className="dialog-result">
-            <li>{`Transaction ${result.transaction.id}: ${result.transaction.phase}`}</li>
-            <li>{`Identity ${result.identityVerification.status}: ${result.identityVerification.message}`}</li>
-            {result.closedProcesses.length > 0 && <li>{`Closed: ${result.closedProcesses.join(", ")}`}</li>}
-            {result.restartedApps.length > 0 && <li>{`Restarted: ${result.restartedApps.join(", ")}`}</li>}
+            <li>{t("transactionSummary", { id: result.transaction.id, phase: result.transaction.phase })}</li>
+            <li>{t("identitySummary", { status: result.identityVerification.status, message: result.identityVerification.message })}</li>
+            {result.closedProcesses.length > 0 && <li>{t("closedSummary", { value: result.closedProcesses.join(", ") })}</li>}
+            {result.restartedApps.length > 0 && <li>{t("restartedSummary", { value: result.restartedApps.join(", ") })}</li>}
             {result.warnings.map((item) => <li key={`warning-${item}`}>{item}</li>)}
             {result.manualActions.map((item) => <li key={`action-${item}`}>{item}</li>)}
             {result.transaction.events.map((event, index) => (
@@ -1768,29 +1800,29 @@ function SwitchDialog({
             {rollbackProfile && rollbackEnvironments.length > 0 && (
               <button className="secondary-button compact" onClick={() => void rollbackToPreviousProfile()} disabled={busy}>
                 <RotateCcw size={14} />
-                Roll back to {rollbackProfile.name}
+                {t("rollbackToProfile", { name: rollbackProfile.name })}
               </button>
             )}
             {result.switchedEnvironments.includes("desktop") && (
               <button className="secondary-button compact" onClick={() => void retryRestart("desktop")}>
                 <RefreshCw size={14} />
-                Restart Desktop
+                {t("restartDesktop")}
               </button>
             )}
             {result.switchedEnvironments.includes("vscode") && (
               <button className="secondary-button compact" onClick={() => void retryRestart("vscode")}>
                 <RefreshCw size={14} />
-                Restart VS Code
+                {t("restartVscode")}
               </button>
             )}
           </div>
         )}
 
         <footer>
-          <button className="secondary-button" onClick={onClose}>Cancel</button>
+          <button className="secondary-button" onClick={onClose}>{t("cancel")}</button>
           <button className="primary-button" onClick={startSwitch} disabled={busy || !profileId || selectedEnvironments.length === 0 || (closeApprovalRequired && !confirmProcessClose)}>
             <RefreshCw size={18} />
-            {busy ? "Switching" : "Start switch"}
+            {busy ? t("switching") : t("startSwitch")}
           </button>
         </footer>
       </section>
@@ -1804,7 +1836,7 @@ type SwitchStep = {
   detail: string;
 };
 
-function switchSteps(result: ProfileSwitchResult | null, busy: boolean, settings: AppSettings): SwitchStep[] {
+function switchSteps(result: ProfileSwitchResult | null, busy: boolean, settings: AppSettings, t: Translate): SwitchStep[] {
   const hasPhase = (phase: string) => Boolean(result?.transaction.events.some((event) => event.phase === phase));
   const terminalPhase = result?.transaction.phase;
   const failed = terminalPhase === "failed";
@@ -1812,48 +1844,48 @@ function switchSteps(result: ProfileSwitchResult | null, busy: boolean, settings
 
   if (!result) {
     return [
-      { label: "Checking profile", status: busy ? "running" : "waiting", detail: busy ? "Running" : "Waiting" },
-      { label: "Closing apps", status: "waiting", detail: "Waiting" },
-      { label: "Backing up", status: "waiting", detail: "Waiting" },
-      { label: "Restoring profile", status: "waiting", detail: "Waiting" },
-      { label: "Restarting apps", status: "waiting", detail: "Waiting" },
-      { label: "Verifying account", status: "waiting", detail: "Waiting" },
-      { label: "Recording history", status: "waiting", detail: "Waiting" }
+      { label: t("checkingProfile"), status: busy ? "running" : "waiting", detail: busy ? t("running") : t("waiting") },
+      { label: t("closingApps"), status: "waiting", detail: t("waiting") },
+      { label: t("backingUp"), status: "waiting", detail: t("waiting") },
+      { label: t("restoringProfile"), status: "waiting", detail: t("waiting") },
+      { label: t("restartingApps"), status: "waiting", detail: t("waiting") },
+      { label: t("verifyingAccount"), status: "waiting", detail: t("waiting") },
+      { label: t("recordingHistory"), status: "waiting", detail: t("waiting") }
     ];
   }
 
   const identityStatus = result.identityVerification.status;
   return [
-    { label: "Checking profile", status: "done", detail: "Done" },
+    { label: t("checkingProfile"), status: "done", detail: t("done") },
     {
-      label: "Closing apps",
+      label: t("closingApps"),
       status: result.closedProcesses.length > 0 ? "done" : "skipped",
-      detail: result.closedProcesses.length > 0 ? result.closedProcesses.join(", ") : "No running GUI apps closed"
+      detail: result.closedProcesses.length > 0 ? result.closedProcesses.join(", ") : t("noRunningGuiClosed")
     },
     {
-      label: "Backing up",
+      label: t("backingUp"),
       status: hasPhase("backup_complete") ? "done" : failed || rolledBack ? "failed" : "waiting",
-      detail: hasPhase("backup_complete") ? "Backup complete" : "Not completed"
+      detail: hasPhase("backup_complete") ? t("backupComplete") : t("notCompleted")
     },
     {
-      label: "Restoring profile",
+      label: t("restoringProfile"),
       status: hasPhase("restore_complete") ? "done" : failed || rolledBack ? "failed" : "waiting",
-      detail: hasPhase("restore_complete") ? "Restore complete" : "Not completed"
+      detail: hasPhase("restore_complete") ? t("restoreComplete") : t("notCompleted")
     },
     {
-      label: "Restarting apps",
+      label: t("restartingApps"),
       status: result.restartedApps.length > 0 ? "done" : settings.autoRestartApps ? "skipped" : "skipped",
-      detail: result.restartedApps.length > 0 ? result.restartedApps.join(", ") : "No restart performed"
+      detail: result.restartedApps.length > 0 ? result.restartedApps.join(", ") : t("noRestartPerformed")
     },
     {
-      label: "Verifying account",
+      label: t("verifyingAccount"),
       status: identityStatus === "verified" ? "done" : identityStatus === "mismatch" ? "failed" : "warning",
       detail: identityStatus
     },
     {
-      label: "Recording history",
+      label: t("recordingHistory"),
       status: terminalPhase === "completed" ? "done" : rolledBack ? "warning" : "failed",
-      detail: terminalPhase ?? "unknown"
+      detail: terminalPhase ?? t("unknown")
     }
   ];
 }
