@@ -2598,7 +2598,7 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
 /* Navigation pages open as dedicated screens with a back title bar. */
 .mac-brand-cluster {
   align-items: center !important;
-  gap: 14px !important;
+  gap: 6px !important;
 }
 
 .mac-brand-title {
