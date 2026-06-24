@@ -2675,3 +2675,26 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.62);
 }
+
+/* Brand belongs on the left; tool tabs and add stay on the right. */
+.mac-topbar {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  align-items: center !important;
+  column-gap: 18px !important;
+}
+
+.mac-brand-cluster {
+  justify-self: start !important;
+}
+
+.mac-top-actions {
+  justify-self: end !important;
+  margin-left: 0 !important;
+}
+
+@media (max-width: 680px) {
+  .mac-brand-cluster {
+    justify-self: start !important;
+  }
+}
