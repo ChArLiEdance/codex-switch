@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose, Engine as _};
 use serde_json::Value;
 use std::{fs, path::Path};
 
@@ -49,6 +50,9 @@ fn redacted_account_hint_from_path_with_budget(
 pub fn redacted_account_hint_from_content(content: &str) -> Option<String> {
     if let Ok(value) = serde_json::from_str::<Value>(content) {
         if let Some(email) = email_from_json_value(&value) {
+            return Some(redact_email(&email));
+        }
+        if let Some(email) = email_from_oauth_tokens(&value) {
             return Some(redact_email(&email));
         }
     }
@@ -115,6 +119,29 @@ fn email_from_json_value(value: &Value) -> Option<String> {
         Value::String(text) => first_email_like(text),
         _ => None,
     }
+}
+
+fn email_from_oauth_tokens(value: &Value) -> Option<String> {
+    let tokens = value.get("tokens").unwrap_or(value);
+    ["id_token", "access_token"].iter().find_map(|field| {
+        tokens
+            .get(*field)
+            .and_then(Value::as_str)
+            .and_then(email_from_jwt)
+    })
+}
+
+fn email_from_jwt(token: &str) -> Option<String> {
+    let payload = token.split('.').nth(1)?;
+    let decoded = general_purpose::URL_SAFE_NO_PAD
+        .decode(payload)
+        .or_else(|_| general_purpose::URL_SAFE.decode(payload))
+        .ok()?;
+    let value: Value = serde_json::from_slice(&decoded).ok()?;
+    value
+        .get("email")
+        .and_then(Value::as_str)
+        .and_then(first_email_like)
 }
 
 fn first_email_like(content: &str) -> Option<String> {
@@ -214,5 +241,38 @@ mod tests {
             Some("p***@example.com".to_string())
         );
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn redacts_email_from_oauth_id_token_claim() {
+        let payload =
+            general_purpose::URL_SAFE_NO_PAD.encode(r#"{"email":"jwt.user@example.net"}"#);
+        let content = format!(r#"{{"tokens":{{"id_token":"header.{payload}.signature"}}}}"#);
+
+        assert_eq!(
+            redacted_account_hint_from_content(&content),
+            Some("j***@example.net".to_string())
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn redacts_real_account_hint_fixtures_from_env() {
+        let fixture_paths = env::var_os("CODEX_SWITCH_ACCOUNT_HINT_FIXTURES")
+            .expect("set CODEX_SWITCH_ACCOUNT_HINT_FIXTURES to auth fixture directories");
+        let hints: Vec<String> = env::split_paths(&fixture_paths)
+            .map(|path| {
+                let hint = redacted_account_hint_from_path(&path)
+                    .unwrap_or_else(|| panic!("no account hint extracted from {}", path.display()));
+                assert_ne!(hint, "Unknown");
+                if hint.contains('@') {
+                    assert!(hint.contains("***"));
+                }
+                hint
+            })
+            .collect();
+
+        assert!(hints.len() >= 2);
+        assert_ne!(hints[0], hints[1]);
     }
 }

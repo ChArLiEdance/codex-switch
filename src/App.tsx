@@ -30,6 +30,7 @@ import {
   AppSettings,
   checkRecoveryStatus,
   clearSwitchHistory,
+  CurrentAccountStatus,
   deleteProfile,
   detectEnvironments,
   emptyEnvironmentScan,
@@ -38,9 +39,11 @@ import {
   EnvironmentPathKind,
   EnvironmentScan,
   EnvironmentState,
+  getCurrentAccountStatus,
   getUsageHistory,
   getSettings,
   importCurrentProfile,
+  importProfileFromFolder,
   listProfiles,
   listSwitchHistory,
   previewCurrentImport,
@@ -109,6 +112,17 @@ const defaultUsageHistory: UsageHistoryReport = {
   sessions: []
 };
 
+const defaultCurrentAccountStatus: CurrentAccountStatus = {
+  resolvedAt: "Not scanned",
+  liveAccountHint: "Unknown",
+  matchedProfileId: null,
+  matchedProfileName: null,
+  matchedBy: "unknown",
+  latestUsedProfileId: null,
+  latestUsedProfileName: null,
+  observations: []
+};
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
   const [switchOpen, setSwitchOpen] = useState(false);
@@ -118,6 +132,7 @@ export default function App() {
   const [history, setHistory] = useState<SwitchHistoryEntry[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [recovery, setRecovery] = useState<RecoveryStatus>(defaultRecoveryStatus);
+  const [currentAccountStatus, setCurrentAccountStatus] = useState<CurrentAccountStatus>(defaultCurrentAccountStatus);
   const [usageHistory, setUsageHistory] = useState<UsageHistoryReport>(defaultUsageHistory);
   const [usageBusy, setUsageBusy] = useState(false);
   const [usageMessage, setUsageMessage] = useState<string | null>(null);
@@ -127,11 +142,17 @@ export default function App() {
 
   const defaultProfile = useMemo(() => profiles.find((profile) => profile.defaultProfile), [profiles]);
   const currentProfile = useMemo(() => {
+    const matchedProfile = currentAccountStatus.matchedProfileId
+      ? profiles.find((profile) => profile.id === currentAccountStatus.matchedProfileId)
+      : undefined;
+    if (matchedProfile) {
+      return matchedProfile;
+    }
     const recentlyUsed = profiles
       .filter((profile) => profile.lastUsedAt)
       .sort((left, right) => Number(right.lastUsedAt ?? 0) - Number(left.lastUsedAt ?? 0))[0];
     return recentlyUsed ?? defaultProfile;
-  }, [defaultProfile, profiles]);
+  }, [currentAccountStatus.matchedProfileId, defaultProfile, profiles]);
   const currentSwitchHistory = useMemo(() => {
     if (!currentProfile) {
       return undefined;
@@ -153,6 +174,7 @@ export default function App() {
     void refreshHistory();
     void refreshSettings();
     void refreshRecovery();
+    void refreshCurrentAccountStatus();
     void refreshUsageHistory();
   }, []);
 
@@ -192,6 +214,7 @@ export default function App() {
     setScanBusy(true);
     try {
       setScan(await detectEnvironments());
+      await refreshCurrentAccountStatus();
     } finally {
       setScanBusy(false);
     }
@@ -215,6 +238,10 @@ export default function App() {
 
   async function refreshRecovery() {
     setRecovery(await checkRecoveryStatus());
+  }
+
+  async function refreshCurrentAccountStatus() {
+    setCurrentAccountStatus(await getCurrentAccountStatus());
   }
 
   async function refreshUsageHistory() {
@@ -248,6 +275,7 @@ export default function App() {
       await refreshProfiles();
       await refreshHistory();
       await runScan();
+      await refreshCurrentAccountStatus();
       setQuickSwitchMessage(`${result.message}: ${result.transaction.phase}.`);
     } catch (error) {
       setQuickSwitchMessage(`Manual recovery rollback failed: ${String(error)}`);
@@ -291,6 +319,7 @@ export default function App() {
       await refreshHistory();
       await refreshRecovery();
       await runScan();
+      await refreshCurrentAccountStatus();
       const phase = result.switchResult?.transaction.phase;
       const target = result.targetProfile?.name;
       setQuickSwitchMessage(
@@ -326,6 +355,7 @@ export default function App() {
         {tab === "home" && (
           <Home
             currentProfile={currentProfile}
+            currentAccountStatus={currentAccountStatus}
             currentSwitchHistory={currentSwitchHistory}
             defaultProfile={defaultProfile}
             previousSwitchCandidateAvailable={previousSwitchCandidateAvailable}
@@ -352,7 +382,10 @@ export default function App() {
             scanBusy={scanBusy}
             t={t}
             onScan={runScan}
-            onProfilesChanged={refreshProfiles}
+            onProfilesChanged={async () => {
+              await refreshProfiles();
+              await refreshCurrentAccountStatus();
+            }}
           />
         )}
         {tab === "environment" && <Environment scan={scan} busy={scanBusy} t={t} onScan={runScan} />}
@@ -387,6 +420,7 @@ export default function App() {
             await refreshHistory();
             await refreshRecovery();
             await runScan();
+            await refreshCurrentAccountStatus();
           }}
           onClose={() => setSwitchOpen(false)}
         />
@@ -416,6 +450,7 @@ function NavButton({
 
 function Home({
   currentProfile,
+  currentAccountStatus,
   currentSwitchHistory,
   defaultProfile,
   previousSwitchCandidateAvailable,
@@ -431,6 +466,7 @@ function Home({
   onSwitchPrevious
 }: {
   currentProfile?: ProfileMetadata;
+  currentAccountStatus: CurrentAccountStatus;
   currentSwitchHistory?: SwitchHistoryEntry;
   defaultProfile?: ProfileMetadata;
   previousSwitchCandidateAvailable: boolean;
@@ -450,10 +486,16 @@ function Home({
       <header className="view-header">
         <div>
           <p className="eyebrow">{t("currentAccount")}</p>
-          <h1>{currentProfile?.accountHint ?? t("noVerifiedAccount")}</h1>
+          <h1>
+            {currentAccountStatus.liveAccountHint !== "Unknown"
+              ? currentAccountStatus.liveAccountHint
+              : currentProfile?.accountHint ?? t("noVerifiedAccount")}
+          </h1>
           <span className="scan-meta">
-            {currentProfile
-              ? `${currentProfile.name}${currentProfile.lastUsedAt ? ` · ${t("lastUsed", { value: currentProfile.lastUsedAt })}` : ""}`
+            {currentAccountStatus.matchedProfileName
+              ? `${t("matchedProfile", { name: currentAccountStatus.matchedProfileName })} · ${currentAccountMatchLabel(currentAccountStatus.matchedBy, t)}`
+              : currentProfile
+                ? `${currentProfile.name}${currentProfile.lastUsedAt ? ` · ${t("lastUsed", { value: currentProfile.lastUsedAt })}` : ""}`
               : t("noProfileSwitched")}
           </span>
           {currentProfile && (
@@ -483,6 +525,33 @@ function Home({
           <EnvironmentSummary key={environment.id} environment={environment} t={t} />
         ))}
       </div>
+
+      <section className="panel">
+        <div className="panel-title">
+          <KeyRound size={18} />
+          <h2>{t("currentDetection")}</h2>
+        </div>
+        <div className="history-list">
+          <div className="history-row">
+            <span>{t("currentAccount")}</span>
+            <strong>{currentAccountStatus.liveAccountHint}</strong>
+            <em>{currentAccountMatchLabel(currentAccountStatus.matchedBy, t)}</em>
+          </div>
+          {currentAccountStatus.observations.length === 0 ? (
+            <div className="history-row">
+              <span>{t("environmentEvidence")}</span>
+              <strong>-</strong>
+              <em>{t("noDetectionEvidence")}</em>
+            </div>
+          ) : currentAccountStatus.observations.map((observation) => (
+            <div className="history-row" key={observation.environmentId}>
+              <span>{observation.environmentId}</span>
+              <strong>{observation.accountHint}</strong>
+              <em>{observation.support}</em>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {recovery.needsRecovery && (
         <section className="recovery-banner">
@@ -554,6 +623,8 @@ function Profiles({
   const [name, setName] = useState("Imported Profile");
   const [tags, setTags] = useState("current");
   const [note, setNote] = useState("Imported from current local Codex state.");
+  const [folderPath, setFolderPath] = useState("");
+  const [folderEnvironment, setFolderEnvironment] = useState<TargetEnvironment>("cli");
   const [selected, setSelected] = useState<Record<TargetEnvironment, boolean>>({
     cli: true,
     vscode: true,
@@ -562,6 +633,7 @@ function Profiles({
   const [confirmSameAccount, setConfirmSameAccount] = useState(false);
   const [makeDefault, setMakeDefault] = useState(profiles.length === 0);
   const [importing, setImporting] = useState(false);
+  const [folderImporting, setFolderImporting] = useState(false);
   const [preflightBusy, setPreflightBusy] = useState(false);
   const [preflight, setPreflight] = useState<ProfileImportPreflightResult | null>(null);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
@@ -622,6 +694,31 @@ function Profiles({
       setMessage(`Import failed: ${String(error)}`);
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function importExistingFolder() {
+    if (folderPath.trim().length === 0) {
+      setMessage("Folder import failed: enter an account data folder path.");
+      return;
+    }
+    setFolderImporting(true);
+    setMessage(null);
+    try {
+      const result = await importProfileFromFolder({
+        name,
+        tags: tags.split(",").map((tag) => tag.trim()).filter(Boolean),
+        note,
+        sourcePath: folderPath.trim(),
+        environment: folderEnvironment,
+        defaultProfile: makeDefault
+      });
+      await onProfilesChanged();
+      setMessage(`Imported ${result.profile.name} from folder into the secret vault.`);
+    } catch (error) {
+      setMessage(`Folder import failed: ${String(error)}`);
+    } finally {
+      setFolderImporting(false);
     }
   }
 
@@ -755,6 +852,31 @@ function Profiles({
             <span>{t("note")}</span>
             <input value={note} onChange={(event) => setNote(event.target.value)} />
           </label>
+        </div>
+        <div className="import-fields">
+          <label>
+            <span>{t("existingAccountFolder")}</span>
+            <input
+              value={folderPath}
+              onChange={(event) => setFolderPath(event.target.value)}
+              placeholder="/Users/charlie/Downloads/a_副本"
+            />
+          </label>
+          <label>
+            <span>{t("folderEnvironment")}</span>
+            <select
+              value={folderEnvironment}
+              onChange={(event) => setFolderEnvironment(event.target.value as TargetEnvironment)}
+            >
+              <option value="cli">CLI</option>
+              <option value="vscode">VS Code</option>
+              <option value="desktop">Desktop</option>
+            </select>
+          </label>
+          <button className="secondary-button" onClick={() => void importExistingFolder()} disabled={folderImporting || folderPath.trim().length === 0}>
+            <FolderSearch size={18} />
+            {folderImporting ? t("importingFolder") : t("importFolder")}
+          </button>
         </div>
         <div className="scope-picker inline">
           {(["cli", "vscode", "desktop"] as TargetEnvironment[]).map((environment) => (
@@ -970,6 +1092,19 @@ function verificationClass(history?: SwitchHistoryEntry) {
     return "incomplete";
   }
   return "failed";
+}
+
+function currentAccountMatchLabel(matchedBy: CurrentAccountStatus["matchedBy"], t: Translate) {
+  if (matchedBy === "matched_profile") {
+    return t("matchedByProfile");
+  }
+  if (matchedBy === "multiple_environment_hints") {
+    return t("matchedByMultipleHints");
+  }
+  if (matchedBy === "latest_used_fallback") {
+    return t("matchedByLatestUsed");
+  }
+  return t("matchedByUnknown");
 }
 
 function verificationLabel(history: SwitchHistoryEntry | undefined, t: Translate) {

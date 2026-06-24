@@ -60,6 +60,29 @@ export type EnvironmentDiagnosticsReport = {
   notes: string[];
 };
 
+export type CurrentAccountMatchKind =
+  | "matched_profile"
+  | "multiple_environment_hints"
+  | "latest_used_fallback"
+  | "unknown";
+
+export type CurrentAccountObservation = {
+  environmentId: EnvironmentId;
+  accountHint: string;
+  support: "detected" | "partial" | "not-detected";
+};
+
+export type CurrentAccountStatus = {
+  resolvedAt: string;
+  liveAccountHint: string;
+  matchedProfileId: string | null;
+  matchedProfileName: string | null;
+  matchedBy: CurrentAccountMatchKind;
+  latestUsedProfileId: string | null;
+  latestUsedProfileName: string | null;
+  observations: CurrentAccountObservation[];
+};
+
 export type ProfileAuthStatus = "available" | "possibly_expired" | "expired" | "not_detected";
 
 export type EnvironmentProfileState = {
@@ -87,6 +110,15 @@ export type ProfileImportRequest = {
   note: string;
   environments: TargetEnvironment[];
   confirmSameAccount: boolean;
+  defaultProfile: boolean;
+};
+
+export type ProfileFolderImportRequest = {
+  name: string;
+  tags: string[];
+  note: string;
+  sourcePath: string;
+  environment: TargetEnvironment;
   defaultProfile: boolean;
 };
 
@@ -336,6 +368,23 @@ export async function environmentDiagnosticsReport(): Promise<EnvironmentDiagnos
   return await invoke<EnvironmentDiagnosticsReport>("environment_diagnostics_report");
 }
 
+export async function getCurrentAccountStatus(): Promise<CurrentAccountStatus> {
+  try {
+    return await invoke<CurrentAccountStatus>("get_current_account_status");
+  } catch {
+    return {
+      resolvedAt: new Date().toISOString(),
+      liveAccountHint: "Unknown",
+      matchedProfileId: null,
+      matchedProfileName: null,
+      matchedBy: "unknown",
+      latestUsedProfileId: null,
+      latestUsedProfileName: null,
+      observations: []
+    };
+  }
+}
+
 export async function listProfiles(): Promise<ProfileMetadata[]> {
   try {
     return await invoke<ProfileMetadata[]>("list_profiles");
@@ -346,6 +395,10 @@ export async function listProfiles(): Promise<ProfileMetadata[]> {
 
 export async function importCurrentProfile(request: ProfileImportRequest): Promise<ProfileImportResult> {
   return await invoke<ProfileImportResult>("import_current_profile", { request });
+}
+
+export async function importProfileFromFolder(request: ProfileFolderImportRequest): Promise<ProfileImportResult> {
+  return await invoke<ProfileImportResult>("import_profile_from_folder", { request });
 }
 
 export async function previewCurrentImport(request: ProfileImportPreflightRequest): Promise<ProfileImportPreflightResult> {

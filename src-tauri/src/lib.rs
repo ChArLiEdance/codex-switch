@@ -100,6 +100,36 @@ pub(crate) struct EnvironmentState {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub(crate) struct CurrentAccountStatus {
+    pub(crate) resolved_at: String,
+    pub(crate) live_account_hint: String,
+    pub(crate) matched_profile_id: Option<String>,
+    pub(crate) matched_profile_name: Option<String>,
+    pub(crate) matched_by: CurrentAccountMatchKind,
+    pub(crate) latest_used_profile_id: Option<String>,
+    pub(crate) latest_used_profile_name: Option<String>,
+    pub(crate) observations: Vec<CurrentAccountObservation>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum CurrentAccountMatchKind {
+    MatchedProfile,
+    MultipleEnvironmentHints,
+    LatestUsedFallback,
+    Unknown,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CurrentAccountObservation {
+    pub(crate) environment_id: &'static str,
+    pub(crate) account_hint: String,
+    pub(crate) support: SupportState,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct DiscoveredPath {
     pub(crate) kind: PathKind,
     pub(crate) path: String,
@@ -139,6 +169,17 @@ struct ProfileDeleteRequest {
     profile_id: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProfileFolderImportRequest {
+    name: String,
+    tags: Vec<String>,
+    note: String,
+    source_path: String,
+    environment: TargetEnvironment,
+    default_profile: bool,
+}
+
 #[tauri::command]
 fn backend_health() -> &'static str {
     "codex_switch_backend_ready"
@@ -168,6 +209,15 @@ fn environment_diagnostics_report() -> EnvironmentDiagnosticsReport {
 }
 
 #[tauri::command]
+fn get_current_account_status() -> Result<CurrentAccountStatus, String> {
+    let scan = detect_environments();
+    let profiles = profile_repository()
+        .list_profiles()
+        .map_err(profile_store_error_message)?;
+    Ok(current_account_status_from(&scan, &profiles))
+}
+
+#[tauri::command]
 fn list_profiles() -> Result<Vec<ProfileMetadata>, String> {
     profile_repository()
         .list_profiles()
@@ -181,6 +231,40 @@ fn import_current_profile(request: ProfileImportRequest) -> Result<ProfileImport
     let vault = SecretVault::new(KeychainSecretStore::new());
     let result = import_profile_from_scan(request, &scan.environments, captured_at, &vault)
         .map_err(|error| format!("{error:?}"))?;
+    profile_repository()
+        .upsert_profile(result.profile.clone())
+        .map_err(profile_store_error_message)?;
+    Ok(result)
+}
+
+#[tauri::command]
+fn import_profile_from_folder(
+    request: ProfileFolderImportRequest,
+) -> Result<ProfileImportResult, String> {
+    let source_path = expand_user_path(&request.source_path);
+    if !source_path.exists() {
+        return Err(format!(
+            "Source path does not exist: {}",
+            source_path.display()
+        ));
+    }
+    let captured_at = unix_timestamp_string();
+    let scan_environment = environment_state_from_import_folder(request.environment, &source_path);
+    let vault = SecretVault::new(KeychainSecretStore::new());
+    let result = import_profile_from_scan(
+        ProfileImportRequest {
+            name: request.name,
+            tags: request.tags,
+            note: request.note,
+            environments: vec![request.environment],
+            confirm_same_account: true,
+            default_profile: request.default_profile,
+        },
+        &[scan_environment],
+        captured_at,
+        &vault,
+    )
+    .map_err(|error| format!("{error:?}"))?;
     profile_repository()
         .upsert_profile(result.profile.clone())
         .map_err(profile_store_error_message)?;
@@ -384,11 +468,7 @@ fn detect_cli(processes: &[String], custom_paths: &[EnvironmentPathOverride]) ->
             home.join(".codex").join("cache"),
         ));
     }
-    append_custom_paths(
-        &mut discovered_paths,
-        custom_paths,
-        TargetEnvironment::Cli,
-    );
+    append_custom_paths(&mut discovered_paths, custom_paths, TargetEnvironment::Cli);
 
     let running_processes = matching_processes(processes, &["codex"]);
     environment_state(
@@ -514,6 +594,110 @@ fn account_hint_from_paths(paths: &[DiscoveredPath]) -> String {
         }
     }
     "Unknown".to_string()
+}
+
+fn environment_state_from_import_folder(
+    environment: TargetEnvironment,
+    source_path: &Path,
+) -> EnvironmentState {
+    let discovered_paths = vec![discovered_path(PathKind::Auth, source_path.to_path_buf())];
+    EnvironmentState {
+        id: scan_id_for_target(environment),
+        installed: true,
+        executable_path: None,
+        discovered_paths,
+        running: false,
+        running_processes: Vec::new(),
+        permission: permission_for_path(source_path),
+        account_hint: redacted_account_hint_from_path(source_path)
+            .unwrap_or_else(|| "Unknown".to_string()),
+        support: SupportState::Detected,
+        status_message: "Imported from an existing local account data folder".to_string(),
+    }
+}
+
+fn scan_id_for_target(environment: TargetEnvironment) -> &'static str {
+    match environment {
+        TargetEnvironment::Cli => "CLI",
+        TargetEnvironment::Vscode => "VS Code",
+        TargetEnvironment::Desktop => "Desktop",
+    }
+}
+
+fn current_account_status_from(
+    scan: &EnvironmentScan,
+    profiles: &[ProfileMetadata],
+) -> CurrentAccountStatus {
+    let observations: Vec<CurrentAccountObservation> = scan
+        .environments
+        .iter()
+        .map(|environment| CurrentAccountObservation {
+            environment_id: environment.id,
+            account_hint: environment.account_hint.clone(),
+            support: environment.support,
+        })
+        .collect();
+    let mut live_hints: Vec<String> = observations
+        .iter()
+        .map(|observation| observation.account_hint.trim())
+        .filter(|hint| !hint.is_empty() && *hint != "Unknown")
+        .map(ToOwned::to_owned)
+        .collect();
+    live_hints.sort();
+    live_hints.dedup();
+
+    let latest_used_profile = profiles
+        .iter()
+        .filter_map(|profile| {
+            profile
+                .last_used_at
+                .as_ref()
+                .map(|used_at| (used_at.parse::<u64>().unwrap_or(0), profile))
+        })
+        .max_by_key(|(used_at, _)| *used_at)
+        .map(|(_, profile)| profile);
+
+    let (live_account_hint, matched_profile, matched_by) = match live_hints.as_slice() {
+        [hint] => {
+            let matched = profiles
+                .iter()
+                .find(|profile| profile.account_hint.trim() == hint);
+            (
+                hint.clone(),
+                matched,
+                if matched.is_some() {
+                    CurrentAccountMatchKind::MatchedProfile
+                } else {
+                    CurrentAccountMatchKind::Unknown
+                },
+            )
+        }
+        [] => (
+            "Unknown".to_string(),
+            latest_used_profile,
+            if latest_used_profile.is_some() {
+                CurrentAccountMatchKind::LatestUsedFallback
+            } else {
+                CurrentAccountMatchKind::Unknown
+            },
+        ),
+        _ => (
+            live_hints.join(" / "),
+            None,
+            CurrentAccountMatchKind::MultipleEnvironmentHints,
+        ),
+    };
+
+    CurrentAccountStatus {
+        resolved_at: scan.scanned_at.clone(),
+        live_account_hint,
+        matched_profile_id: matched_profile.map(|profile| profile.id.clone()),
+        matched_profile_name: matched_profile.map(|profile| profile.name.clone()),
+        matched_by,
+        latest_used_profile_id: latest_used_profile.map(|profile| profile.id.clone()),
+        latest_used_profile_name: latest_used_profile.map(|profile| profile.name.clone()),
+        observations,
+    }
 }
 
 fn discovered_path(kind: PathKind, path: PathBuf) -> DiscoveredPath {
@@ -680,7 +864,10 @@ fn vscode_candidate_paths_for_home(home: &Path) -> Vec<(PathKind, PathBuf)> {
         paths.push((PathKind::Config, storage));
     }
     for product in ["Code", "Code - Insiders"] {
-        let storage = home.join(".config").join(product).join("User/globalStorage");
+        let storage = home
+            .join(".config")
+            .join(product)
+            .join("User/globalStorage");
         paths.push((PathKind::Auth, storage.join("openai.chatgpt")));
         paths.push((PathKind::Auth, storage.join("openai.codex")));
         paths.push((PathKind::Config, storage));
@@ -1035,10 +1222,7 @@ mod tests {
 
     #[test]
     fn custom_paths_are_added_to_matching_environment_detection() {
-        let root = env::temp_dir().join(format!(
-            "codex-switch-custom-path-{}",
-            std::process::id()
-        ));
+        let root = env::temp_dir().join(format!("codex-switch-custom-path-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).expect("create custom path");
         let custom_paths = vec![EnvironmentPathOverride {
@@ -1068,11 +1252,13 @@ mod tests {
 
         assert!(candidates.iter().any(|(kind, path)| {
             *kind == PathKind::Auth
-                && path.ends_with("Library/Application Support/Code/User/globalStorage/openai.chatgpt")
+                && path
+                    .ends_with("Library/Application Support/Code/User/globalStorage/openai.chatgpt")
         }));
         assert!(candidates.iter().any(|(kind, path)| {
             *kind == PathKind::Auth
-                && path.ends_with("Library/Application Support/Code/User/globalStorage/openai.codex")
+                && path
+                    .ends_with("Library/Application Support/Code/User/globalStorage/openai.codex")
         }));
     }
 
@@ -1090,13 +1276,110 @@ mod tests {
                 && path.ends_with("Library/Application Support/Codex/Partitions/codex-browser-app")
         }));
         assert!(candidates.iter().any(|(kind, path)| {
-            *kind == PathKind::Cache
-                && path.ends_with("Library/Application Support/Codex/Cache")
+            *kind == PathKind::Cache && path.ends_with("Library/Application Support/Codex/Cache")
         }));
         assert!(candidates.iter().any(|(kind, path)| {
             *kind == PathKind::Auth
                 && path.ends_with("Library/Application Support/com.openai.codex/web")
         }));
+    }
+
+    fn test_environment(id: &'static str, account_hint: &str) -> EnvironmentState {
+        EnvironmentState {
+            id,
+            installed: true,
+            executable_path: None,
+            discovered_paths: Vec::new(),
+            running: false,
+            running_processes: Vec::new(),
+            permission: PermissionState::Unknown,
+            account_hint: account_hint.to_string(),
+            support: SupportState::Detected,
+            status_message: "test".to_string(),
+        }
+    }
+
+    fn test_profile(
+        id: &str,
+        name: &str,
+        account_hint: &str,
+        last_used_at: Option<&str>,
+    ) -> ProfileMetadata {
+        ProfileMetadata {
+            id: id.to_string(),
+            name: name.to_string(),
+            account_hint: account_hint.to_string(),
+            tags: Vec::new(),
+            note: String::new(),
+            default_profile: false,
+            last_used_at: last_used_at.map(ToOwned::to_owned),
+            environments: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn current_account_status_matches_profile_by_live_hint() {
+        let scan = EnvironmentScan {
+            os: "macos",
+            scanned_at: "1000".to_string(),
+            read_only: true,
+            environments: vec![
+                test_environment("CLI", "c***@example.com"),
+                test_environment("VS Code", "Unknown"),
+            ],
+        };
+        let profiles = vec![test_profile("profile-1", "Work", "c***@example.com", None)];
+
+        let status = current_account_status_from(&scan, &profiles);
+
+        assert_eq!(status.live_account_hint, "c***@example.com");
+        assert_eq!(status.matched_profile_id.as_deref(), Some("profile-1"));
+        assert_eq!(status.matched_by, CurrentAccountMatchKind::MatchedProfile);
+    }
+
+    #[test]
+    fn current_account_status_reports_multiple_environment_hints() {
+        let scan = EnvironmentScan {
+            os: "macos",
+            scanned_at: "1000".to_string(),
+            read_only: true,
+            environments: vec![
+                test_environment("CLI", "a***@example.com"),
+                test_environment("Desktop", "b***@example.com"),
+            ],
+        };
+
+        let status = current_account_status_from(&scan, &[]);
+
+        assert_eq!(status.matched_profile_id, None);
+        assert_eq!(
+            status.matched_by,
+            CurrentAccountMatchKind::MultipleEnvironmentHints
+        );
+        assert!(status.live_account_hint.contains("a***@example.com"));
+        assert!(status.live_account_hint.contains("b***@example.com"));
+    }
+
+    #[test]
+    fn current_account_status_falls_back_to_latest_used_when_live_unknown() {
+        let scan = EnvironmentScan {
+            os: "macos",
+            scanned_at: "1000".to_string(),
+            read_only: true,
+            environments: vec![test_environment("CLI", "Unknown")],
+        };
+        let profiles = vec![
+            test_profile("profile-1", "Old", "o***@example.com", Some("100")),
+            test_profile("profile-2", "New", "n***@example.com", Some("200")),
+        ];
+
+        let status = current_account_status_from(&scan, &profiles);
+
+        assert_eq!(status.matched_profile_id.as_deref(), Some("profile-2"));
+        assert_eq!(
+            status.matched_by,
+            CurrentAccountMatchKind::LatestUsedFallback
+        );
     }
 }
 
@@ -1107,9 +1390,11 @@ pub fn run() {
             backend_health,
             detect_environments,
             environment_diagnostics_report,
+            get_current_account_status,
             list_profiles,
             preview_current_import,
             import_current_profile,
+            import_profile_from_folder,
             update_profile,
             delete_profile,
             get_settings,
