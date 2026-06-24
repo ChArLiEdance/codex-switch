@@ -13,7 +13,16 @@ import { state } from "@front-shared/state";
 import { getThemeOption, isThemeId } from "@front-shared/theme";
 
 const isWindowsUiTarget = __CODEX_UI_TARGET__ === "windows";
-const shellRoutes: readonly ShellRoute[] = ["dashboard", "profiles", "settings", "guide"];
+const defaultRoute: ShellRoute = isWindowsUiTarget ? "dashboard" : "profiles";
+const shellRoutes: readonly ShellRoute[] = [
+  "dashboard",
+  "profiles",
+  "settings",
+  "guide",
+  "skills",
+  "prompts",
+  "history",
+];
 
 function isShellRoute(value: string): value is ShellRoute {
   return shellRoutes.includes(value as ShellRoute);
@@ -21,7 +30,7 @@ function isShellRoute(value: string): value is ShellRoute {
 
 export function routeFromLocation(): ShellRoute {
   const hash = window.location.hash.replace(/^#/, "");
-  return isShellRoute(hash) ? hash : "dashboard";
+  return isShellRoute(hash) ? hash : defaultRoute;
 }
 
 function requiredElement<T extends HTMLElement>(id: string): T {
@@ -564,6 +573,142 @@ export function renderProfiles(
       ]
         .filter((value): value is string => value != null)
         .join(" ");
+
+      if (!isWindowsUiTarget) {
+        const displayTitle = profileDisplayTitle(profile);
+        const connectionLabel = profile.openai_base_url || "https://chatgpt.com/codex";
+        const primaryActionLabel = profile.status === "current" ? t(state.locale, "loginButton") : t(state.locale, "switch");
+        const primaryActionAttribute = profile.status === "current"
+          ? `data-login-profile="${profile.folder_name}"`
+          : `data-switch-profile="${profile.folder_name}"`;
+        const primaryActionDisabled = profile.status === "current" ? loginDisabled : switchDisabled;
+        const primaryActionTitle = profile.status === "current"
+          ? (
+              loginRunning
+                ? t(state.locale, "profileLoginCancelHint")
+                : loginDisabled
+                  ? t(state.locale, "profileLoginDisabled")
+                  : t(state.locale, "profileLoginReady")
+            )
+          : (
+              switchDisabled
+                ? t(state.locale, "profileSwitchDisabled")
+                : t(state.locale, "profileSwitchReady")
+            );
+
+        return `
+          <article class="profile-card mac-account-card status-${profile.status}${unavailable ? " is-unavailable-card" : ""}">
+            <div class="mac-card-grip" aria-hidden="true"></div>
+            <div class="mac-provider-mark" aria-hidden="true">
+              <span class="mac-provider-mark-core"></span>
+            </div>
+
+            <div class="mac-profile-main">
+              <div class="mac-title-row">
+                <p class="profile-title-account">${escapeHtml(displayTitle)}</p>
+                <span class="mac-route-badge">${profile.openai_base_url ? "Base URL" : "Official"}</span>
+              </div>
+              <p class="mac-profile-url">${escapeHtml(connectionLabel)}</p>
+            </div>
+
+            <div class="mac-quota-summary">
+              <span>${escapeHtml(t(state.locale, "fiveHourAllowance"))}: <strong>${escapeHtml(formatPercent(unavailable ? null : profile.quota?.five_hour?.remaining_percent ?? null))}</strong></span>
+              <span>${escapeHtml(t(state.locale, "weeklyAllowance"))}: <strong>${escapeHtml(formatPercent(unavailable ? null : profile.quota?.weekly?.remaining_percent ?? null))}</strong></span>
+            </div>
+
+            ${buildProfileQuotaMarkup(profile)}
+
+            <div class="profile-card-actions mac-profile-actions">
+              <button
+                class="profile-action-button mac-profile-primary"
+                type="button"
+                title="${escapeHtml(primaryActionTitle)}"
+                ${primaryActionAttribute}
+                ${primaryActionDisabled ? "disabled" : ""}
+              >
+                <span class="mac-action-icon mac-action-icon--play" aria-hidden="true"></span>
+                <span class="mac-action-label">${escapeHtml(primaryActionLabel)}</span>
+              </button>
+              <button
+                class="profile-action-button mac-icon-button mac-icon-button--edit"
+                type="button"
+                title="${renameDisabled ? t(state.locale, "profileRenameDisabled") : t(state.locale, "profileRenameReady")}"
+                data-rename-profile="${profile.folder_name}"
+                ${renameDisabled ? "disabled" : ""}
+              >
+                <span class="mac-action-label">${t(state.locale, "rename")}</span>
+              </button>
+              <button
+                class="profile-action-button mac-icon-button mac-icon-button--login"
+                type="button"
+                title="${
+                  loginRunning
+                    ? t(state.locale, "profileLoginCancelHint")
+                    : loginDisabled
+                      ? t(state.locale, "profileLoginDisabled")
+                      : t(state.locale, "profileLoginReady")
+                }"
+                aria-label="${
+                  loginRunning
+                    ? t(state.locale, "profileLoginCancelAria", { profile: profile.folder_name })
+                    : t(state.locale, "profileLoginReadyAria", { profile: profile.folder_name })
+                }"
+                data-login-profile="${profile.folder_name}"
+                ${loginDisabled ? "disabled" : ""}
+              >
+                ${
+                  loginRunning
+                    ? `<span class="button-spinner" aria-hidden="true"></span><span class="mac-action-label">${t(state.locale, "cancel")}</span>`
+                    : `<span class="mac-action-label">${t(state.locale, "loginButton")}</span>`
+                }
+              </button>
+              <button
+                class="profile-action-button mac-icon-button mac-icon-button--refresh"
+                type="button"
+                title="${refreshTitle}"
+                data-refresh-profile="${profile.folder_name}"
+                ${refreshDisabled ? "disabled" : ""}
+              >
+                ${
+                  refreshPending
+                    ? '<span class="button-spinner" aria-hidden="true"></span>'
+                    : `<span class="mac-action-label">${t(state.locale, "refreshButton")}</span>`
+                }
+              </button>
+              <button
+                class="${
+                  profile.openai_base_url
+                    ? "profile-action-button mac-icon-button mac-icon-button--base profile-action-button-danger"
+                    : "profile-action-button mac-icon-button mac-icon-button--base"
+                }"
+                type="button"
+                title="${
+                  profile.openai_base_url
+                    ? t(state.locale, "profileBaseConfigured")
+                    : t(state.locale, "profileBaseReady")
+                }"
+                data-base-url-profile="${profile.folder_name}"
+                ${baseDisabled ? "disabled" : ""}
+              >
+                <span class="mac-action-label">${t(state.locale, "baseButton")}</span>
+              </button>
+              ${
+                hasDeleteProfileUi
+                  ? `<button
+                      class="profile-action-button mac-icon-button mac-icon-button--delete profile-action-button-danger"
+                      type="button"
+                      title="${deleteDisabled ? t(state.locale, "profileDeleteDisabled") : t(state.locale, "profileDeleteReady")}"
+                      data-delete-profile="${profile.folder_name}"
+                      ${deleteDisabled ? "disabled" : ""}
+                    >
+                      <span class="mac-action-label">${t(state.locale, "deleteButton")}</span>
+                    </button>`
+                  : ""
+              }
+            </div>
+          </article>
+        `;
+      }
 
       return `
         <article class="profile-card status-${profile.status}${unavailable ? " is-unavailable-card" : ""}">

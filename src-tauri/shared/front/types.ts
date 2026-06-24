@@ -115,4 +115,4 @@ export interface CodexCliRedetectResult {
   status: CodexCliStatus;
 }
 
-export type ShellRoute = "dashboard" | "profiles" | "settings" | "guide";
+export type ShellRoute = "dashboard" | "profiles" | "settings" | "guide" | "skills" | "prompts" | "history";

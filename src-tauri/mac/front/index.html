@@ -8,14 +8,32 @@
   <body>
     <div class="window-shell window-shell--macos">
       <main class="dashboard dashboard--macos dashboard-shell">
-        <section class="app-toolbar" aria-label="Application navigation">
-          <nav class="route-tabs" aria-label="Primary navigation">
-            <a class="route-tab" href="#dashboard" data-route-tab="dashboard" data-i18n-key="navDashboard">Dashboard</a>
-            <a class="route-tab" href="#profiles" data-route-tab="profiles" data-i18n-key="navProfiles">Profiles</a>
-            <a class="route-tab" href="#settings" data-route-tab="settings" data-i18n-key="navSettings">Settings</a>
-            <a class="route-tab" href="#guide" data-route-tab="guide" data-i18n-key="navGuide">Guide</a>
-          </nav>
-        </section>
+        <header class="mac-topbar" aria-label="Application navigation">
+          <div class="mac-brand-cluster">
+            <h1 class="mac-brand-title">Codex Switch</h1>
+            <a
+              class="mac-settings-button route-tab"
+              href="#settings"
+              data-route-tab="settings"
+              aria-label="Settings"
+              title="Settings"
+            >
+              <span class="mac-toolbar-icon mac-toolbar-icon--settings" aria-hidden="true"></span>
+            </a>
+          </div>
+
+          <div class="mac-top-actions">
+            <nav class="mac-feature-tabs route-tabs" aria-label="Codex tools">
+              <a class="route-tab mac-feature-tab mac-feature-tab--account" href="#profiles" data-route-tab="profiles" aria-label="Accounts" title="Accounts">
+                <span class="mac-toolbar-icon mac-toolbar-icon--account" aria-hidden="true"></span>
+              </a>
+              <a class="route-tab mac-feature-tab mac-feature-tab--skills" href="#skills" data-route-tab="skills" data-i18n-key="navSkills" aria-label="Skills" title="Skills">Skills</a>
+              <a class="route-tab mac-feature-tab mac-feature-tab--prompts" href="#prompts" data-route-tab="prompts" data-i18n-key="navPrompts" aria-label="Prompts" title="Prompts">Prompts</a>
+              <a class="route-tab mac-feature-tab mac-feature-tab--history" href="#history" data-route-tab="history" data-i18n-key="navHistory" aria-label="Sessions" title="Sessions">History</a>
+            </nav>
+            <button class="mac-add-button" type="button" data-add-profile aria-label="Add profile" title="Add profile">+</button>
+          </div>
+        </header>
 
         <section class="page active" id="page-dashboard" data-page="dashboard">
           <div class="dashboard-grid">
@@ -94,9 +112,9 @@
         <section class="page" id="page-profiles" data-page="profiles">
           <section class="content-row content-row--profiles">
             <section class="profiles-stage">
-              <div class="profiles-header">
+              <div class="profiles-header mac-profiles-header">
                 <div>
-                  <h2 id="profiles-heading" class="section-title">Profiles</h2>
+                  <h2 id="profiles-heading" class="section-title">Accounts</h2>
                 </div>
 
                 <div class="pager-block">
@@ -112,6 +130,39 @@
               <div id="profiles-grid" class="profiles-grid"></div>
             </section>
           </section>
+        </section>
+
+        <section class="page mac-tool-page" id="page-skills" data-page="skills">
+          <article class="mac-placeholder-card">
+            <span class="mac-placeholder-icon mac-placeholder-icon--skills" aria-hidden="true"></span>
+            <div>
+              <p class="page-kicker" data-i18n-key="navSkills">Skills</p>
+              <h2 class="section-title" data-i18n-key="skillsTitle">Codex Skills</h2>
+              <p class="page-copy" data-i18n-key="skillsSubtitle">Codex-related skills will be surfaced here after local skill discovery is wired in.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="page mac-tool-page" id="page-prompts" data-page="prompts">
+          <article class="mac-placeholder-card">
+            <span class="mac-placeholder-icon mac-placeholder-icon--prompts" aria-hidden="true"></span>
+            <div>
+              <p class="page-kicker" data-i18n-key="navPrompts">Prompts</p>
+              <h2 class="section-title" data-i18n-key="promptsTitle">Prompt Library</h2>
+              <p class="page-copy" data-i18n-key="promptsSubtitle">Codex prompt templates and account-safe shortcuts will live here.</p>
+            </div>
+          </article>
+        </section>
+
+        <section class="page mac-tool-page" id="page-history" data-page="history">
+          <article class="mac-placeholder-card">
+            <span class="mac-placeholder-icon mac-placeholder-icon--history" aria-hidden="true"></span>
+            <div>
+              <p class="page-kicker" data-i18n-key="navHistory">Sessions</p>
+              <h2 class="section-title" data-i18n-key="historyTitle">Session History</h2>
+              <p class="page-copy" data-i18n-key="historySubtitle">Codex session records and switching history can be reviewed here once history indexing is connected.</p>
+            </div>
+          </article>
         </section>
 
         <section class="page" id="page-settings" data-page="settings">
