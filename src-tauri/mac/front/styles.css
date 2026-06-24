@@ -2363,3 +2363,86 @@ body {
     justify-content: flex-start;
   }
 }
+
+/* Current profile shows full quota bars; inactive profiles stay compact. */
+.profile-card.mac-account-card.mac-account-card--compact {
+  grid-template-areas:
+    "grip mark main summary"
+    "grip mark actions actions";
+  min-height: 92px;
+  padding: 16px 20px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.profile-card.mac-account-card.mac-account-card--expanded {
+  min-height: 150px;
+}
+
+.mac-account-card--compact .profile-quota-stack {
+  display: none !important;
+}
+
+.mac-profile-url {
+  display: none !important;
+}
+
+.mac-account-card--compact .mac-quota-summary {
+  align-self: center;
+  justify-self: end;
+}
+
+.mac-account-card--compact .profile-card-actions.mac-profile-actions {
+  align-self: center;
+  min-height: 34px;
+}
+
+html[data-theme] .mac-profile-actions .mac-profile-primary,
+html[data-theme] .mac-profile-actions .mac-profile-primary:disabled,
+.mac-profile-actions .mac-profile-primary,
+.mac-profile-actions .mac-profile-primary:disabled {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 92px !important;
+  height: 33px !important;
+  padding: 0 13px !important;
+  border: 0 !important;
+  border-radius: 11px !important;
+  background: #1683ff !important;
+  color: #ffffff !important;
+  opacity: 1 !important;
+  box-shadow: 0 12px 24px rgba(22, 131, 255, 0.2) !important;
+}
+
+html[data-theme] .mac-profile-actions .mac-profile-primary .mac-action-label,
+.mac-profile-actions .mac-profile-primary .mac-action-label {
+  display: inline !important;
+  color: #ffffff !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+html[data-theme] .mac-profile-actions .mac-profile-primary .cc-icon--primary-action,
+.mac-profile-actions .mac-profile-primary .cc-icon--primary-action {
+  opacity: 1 !important;
+  filter: brightness(0) invert(1) !important;
+}
+
+html[data-theme] .mac-profile-actions .mac-profile-primary--login .cc-icon--primary-action,
+.mac-profile-actions .mac-profile-primary--login .cc-icon--primary-action {
+  filter: none !important;
+}
+
+@media (max-width: 980px) {
+  .profile-card.mac-account-card.mac-account-card--compact {
+    grid-template-areas:
+      "grip mark main"
+      "grip mark summary"
+      "grip mark actions";
+  }
+
+  .mac-account-card--compact .mac-quota-summary {
+    justify-self: start;
+  }
+}

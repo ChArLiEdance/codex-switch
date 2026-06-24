@@ -581,7 +581,8 @@ export function renderProfiles(
 
       if (!isWindowsUiTarget) {
         const displayTitle = profileDisplayTitle(profile);
-        const connectionLabel = profile.openai_base_url || "https://chatgpt.com/codex";
+        const showQuotaPanel = profile.status === "current";
+        const macCardMode = showQuotaPanel ? " mac-account-card--expanded" : " mac-account-card--compact";
         const primaryActionLabel = profile.status === "current" ? t(state.locale, "loginButton") : t(state.locale, "switch");
         const primaryActionAttribute = profile.status === "current"
           ? `data-login-profile="${profile.folder_name}"`
@@ -602,7 +603,7 @@ export function renderProfiles(
             );
 
         return `
-          <article class="profile-card mac-account-card status-${profile.status}${unavailable ? " is-unavailable-card" : ""}">
+          <article class="profile-card mac-account-card${macCardMode} status-${profile.status}${unavailable ? " is-unavailable-card" : ""}">
             <div class="mac-card-grip" aria-hidden="true">${macIcon("grip-vertical", "cc-icon cc-icon--muted")}</div>
             <div class="mac-provider-mark" aria-hidden="true">
               <img class="cc-icon cc-icon--provider" src="${macIconBase}/openai.svg" alt="" />
@@ -613,7 +614,6 @@ export function renderProfiles(
                 <p class="profile-title-account">${escapeHtml(displayTitle)}</p>
                 <span class="mac-route-badge">${profile.openai_base_url ? "Base URL" : "Official"}</span>
               </div>
-              <p class="mac-profile-url">${escapeHtml(connectionLabel)}</p>
             </div>
 
             <div class="mac-quota-summary">
@@ -621,7 +621,7 @@ export function renderProfiles(
               <span>${escapeHtml(t(state.locale, "weeklyAllowance"))}: <strong>${escapeHtml(formatPercent(unavailable ? null : profile.quota?.weekly?.remaining_percent ?? null))}</strong></span>
             </div>
 
-            ${buildProfileQuotaMarkup(profile)}
+            ${showQuotaPanel ? buildProfileQuotaMarkup(profile) : ""}
 
             <div class="profile-card-actions mac-profile-actions">
               <button
