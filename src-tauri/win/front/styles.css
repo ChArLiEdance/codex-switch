@@ -788,3 +788,85 @@ button.pager-pill:disabled {
     display: grid;
   }
 }
+
+.window-shell,
+.dashboard {
+  background: #ffffff;
+}
+
+.dashboard-hidden {
+  display: none !important;
+}
+
+.dashboard-grid {
+  display: block;
+}
+
+.app-toolbar {
+  padding-top: 10px;
+}
+
+.route-tabs,
+.locale-segment,
+.quota-monitor-pill,
+.pager-row {
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.route-tab.active,
+.locale-pill.is-active {
+  background: #111827;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.profiles-stage,
+.rail-card,
+.status-card,
+.setting-card,
+.settings-panel,
+.timeline-card,
+.profile-card,
+.current-quota-metric,
+.empty-state {
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.current-account-card--hero {
+  width: 100%;
+  min-height: 0;
+}
+
+.current-account-topbar {
+  justify-content: space-between;
+}
+
+.current-account-heading {
+  display: flex;
+}
+
+.section-title,
+.section-title-rail {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  letter-spacing: 0;
+}
+
+.current-account-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.action-button-primary {
+  background: #111827;
+  border-color: #111827;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.action-button-primary:hover:not(:disabled) {
+  background: #374151;
+  border-color: #374151;
+}

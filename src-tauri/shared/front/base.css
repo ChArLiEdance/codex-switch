@@ -1763,6 +1763,175 @@ html[data-theme] .toast.is-error {
   }
 }
 
+/* Minimal white mode customizations for the simplified Codex Switch shell. */
+:root,
+:root[data-theme="classic"],
+:root[data-theme="mica"],
+:root[data-theme="pine"],
+:root[data-theme="sea-salt"],
+:root[data-theme="jade-night"] {
+  color-scheme: light;
+  --canvas-bg: #ffffff;
+  --canvas-bg-soft: #ffffff;
+  --surface: #ffffff;
+  --surface-strong: #ffffff;
+  --surface-muted: #f8fafc;
+  --surface-pressed: #111827;
+  --border: #e5e7eb;
+  --border-accent: #e5e7eb;
+  --text-strong: #111827;
+  --text-body: #374151;
+  --text-muted: #6b7280;
+  --text-inverse: #ffffff;
+  --track: #eef2f7;
+  --blue-fill: #38bdf8;
+  --pink-fill: #f472b6;
+  --monitor-dot: #22c55e;
+  --app-background: #ffffff;
+  --shell-background: #ffffff;
+  --panel-background: #ffffff;
+  --profile-background: #ffffff;
+  --profile-muted-background: #f8fafc;
+  --dialog-background: #ffffff;
+  --control-surface: #ffffff;
+  --locale-background: #ffffff;
+  --route-tabs-background: #ffffff;
+  --monitor-background: #ffffff;
+  --pager-row-background: #ffffff;
+  --control-surface-strong: #ffffff;
+  --control-surface-soft: #ffffff;
+  --control-surface-current: #f3f4f6;
+  --control-hover: #f9fafb;
+  --button-background: #ffffff;
+  --button-border: #e5e7eb;
+  --button-hover-background: #f9fafb;
+  --button-hover-border: #d1d5db;
+  --primary-background: #111827;
+  --primary-background-hover: #374151;
+  --primary-shadow: none;
+  --metric-background: #ffffff;
+  --metric-border: #e5e7eb;
+  --empty-background: #f9fafb;
+  --empty-border: #e5e7eb;
+  --field-background: #ffffff;
+  --field-border: #d1d5db;
+  --code-background: #f3f4f6;
+  --setting-status-background: #f9fafb;
+  --settings-row-border: #e5e7eb;
+  --highlight-inset: none;
+  --highlight-inset-soft: none;
+  --metric-inset: none;
+  --monitor-ring: none;
+  --active-control-shadow: none;
+  --dialog-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+  --toast-background: #ffffff;
+  --toast-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+  --dialog-backdrop: rgba(15, 23, 42, 0.2);
+  --window-control-hover-background: #f3f4f6;
+  --muted-strong: #4b5563;
+  --danger-border: #fecaca;
+  --danger-text: #b91c1c;
+  --danger-hover-border: #fca5a5;
+  --danger-hover-background: #fff5f5;
+  --danger-hover-text: #991b1b;
+  --blue-fill-gradient: linear-gradient(90deg, #38bdf8, #7dd3fc);
+  --pink-fill-gradient: linear-gradient(90deg, #f472b6, #f9a8d4);
+  --gray-fill-gradient: linear-gradient(90deg, #cbd5e1, #94a3b8);
+  --shadow-soft: none;
+  --shadow-card: none;
+  --radius-shell: 0;
+  --radius-card: 16px;
+  --radius-profile: 14px;
+  --radius-metric: 12px;
+  --font-display: "IBM Plex Sans Custom", "Noto Sans SC Custom", "Segoe UI", sans-serif;
+}
+
+body,
+.window-shell,
+.window-shell .dashboard-shell {
+  background: #ffffff;
+}
+
+.dashboard-hidden {
+  display: none !important;
+}
+
+.dashboard-grid {
+  display: block;
+}
+
+.app-toolbar {
+  padding-top: 10px;
+}
+
+.route-tabs,
+.locale-segment,
+.quota-monitor-pill,
+.pager-row {
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.route-tab.active,
+.locale-pill.is-active {
+  background: #111827;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.profiles-stage,
+.rail-card,
+.status-card,
+.setting-card,
+.settings-panel,
+.timeline-card,
+.profile-card,
+.current-quota-metric,
+.empty-state {
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.current-account-card--hero {
+  width: 100%;
+  min-height: 0;
+}
+
+.current-account-topbar {
+  justify-content: space-between;
+}
+
+.current-account-heading {
+  display: flex;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  letter-spacing: 0;
+}
+
+.section-title-rail {
+  font-size: 1.75rem;
+}
+
+.current-account-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.action-button-primary {
+  background: #111827;
+  border-color: #111827;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.action-button-primary:hover:not(:disabled) {
+  background: #374151;
+  border-color: #374151;
+}
+
 .dashboard {
   display: flex;
   flex-direction: column;
