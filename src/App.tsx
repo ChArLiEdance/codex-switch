@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  BarChart3,
   CheckCircle2,
   Clock3,
   ClipboardList,
@@ -37,6 +38,7 @@ import {
   EnvironmentPathKind,
   EnvironmentScan,
   EnvironmentState,
+  getUsageHistory,
   getSettings,
   importCurrentProfile,
   listProfiles,
@@ -59,10 +61,14 @@ import {
   switchPreviousProfile,
   switchToProfile,
   TargetEnvironment,
+  UsageHistoryReport,
+  UsageQuotaSummary,
+  UsageSessionSummary,
+  UsageTokenTotals,
   updateProfile
 } from "./backend";
 
-type Tab = "home" | "profiles" | "environment" | "settings";
+type Tab = "home" | "profiles" | "environment" | "usage" | "settings";
 
 const defaultSettings: AppSettings = {
   defaultScope: ["cli", "vscode", "desktop"],
@@ -84,6 +90,23 @@ const defaultRecoveryStatus: RecoveryStatus = {
   latestEventMessage: null
 };
 
+const defaultUsageHistory: UsageHistoryReport = {
+  scannedAt: "Not scanned",
+  codexHome: "",
+  sessionsRoot: "",
+  archivedSessionsRoot: "",
+  filesScanned: 0,
+  parseErrors: [],
+  totals: {
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0
+  },
+  latestQuota: null,
+  sessions: []
+};
+
 export default function App() {
   const [tab, setTab] = useState<Tab>("home");
   const [switchOpen, setSwitchOpen] = useState(false);
@@ -93,6 +116,9 @@ export default function App() {
   const [history, setHistory] = useState<SwitchHistoryEntry[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [recovery, setRecovery] = useState<RecoveryStatus>(defaultRecoveryStatus);
+  const [usageHistory, setUsageHistory] = useState<UsageHistoryReport>(defaultUsageHistory);
+  const [usageBusy, setUsageBusy] = useState(false);
+  const [usageMessage, setUsageMessage] = useState<string | null>(null);
   const [quickSwitchMessage, setQuickSwitchMessage] = useState<string | null>(null);
   const closeAfterExitRestore = useRef(false);
 
@@ -124,6 +150,7 @@ export default function App() {
     void refreshHistory();
     void refreshSettings();
     void refreshRecovery();
+    void refreshUsageHistory();
   }, []);
 
   useEffect(() => {
@@ -185,6 +212,20 @@ export default function App() {
 
   async function refreshRecovery() {
     setRecovery(await checkRecoveryStatus());
+  }
+
+  async function refreshUsageHistory() {
+    setUsageBusy(true);
+    setUsageMessage(null);
+    try {
+      const report = await getUsageHistory();
+      setUsageHistory(report);
+      setUsageMessage(`Usage scan finished: ${report.sessions.length} session(s), ${report.filesScanned} file(s).`);
+    } catch (error) {
+      setUsageMessage(`Usage scan failed: ${String(error)}`);
+    } finally {
+      setUsageBusy(false);
+    }
   }
 
   async function resolveRecovery() {
@@ -273,6 +314,7 @@ export default function App() {
           <NavButton icon={<Laptop size={18} />} label="Home" active={tab === "home"} onClick={() => setTab("home")} />
           <NavButton icon={<KeyRound size={18} />} label="Profiles" active={tab === "profiles"} onClick={() => setTab("profiles")} />
           <NavButton icon={<FolderSearch size={18} />} label="Environment" active={tab === "environment"} onClick={() => setTab("environment")} />
+          <NavButton icon={<BarChart3 size={18} />} label="Usage" active={tab === "usage"} onClick={() => setTab("usage")} />
           <NavButton icon={<Settings size={18} />} label="Settings" active={tab === "settings"} onClick={() => setTab("settings")} />
         </nav>
       </aside>
@@ -309,6 +351,15 @@ export default function App() {
           />
         )}
         {tab === "environment" && <Environment scan={scan} busy={scanBusy} onScan={runScan} />}
+        {tab === "usage" && (
+          <UsageHistoryView
+            report={usageHistory}
+            busy={usageBusy}
+            message={usageMessage}
+            switchHistory={history}
+            onRefresh={() => void refreshUsageHistory()}
+          />
+        )}
         {tab === "settings" && (
           <SettingsView
             settings={settings}
@@ -921,6 +972,216 @@ function verificationLabel(history?: SwitchHistoryEntry) {
     return "Last switch rolled back";
   }
   return "Last switch failed";
+}
+
+function UsageHistoryView({
+  report,
+  busy,
+  message,
+  switchHistory,
+  onRefresh
+}: {
+  report: UsageHistoryReport;
+  busy: boolean;
+  message: string | null;
+  switchHistory: SwitchHistoryEntry[];
+  onRefresh: () => void;
+}) {
+  const recentSessions = report.sessions.slice(0, 12);
+  return (
+    <section className="view">
+      <header className="view-header">
+        <div>
+          <p className="eyebrow">Usage and history</p>
+          <h1>Local Codex activity</h1>
+          <span className="scan-meta">
+            {report.codexHome || "Codex home not scanned"} · {report.scannedAt}
+          </span>
+        </div>
+        <div className="header-actions">
+          <button className="secondary-button" onClick={onRefresh} disabled={busy}>
+            <RefreshCw size={18} />
+            {busy ? "Scanning" : "Refresh usage"}
+          </button>
+        </div>
+      </header>
+
+      {message && (
+        <section className="recovery-banner">
+          <ListChecks size={18} />
+          <span>{message}</span>
+        </section>
+      )}
+
+      <div className="usage-hero-grid">
+        <UsageMetricCard title="Total tokens" value={formatTokenCount(report.totals.totalTokens)} detail="Input + cached input + output" />
+        <UsageMetricCard title="Input" value={formatTokenCount(report.totals.inputTokens)} detail={`${formatTokenCount(report.totals.cachedInputTokens)} cached`} />
+        <UsageMetricCard title="Output" value={formatTokenCount(report.totals.outputTokens)} detail={`${report.sessions.length} sessions`} />
+        <UsageMetricCard title="Files scanned" value={String(report.filesScanned)} detail={`${report.parseErrors.length} parse issue(s)`} />
+      </div>
+
+      <section className="panel">
+        <div className="panel-title">
+          <BarChart3 size={18} />
+          <h2>Current usage status</h2>
+        </div>
+        {report.latestQuota ? (
+          <QuotaPanel quota={report.latestQuota} />
+        ) : (
+          <div className="empty-state compact">
+            <h2>No quota snapshot found</h2>
+            <p>Run Codex CLI until it writes token_count rate limit events, then refresh this page.</p>
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="panel-title">
+          <History size={18} />
+          <h2>Codex session history</h2>
+        </div>
+        <div className="usage-session-list">
+          {recentSessions.length === 0 && (
+            <div className="history-row">
+              <span>No sessions</span>
+              <strong>-</strong>
+              <em>No token_count events found under the scanned Codex session roots</em>
+            </div>
+          )}
+          {recentSessions.map((session) => (
+            <UsageSessionRow key={`${session.sourcePath}-${session.latestEventAt ?? session.modifiedAt ?? "unknown"}`} session={session} />
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-title">
+          <Database size={18} />
+          <h2>Switch history</h2>
+        </div>
+        <div className="history-list">
+          {switchHistory.length === 0 && (
+            <div className="history-row">
+              <span>No switch history</span>
+              <strong>- {"->"} -</strong>
+              <em>No account switch transaction has been recorded</em>
+            </div>
+          )}
+          {switchHistory.slice(0, 20).map((item) => (
+            <div className="history-row" key={item.id}>
+              <span>{formatDisplayTime(item.switchedAt)}</span>
+              <strong>{item.fromProfile ?? "-"} {"->"} {item.toProfile}</strong>
+              <em>{item.status}{item.errorType ? ` · ${item.errorType}` : ""}</em>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-title">
+          <FolderSearch size={18} />
+          <h2>Scanned locations</h2>
+        </div>
+        <div className="usage-path-grid">
+          <div>
+            <span>Sessions</span>
+            <strong>{report.sessionsRoot || "-"}</strong>
+          </div>
+          <div>
+            <span>Archived sessions</span>
+            <strong>{report.archivedSessionsRoot || "-"}</strong>
+          </div>
+        </div>
+        {report.parseErrors.length > 0 && (
+          <div className="usage-errors">
+            {report.parseErrors.slice(0, 5).map((error) => <span key={error}>{error}</span>)}
+          </div>
+        )}
+      </section>
+    </section>
+  );
+}
+
+function UsageMetricCard({ title, value, detail }: { title: string; value: string; detail: string }) {
+  return (
+    <article className="usage-metric-card">
+      <span>{title}</span>
+      <strong>{value}</strong>
+      <em>{detail}</em>
+    </article>
+  );
+}
+
+function QuotaPanel({ quota }: { quota: UsageQuotaSummary }) {
+  return (
+    <div className="quota-grid">
+      <QuotaWindow title="5 hour window" window={quota.fiveHour} />
+      <QuotaWindow title="Weekly window" window={quota.weekly} />
+    </div>
+  );
+}
+
+function QuotaWindow({ title, window }: { title: string; window: UsageQuotaSummary["fiveHour"] }) {
+  const percent = window.remainingPercent ?? 0;
+  return (
+    <article className={`quota-window ${window.remainingPercent === null ? "unknown" : ""}`}>
+      <div>
+        <span>{title}</span>
+        <strong>{window.remainingPercent === null ? "Unknown" : `${window.remainingPercent}% remaining`}</strong>
+        <em>{window.resetAt ? `Resets ${formatDisplayTime(window.resetAt)}` : "No reset time recorded"}</em>
+      </div>
+      <div className="quota-track" aria-hidden="true">
+        <div className="quota-fill" style={{ width: `${percent}%` }} />
+      </div>
+    </article>
+  );
+}
+
+function UsageSessionRow({ session }: { session: UsageSessionSummary }) {
+  return (
+    <article className="usage-session-row">
+      <div>
+        <strong>{session.sessionId ?? "Unknown session"}</strong>
+        <span>{session.model} · {formatDisplayTime(session.latestEventAt ?? session.modifiedAt)}</span>
+      </div>
+      <dl>
+        <div>
+          <dt>Total</dt>
+          <dd>{formatTokenCount(session.tokens.totalTokens)}</dd>
+        </div>
+        <div>
+          <dt>Input</dt>
+          <dd>{formatTokenCount(session.tokens.inputTokens)}</dd>
+        </div>
+        <div>
+          <dt>Cached</dt>
+          <dd>{formatTokenCount(session.tokens.cachedInputTokens)}</dd>
+        </div>
+        <div>
+          <dt>Output</dt>
+          <dd>{formatTokenCount(session.tokens.outputTokens)}</dd>
+        </div>
+      </dl>
+      <em>{session.tokenEvents} token event(s)</em>
+    </article>
+  );
+}
+
+function formatTokenCount(value: number) {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function formatDisplayTime(value: string | null | undefined) {
+  if (!value) {
+    return "Unknown time";
+  }
+  if (/^\d+$/.test(value)) {
+    const numeric = Number(value);
+    const millis = value.length <= 10 ? numeric * 1000 : numeric;
+    return new Date(millis).toLocaleString();
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? value : new Date(parsed).toLocaleString();
 }
 
 function Environment({ scan, busy, onScan }: { scan: EnvironmentScan; busy: boolean; onScan: () => void }) {

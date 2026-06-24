@@ -187,6 +187,48 @@ export type RecoveryRollbackResult = {
   message: string;
 };
 
+export type UsageTokenTotals = {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+};
+
+export type UsageQuotaWindow = {
+  remainingPercent: number | null;
+  resetAt: string | null;
+  windowMinutes: number | null;
+};
+
+export type UsageQuotaSummary = {
+  fiveHour: UsageQuotaWindow;
+  weekly: UsageQuotaWindow;
+  sourcePath: string | null;
+};
+
+export type UsageSessionSummary = {
+  sessionId: string | null;
+  sourcePath: string;
+  modifiedAt: string | null;
+  latestEventAt: string | null;
+  model: string;
+  tokenEvents: number;
+  tokens: UsageTokenTotals;
+  quota: UsageQuotaSummary | null;
+};
+
+export type UsageHistoryReport = {
+  scannedAt: string;
+  codexHome: string;
+  sessionsRoot: string;
+  archivedSessionsRoot: string;
+  filesScanned: number;
+  parseErrors: string[];
+  totals: UsageTokenTotals;
+  latestQuota: UsageQuotaSummary | null;
+  sessions: UsageSessionSummary[];
+};
+
 export type ProfileSwitchRequest = {
   profileId: string;
   environments: TargetEnvironment[];
@@ -358,6 +400,10 @@ export async function resolveRecoveryStatus(): Promise<RecoveryStatus> {
 
 export async function rollbackUnfinishedTransaction(): Promise<RecoveryRollbackResult> {
   return await invoke<RecoveryRollbackResult>("rollback_unfinished_transaction");
+}
+
+export async function getUsageHistory(): Promise<UsageHistoryReport> {
+  return await invoke<UsageHistoryReport>("get_usage_history");
 }
 
 export async function switchToProfile(request: ProfileSwitchRequest): Promise<ProfileSwitchResult> {

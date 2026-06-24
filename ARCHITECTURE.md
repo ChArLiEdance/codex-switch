@@ -164,6 +164,12 @@ Restore failures skip all reload or restart actions. Timeout errors include the 
 
 `check_recovery_status` reports whether a transaction journal is unfinished. It also checks the matching timestamped backup `manifest.json` and returns only non-secret recovery evidence: whether the manifest exists, how many entries it contains, whether rollback evidence is available, and the latest transaction event message. It does not read auth payloads or secret snapshots. A non-terminal journal means the app exited while a restore transaction was in progress or before terminal status was persisted. `rollback_unfinished_transaction` lets the Home view restore from that persisted backup manifest and writes `RolledBack` or `Failed` back to the same transaction journal. `resolve_recovery_status` remains available to mark a reviewed non-terminal journal as failed when the user chooses a corrective Restore default or Switch back operation instead.
 
+## Usage And Local History
+
+`get_usage_history` is a read-only command inspired by the local session parsing patterns in `cc-switch` and `Codex_Account_Switch`. It scans the current Codex home for `sessions/**/*.jsonl` and `archived_sessions/**/*.jsonl`, parses only structural `session_meta`, `turn_context`, and `event_msg` lines, and ignores message bodies. Token totals are derived from `token_count.info.total_token_usage` deltas or `last_token_usage` increments. Current usage status is derived from `token_count.rate_limits` when Codex writes primary or secondary rate-limit windows.
+
+The Usage view combines that local session usage summary with the existing non-secret switch history. The scan output includes session id, source path, model name, token event counts, token totals, quota remaining percentages, reset timestamps, parse errors, and scanned roots. It must not persist or display prompt text, code content, response text, API keys, cookies, or full account emails.
+
 ## Saved Profile Switch Command
 
 `switch_to_profile` is the current UI-facing bridge from saved Profile metadata to restore execution:

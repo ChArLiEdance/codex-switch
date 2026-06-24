@@ -8,6 +8,7 @@ pub mod profile_store;
 pub mod profile_switch;
 pub mod secret_store;
 pub mod switch_transaction;
+pub mod usage_history;
 pub mod vscode_app;
 
 use account_hint::{redact_email_like_text, redacted_account_hint_from_path};
@@ -36,6 +37,7 @@ use std::{
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
+use usage_history::UsageHistoryReport;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -274,6 +276,11 @@ fn rollback_unfinished_transaction() -> Result<RecoveryRollbackResult, String> {
     app_state_repository()
         .rollback_unfinished_transaction_from_backup()
         .map_err(|error| format!("{error:?}"))
+}
+
+#[tauri::command]
+fn get_usage_history() -> UsageHistoryReport {
+    usage_history::load_usage_history()
 }
 
 #[tauri::command]
@@ -1112,6 +1119,7 @@ pub fn run() {
             check_recovery_status,
             resolve_recovery_status,
             rollback_unfinished_transaction,
+            get_usage_history,
             switch_to_profile,
             restore_default_profile,
             switch_previous_profile,
