@@ -154,6 +154,9 @@ function setLocaleFromValue(value: string | undefined): void {
 
 function setTheme(theme: ThemeId): void {
   if (state.theme === theme) {
+    applyTheme(theme);
+    document.documentElement.dataset.effectiveTheme = resolveEffectiveTheme(theme);
+    renderThemeOptions();
     return;
   }
 
@@ -185,6 +188,23 @@ function handleToggleQuotaProfile(profile: string): void {
     state.expandedQuotaProfiles = [...state.expandedQuotaProfiles, profile];
   }
   rerenderDashboard();
+}
+
+function activateSettingsTab(tabName: string): void {
+  const buttons = document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]");
+  const panels = document.querySelectorAll<HTMLElement>("[data-settings-panel]");
+
+  for (const button of buttons) {
+    const isActive = button.dataset.settingsTab === tabName;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  }
+
+  for (const panel of panels) {
+    const isActive = panel.dataset.settingsPanel === tabName;
+    panel.classList.toggle("is-active", isActive);
+    panel.hidden = !isActive;
+  }
 }
 
 async function refreshCurrentQuota(showError = false): Promise<void> {
@@ -980,6 +1000,7 @@ export function bootstrap(): void {
 
   const systemThemeMedia = globalThis.matchMedia?.("(prefers-color-scheme: dark)");
   systemThemeMedia?.addEventListener("change", handleSystemThemeChange);
+  activateSettingsTab("general");
 
   window.addEventListener("hashchange", () => {
     state.route = routeFromLocation();
@@ -1082,6 +1103,11 @@ export function bootstrap(): void {
   for (const button of elements.themeButtons) {
     button.addEventListener("click", () => {
       setThemeFromValue(button.dataset.themeOption);
+    });
+  }
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-settings-tab]")) {
+    button.addEventListener("click", () => {
+      activateSettingsTab(button.dataset.settingsTab ?? "general");
     });
   }
   window.setInterval(() => {

@@ -1,6 +1,6 @@
 import type { MessageKey } from "@front-shared/i18n";
 
-export type ThemeId = "classic" | "mica" | "pine" | "sea-salt" | "jade-night" | "system";
+export type ThemeId = "light" | "dark" | "system";
 
 export interface ThemeOption {
   id: ThemeId;
@@ -9,7 +9,7 @@ export interface ThemeOption {
 }
 
 const STORAGE_KEY = "codex-switch-theme";
-const DEFAULT_THEME: ThemeId = "classic";
+const DEFAULT_THEME: ThemeId = "light";
 
 export const themeOptions: readonly ThemeOption[] = [
   {
@@ -18,29 +18,14 @@ export const themeOptions: readonly ThemeOption[] = [
     descriptionKey: "themeSystemDescription",
   },
   {
-    id: "classic",
-    nameKey: "themeClassicName",
-    descriptionKey: "themeClassicDescription",
+    id: "light",
+    nameKey: "themeLightName",
+    descriptionKey: "themeLightDescription",
   },
   {
-    id: "mica",
-    nameKey: "themeMicaName",
-    descriptionKey: "themeMicaDescription",
-  },
-  {
-    id: "pine",
-    nameKey: "themePineName",
-    descriptionKey: "themePineDescription",
-  },
-  {
-    id: "sea-salt",
-    nameKey: "themeSeaSaltName",
-    descriptionKey: "themeSeaSaltDescription",
-  },
-  {
-    id: "jade-night",
-    nameKey: "themeJadeNightName",
-    descriptionKey: "themeJadeNightDescription",
+    id: "dark",
+    nameKey: "themeDarkName",
+    descriptionKey: "themeDarkDescription",
   },
 ] as const;
 
@@ -54,6 +39,12 @@ export function getThemeOption(themeId: ThemeId): ThemeOption {
 
 export function resolveInitialTheme(): ThemeId {
   const stored = globalThis.localStorage?.getItem(STORAGE_KEY) ?? undefined;
+  if (stored === "classic" || stored === "mica" || stored === "pine" || stored === "sea-salt") {
+    return "light";
+  }
+  if (stored === "jade-night") {
+    return "dark";
+  }
   return isThemeId(stored) ? stored : DEFAULT_THEME;
 }
 
@@ -61,9 +52,12 @@ export function persistTheme(theme: ThemeId): void {
   globalThis.localStorage?.setItem(STORAGE_KEY, theme);
 }
 
-export function resolveEffectiveTheme(theme: ThemeId): Exclude<ThemeId, "system"> {
-  if (theme !== "system") {
-    return theme;
+export function resolveEffectiveTheme(theme: ThemeId): "classic" | "jade-night" {
+  if (theme === "light") {
+    return "classic";
+  }
+  if (theme === "dark") {
+    return "jade-night";
   }
 
   const prefersDark = globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;

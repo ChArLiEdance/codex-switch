@@ -199,37 +199,52 @@
             <h2 class="mac-detail-title" data-i18n-key="settingsTitle">Settings</h2>
           </header>
           <article class="settings-panel settings-panel--runtime">
-            <div class="settings-row">
-              <strong data-i18n-key="settingsLanguage">Language</strong>
-              <div class="locale-segment" role="group" aria-label="Locale">
-                <button class="locale-pill" type="button" data-set-locale="en">EN</button>
-                <button class="locale-pill" type="button" data-set-locale="zh-CN">中文</button>
+            <nav class="settings-tab-strip" aria-label="Settings sections">
+              <button class="settings-tab-button is-active" type="button" data-settings-tab="general" data-i18n-key="settingsTabGeneral">General</button>
+              <button class="settings-tab-button" type="button" data-settings-tab="usage" data-i18n-key="settingsUsageTitle">Usage Statistics</button>
+              <button class="settings-tab-button" type="button" data-settings-tab="about" data-i18n-key="settingsTabAbout">About</button>
+            </nav>
+
+            <div class="settings-tab-panel is-active" data-settings-panel="general">
+              <div class="settings-row">
+                <strong data-i18n-key="settingsLanguage">Language</strong>
+                <div class="locale-segment" role="group" aria-label="Locale">
+                  <button class="locale-pill" type="button" data-set-locale="en">EN</button>
+                  <button class="locale-pill" type="button" data-set-locale="zh-CN">中文</button>
+                </div>
+              </div>
+              <div class="settings-row">
+                <strong data-i18n-key="settingsTheme">Theme</strong>
+                <div class="theme-options theme-options--compact" role="group" aria-label="Theme">
+                  <button class="theme-option theme-option--color theme-option--light" type="button" data-theme-option="light">
+                    <span class="theme-core-swatch" aria-hidden="true"></span>
+                    <span class="theme-option-text" data-i18n-key="themeLightName">Light</span>
+                  </button>
+                  <button class="theme-option theme-option--color theme-option--dark" type="button" data-theme-option="dark">
+                    <span class="theme-core-swatch" aria-hidden="true"></span>
+                    <span class="theme-option-text" data-i18n-key="themeDarkName">Dark</span>
+                  </button>
+                  <button class="theme-option theme-option--color theme-option--system" type="button" data-theme-option="system">
+                    <span class="theme-core-swatch" aria-hidden="true"></span>
+                    <span class="theme-option-text" data-i18n-key="themeSystemName">System</span>
+                  </button>
+                </div>
+              </div>
+              <label class="settings-row settings-row--field">
+                <strong data-i18n-key="settingsUpdateUrl">Update URL</strong>
+                <input id="settings-update-url-input" class="settings-input" type="url" value="https://api.github.com/repos/ChArLiEdance/codex-switch/releases/latest" />
+              </label>
+              <div class="settings-row">
+                <strong id="settings-codex-cli-label">Codex CLI path</strong>
+                <div class="settings-cli-inline">
+                  <p id="settings-codex-cli-value" class="settings-value settings-value--inline">--</p>
+                  <button id="settings-codex-cli-detect-button" class="settings-action-button" type="button">Auto-detect</button>
+                  <button id="settings-codex-cli-button" class="settings-action-button" type="button">Change</button>
+                </div>
               </div>
             </div>
-            <div class="settings-row">
-              <strong data-i18n-key="settingsTheme">Theme</strong>
-              <div class="theme-options theme-options--compact" role="group" aria-label="Theme">
-                <button class="theme-option theme-option--color theme-option--system" type="button" data-theme-option="system">
-                  <span class="theme-core-swatch" aria-hidden="true"></span>
-                </button>
-                <button class="theme-option theme-option--color" type="button" data-theme-option="classic">
-                  <span class="theme-core-swatch" aria-hidden="true"></span>
-                </button>
-                <button class="theme-option theme-option--color" type="button" data-theme-option="mica">
-                  <span class="theme-core-swatch" aria-hidden="true"></span>
-                </button>
-                <button class="theme-option theme-option--color" type="button" data-theme-option="pine">
-                  <span class="theme-core-swatch" aria-hidden="true"></span>
-                </button>
-                <button class="theme-option theme-option--color" type="button" data-theme-option="sea-salt">
-                  <span class="theme-core-swatch" aria-hidden="true"></span>
-                </button>
-                <button class="theme-option theme-option--color" type="button" data-theme-option="jade-night">
-                  <span class="theme-core-swatch" aria-hidden="true"></span>
-                </button>
-              </div>
-            </div>
-            <section class="settings-usage-panel" aria-labelledby="settings-usage-title">
+
+            <section class="settings-tab-panel settings-usage-panel" data-settings-panel="usage" aria-labelledby="settings-usage-title" hidden>
               <div class="settings-usage-header">
                 <div>
                   <strong id="settings-usage-title" data-i18n-key="settingsUsageTitle">Usage Statistics</strong>
@@ -264,38 +279,29 @@
                 <div id="settings-usage-rows"></div>
               </div>
             </section>
-            <label class="settings-row settings-row--field">
-              <strong data-i18n-key="settingsUpdateUrl">Update URL</strong>
-              <input id="settings-update-url-input" class="settings-input" type="url" value="https://api.github.com/repos/ChArLiEdance/codex-switch/releases/latest" />
-            </label>
-            <div class="settings-row">
-              <strong id="settings-codex-cli-label">Codex CLI path</strong>
-              <div class="settings-cli-inline">
-                <p id="settings-codex-cli-value" class="settings-value settings-value--inline">--</p>
-                <button id="settings-codex-cli-detect-button" class="settings-action-button" type="button">Auto-detect</button>
-                <button id="settings-codex-cli-button" class="settings-action-button" type="button">Change</button>
+
+            <div class="settings-tab-panel" data-settings-panel="about" hidden>
+              <div class="settings-row">
+                <strong data-i18n-key="settingsVersion">Version</strong>
+                <span id="settings-version-value" class="settings-value settings-value--strong">—</span>
               </div>
-            </div>
-            <div class="settings-row">
-              <strong data-i18n-key="settingsVersion">Version</strong>
-              <span id="settings-version-value" class="settings-value settings-value--strong">—</span>
-            </div>
-            <div class="settings-row">
-              <strong data-i18n-key="settingsLicense">License</strong>
-              <span class="settings-value settings-value--strong">MIT License</span>
-            </div>
-            <div class="settings-row">
-              <strong data-i18n-key="settingsCheckUpdate">Check updates</strong>
-              <button id="settings-check-update-button" class="settings-action-button settings-action-button--icon" type="button">
-                <span class="settings-action-icon settings-action-icon--download" aria-hidden="true"></span>
-                <span data-i18n-key="settingsCheckUpdateButton">Check update</span>
-              </button>
-            </div>
-            <div class="settings-row">
-              <strong data-i18n-key="settingsGithub">GitHub</strong>
-              <button id="settings-github-button" class="settings-icon-button" type="button" aria-label="GitHub">
-                <span class="settings-external-icon" aria-hidden="true"></span>
-              </button>
+              <div class="settings-row">
+                <strong data-i18n-key="settingsLicense">License</strong>
+                <span class="settings-value settings-value--strong">MIT License</span>
+              </div>
+              <div class="settings-row">
+                <strong data-i18n-key="settingsCheckUpdate">Check updates</strong>
+                <button id="settings-check-update-button" class="settings-action-button settings-action-button--icon" type="button">
+                  <span class="settings-action-icon settings-action-icon--download" aria-hidden="true"></span>
+                  <span data-i18n-key="settingsCheckUpdateButton">Check update</span>
+                </button>
+              </div>
+              <div class="settings-row">
+                <strong data-i18n-key="settingsGithub">GitHub</strong>
+                <button id="settings-github-button" class="settings-icon-button" type="button" aria-label="GitHub">
+                  <span class="settings-external-icon" aria-hidden="true"></span>
+                </button>
+              </div>
             </div>
           </article>
         </section>

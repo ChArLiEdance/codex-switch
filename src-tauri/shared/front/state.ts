@@ -11,7 +11,7 @@ export const state = {
   expandedQuotaProfiles: [] as string[],
   route: "dashboard" as ShellRoute,
   locale: "en" as Locale,
-  theme: "classic" as ThemeId,
+  theme: "light" as ThemeId,
   pageSize: 8,
   snapshot: null as ProfilesSnapshotResponse | null,
   currentQuota: null as QuotaSummary | null,
