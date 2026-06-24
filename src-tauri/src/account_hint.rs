@@ -49,14 +49,14 @@ fn redacted_account_hint_from_path_with_budget(
 
 pub fn redacted_account_hint_from_content(content: &str) -> Option<String> {
     if let Ok(value) = serde_json::from_str::<Value>(content) {
-        if let Some(email) = email_from_json_value(&value) {
-            return Some(redact_email(&email));
-        }
         if let Some(email) = email_from_oauth_tokens(&value) {
             return Some(redact_email(&email));
         }
+        if let Some(email) = email_from_json_value(&value) {
+            return Some(redact_email(&email));
+        }
     }
-    first_email_like(content).map(|email| redact_email(&email))
+    first_user_email_like(content).map(|email| redact_email(&email))
 }
 
 pub fn redact_email_like_text(content: &str) -> String {
@@ -102,7 +102,7 @@ fn email_from_json_value(value: &Value) -> Option<String> {
                         | "profile"
                 ) {
                     if let Value::String(text) = value {
-                        if let Some(email) = first_email_like(text) {
+                        if let Some(email) = first_user_email_like(text) {
                             return Some(email);
                         }
                     }
@@ -116,7 +116,7 @@ fn email_from_json_value(value: &Value) -> Option<String> {
             None
         }
         Value::Array(values) => values.iter().find_map(email_from_json_value),
-        Value::String(text) => first_email_like(text),
+        Value::String(text) => first_user_email_like(text),
         _ => None,
     }
 }
@@ -141,10 +141,10 @@ fn email_from_jwt(token: &str) -> Option<String> {
     value
         .get("email")
         .and_then(Value::as_str)
-        .and_then(first_email_like)
+        .and_then(first_user_email_like)
 }
 
-fn first_email_like(content: &str) -> Option<String> {
+fn first_user_email_like(content: &str) -> Option<String> {
     for token in content.split(|character: char| {
         character.is_whitespace()
             || matches!(
@@ -155,11 +155,24 @@ fn first_email_like(content: &str) -> Option<String> {
         let candidate = token.trim_matches(|character: char| {
             !character.is_ascii_alphanumeric() && !matches!(character, '@' | '.' | '_' | '-' | '+')
         });
-        if is_email_like(candidate) {
+        if is_email_like(candidate) && !is_service_email(candidate) {
             return Some(candidate.to_string());
         }
     }
     None
+}
+
+fn is_service_email(email: &str) -> bool {
+    let Some((local, domain)) = email.split_once('@') else {
+        return false;
+    };
+    let local = local.to_ascii_lowercase();
+    let domain = domain.to_ascii_lowercase();
+    domain == "openai.com"
+        && matches!(
+            local.as_str(),
+            "support" | "security" | "noreply" | "no-reply" | "help" | "privacy"
+        )
 }
 
 fn is_email_like(value: &str) -> bool {
@@ -195,7 +208,10 @@ struct AccountHintBudget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{env, fs};
+    use std::{
+        env, fs,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     #[test]
     fn redacts_email_from_json_account_hint() {
@@ -229,8 +245,14 @@ mod tests {
 
     #[test]
     fn reads_bounded_redacted_hint_from_path() {
-        let root =
-            env::temp_dir().join(format!("codex-switch-account-hint-{}", std::process::id()));
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let root = env::temp_dir().join(format!(
+            "codex-switch-account-hint-{}-{unique}",
+            std::process::id()
+        ));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).expect("create hint dir");
         let auth_path = root.join("auth.json");
@@ -253,6 +275,29 @@ mod tests {
             redacted_account_hint_from_content(&content),
             Some("j***@example.net".to_string())
         );
+    }
+
+    #[test]
+    fn prefers_oauth_claim_over_openai_service_email() {
+        let payload = general_purpose::URL_SAFE_NO_PAD.encode(r#"{"email":"real.user@example.net"}"#);
+        let content = format!(
+            r#"{{
+                "support":"support@openai.com",
+                "tokens":{{"id_token":"header.{payload}.signature"}}
+            }}"#
+        );
+
+        assert_eq!(
+            redacted_account_hint_from_content(&content),
+            Some("r***@example.net".to_string())
+        );
+    }
+
+    #[test]
+    fn ignores_openai_service_email_when_no_user_identity_exists() {
+        let content = r#"{"support":"support@openai.com","help":"security@openai.com"}"#;
+
+        assert_eq!(redacted_account_hint_from_content(content), None);
     }
 
     #[test]

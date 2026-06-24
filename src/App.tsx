@@ -1,12 +1,14 @@
 import {
   AlertTriangle,
   BarChart3,
+  BookOpen,
   CheckCircle2,
   Clock3,
   ClipboardList,
   Copy,
   Database,
   FolderSearch,
+  Gauge,
   History,
   KeyRound,
   Laptop,
@@ -21,6 +23,7 @@ import {
   SquareTerminal,
   Star,
   Trash2,
+  Users,
   X,
   UserPlus
 } from "lucide-react";
@@ -72,7 +75,7 @@ import {
 } from "./backend";
 import { createTranslator, type Translate } from "./i18n";
 
-type Tab = "home" | "profiles" | "environment" | "usage" | "settings";
+type Tab = "dashboard" | "accounts" | "settings" | "guide";
 
 const defaultSettings: AppSettings = {
   defaultScope: ["cli", "vscode", "desktop"],
@@ -124,7 +127,7 @@ const defaultCurrentAccountStatus: CurrentAccountStatus = {
 };
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("home");
+  const [tab, setTab] = useState<Tab>("dashboard");
   const [switchOpen, setSwitchOpen] = useState(false);
   const [scan, setScan] = useState<EnvironmentScan>(emptyEnvironmentScan);
   const [scanBusy, setScanBusy] = useState(false);
@@ -343,16 +346,21 @@ export default function App() {
           </div>
         </div>
         <nav className="nav-list" aria-label="Primary">
-          <NavButton icon={<Laptop size={18} />} label={t("navHome")} active={tab === "home"} onClick={() => setTab("home")} />
-          <NavButton icon={<KeyRound size={18} />} label={t("navProfiles")} active={tab === "profiles"} onClick={() => setTab("profiles")} />
-          <NavButton icon={<FolderSearch size={18} />} label={t("navEnvironment")} active={tab === "environment"} onClick={() => setTab("environment")} />
-          <NavButton icon={<BarChart3 size={18} />} label={t("navUsage")} active={tab === "usage"} onClick={() => setTab("usage")} />
+          <NavButton icon={<Gauge size={18} />} label={t("navDashboard")} active={tab === "dashboard"} onClick={() => setTab("dashboard")} />
+          <NavButton icon={<Users size={18} />} label={t("navAccounts")} active={tab === "accounts"} onClick={() => setTab("accounts")} />
           <NavButton icon={<Settings size={18} />} label={t("navSettings")} active={tab === "settings"} onClick={() => setTab("settings")} />
+          <NavButton icon={<BookOpen size={18} />} label={t("navGuide")} active={tab === "guide"} onClick={() => setTab("guide")} />
         </nav>
+        <SidebarQuickStatus
+          accountStatus={currentAccountStatus}
+          usageHistory={usageHistory}
+          t={t}
+          onSwitch={() => setSwitchOpen(true)}
+        />
       </aside>
 
       <main className="content">
-        {tab === "home" && (
+        {tab === "dashboard" && (
           <Home
             currentProfile={currentProfile}
             currentAccountStatus={currentAccountStatus}
@@ -362,6 +370,7 @@ export default function App() {
             scan={scan}
             history={history}
             recovery={recovery}
+            usageHistory={usageHistory}
             quickSwitchMessage={quickSwitchMessage}
             t={t}
             onSwitch={() => setSwitchOpen(true)}
@@ -375,7 +384,7 @@ export default function App() {
             }}
           />
         )}
-        {tab === "profiles" && (
+        {tab === "accounts" && (
           <Profiles
             profiles={profiles}
             scan={scan}
@@ -388,17 +397,6 @@ export default function App() {
             }}
           />
         )}
-        {tab === "environment" && <Environment scan={scan} busy={scanBusy} t={t} onScan={runScan} />}
-        {tab === "usage" && (
-          <UsageHistoryView
-            report={usageHistory}
-            busy={usageBusy}
-            message={usageMessage}
-            switchHistory={history}
-            t={t}
-            onRefresh={() => void refreshUsageHistory()}
-          />
-        )}
         {tab === "settings" && (
           <SettingsView
             settings={settings}
@@ -407,6 +405,7 @@ export default function App() {
             onClearHistory={clearHistory}
           />
         )}
+        {tab === "guide" && <GuideView t={t} />}
       </main>
 
       {switchOpen && (
@@ -448,6 +447,39 @@ function NavButton({
   );
 }
 
+function SidebarQuickStatus({
+  accountStatus,
+  usageHistory,
+  t,
+  onSwitch
+}: {
+  accountStatus: CurrentAccountStatus;
+  usageHistory: UsageHistoryReport;
+  t: Translate;
+  onSwitch: () => void;
+}) {
+  const fiveHour = usageHistory.latestQuota?.fiveHour.remainingPercent;
+  const weekly = usageHistory.latestQuota?.weekly.remainingPercent;
+  return (
+    <section className="sidebar-quick">
+      <button className="sidebar-switch-button" onClick={onSwitch} aria-label={t("oneClickSwitch")}>
+        <RefreshCw size={16} />
+        <span>{t("oneClickSwitch")}</span>
+      </button>
+      <div className="sidebar-quota">
+        <div>
+          <span>{t("currentAccount")}</span>
+          <strong>{accountStatus.matchedProfileName ?? accountStatus.liveAccountHint}</strong>
+        </div>
+        <div className="sidebar-quota-grid">
+          <span>{t("fiveHourShort")}: {fiveHour === null || fiveHour === undefined ? t("quotaUnknown") : `${fiveHour}%`}</span>
+          <span>{t("weeklyShort")}: {weekly === null || weekly === undefined ? t("quotaUnknown") : `${weekly}%`}</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Home({
   currentProfile,
   currentAccountStatus,
@@ -457,6 +489,7 @@ function Home({
   scan,
   history,
   recovery,
+  usageHistory,
   quickSwitchMessage,
   t,
   onSwitch,
@@ -473,6 +506,7 @@ function Home({
   scan: EnvironmentScan;
   history: SwitchHistoryEntry[];
   recovery: RecoveryStatus;
+  usageHistory: UsageHistoryReport;
   quickSwitchMessage: string | null;
   t: Translate;
   onSwitch: () => void;
@@ -487,15 +521,15 @@ function Home({
         <div>
           <p className="eyebrow">{t("currentAccount")}</p>
           <h1>
-            {currentAccountStatus.liveAccountHint !== "Unknown"
-              ? currentAccountStatus.liveAccountHint
-              : currentProfile?.accountHint ?? t("noVerifiedAccount")}
+            {currentAccountStatus.matchedProfileName
+              ?? currentProfile?.name
+              ?? (currentAccountStatus.liveAccountHint !== "Unknown" ? currentAccountStatus.liveAccountHint : t("noVerifiedAccount"))}
           </h1>
           <span className="scan-meta">
             {currentAccountStatus.matchedProfileName
-              ? `${t("matchedProfile", { name: currentAccountStatus.matchedProfileName })} · ${currentAccountMatchLabel(currentAccountStatus.matchedBy, t)}`
+              ? `${currentAccountStatus.liveAccountHint} · ${currentAccountMatchLabel(currentAccountStatus.matchedBy, t)}`
               : currentProfile
-                ? `${currentProfile.name}${currentProfile.lastUsedAt ? ` · ${t("lastUsed", { value: currentProfile.lastUsedAt })}` : ""}`
+                ? `${currentProfile.accountHint}${currentProfile.lastUsedAt ? ` · ${t("lastUsed", { value: currentProfile.lastUsedAt })}` : ""}`
               : t("noProfileSwitched")}
           </span>
           {currentProfile && (
@@ -551,6 +585,27 @@ function Home({
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="panel dashboard-quota-panel">
+        <div className="panel-title">
+          <BarChart3 size={18} />
+          <h2>{t("quotaAndUsage")}</h2>
+        </div>
+        <div className="usage-hero-grid">
+          <UsageMetricCard title={t("totalTokens")} value={formatTokenCount(usageHistory.totals.totalTokens)} detail={t("inputCachedOutput")} />
+          <UsageMetricCard title={t("input")} value={formatTokenCount(usageHistory.totals.inputTokens)} detail={t("cached", { value: formatTokenCount(usageHistory.totals.cachedInputTokens) })} />
+          <UsageMetricCard title={t("output")} value={formatTokenCount(usageHistory.totals.outputTokens)} detail={t("sessions", { count: usageHistory.sessions.length })} />
+          <UsageMetricCard title={t("filesScanned")} value={String(usageHistory.filesScanned)} detail={t("parseIssues", { count: usageHistory.parseErrors.length })} />
+        </div>
+        {usageHistory.latestQuota ? (
+          <QuotaPanel quota={usageHistory.latestQuota} t={t} />
+        ) : (
+          <div className="empty-state compact">
+            <h2>{t("noQuotaSnapshot")}</h2>
+            <p>{t("noQuotaSnapshotHint")}</p>
+          </div>
+        )}
       </section>
 
       {recovery.needsRecovery && (
@@ -1670,6 +1725,42 @@ function SettingsView({
           </div>
         </div>
         <button className="danger-button" onClick={() => void onClearHistory()}>{t("clearLocalHistory")}</button>
+      </section>
+    </section>
+  );
+}
+
+function GuideView({ t }: { t: Translate }) {
+  return (
+    <section className="view">
+      <header className="view-header">
+        <div>
+          <p className="eyebrow">{t("navGuide")}</p>
+          <h1>{t("guideTitle")}</h1>
+          <span className="scan-meta">{t("guideSubtitle")}</span>
+        </div>
+      </header>
+      <section className="guide-grid">
+        <article className="panel guide-card">
+          <KeyRound size={20} />
+          <h2>{t("guideAddAccountTitle")}</h2>
+          <p>{t("guideAddAccountBody")}</p>
+        </article>
+        <article className="panel guide-card">
+          <FolderSearch size={20} />
+          <h2>{t("guideImportFolderTitle")}</h2>
+          <p>{t("guideImportFolderBody")}</p>
+        </article>
+        <article className="panel guide-card">
+          <RefreshCw size={20} />
+          <h2>{t("guideSwitchTitle")}</h2>
+          <p>{t("guideSwitchBody")}</p>
+        </article>
+        <article className="panel guide-card">
+          <AlertTriangle size={20} />
+          <h2>{t("guideUnknownTitle")}</h2>
+          <p>{t("guideUnknownBody")}</p>
+        </article>
       </section>
     </section>
   );

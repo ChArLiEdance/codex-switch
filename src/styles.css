@@ -88,6 +88,64 @@ button:disabled {
   color: #ffffff;
 }
 
+.sidebar-quick {
+  margin-top: auto;
+  display: grid;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(244, 240, 232, 0.16);
+}
+
+.sidebar-switch-button {
+  min-height: 40px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #ffffff;
+  background: #276749;
+}
+
+.sidebar-quota {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(244, 240, 232, 0.14);
+  border-radius: 8px;
+  background: #1c2c25;
+}
+
+.sidebar-quota span {
+  display: block;
+  color: #b8c3ba;
+  font-size: 12px;
+}
+
+.sidebar-quota strong {
+  display: block;
+  margin-top: 3px;
+  color: #ffffff;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.sidebar-quota-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.sidebar-quota-grid span {
+  min-height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(244, 240, 232, 0.08);
+  color: #f4f0e8;
+  font-weight: 700;
+}
+
 .content {
   padding: 34px;
   overflow: auto;
@@ -297,6 +355,33 @@ h2 {
 
 .panel {
   padding: 18px;
+}
+
+.dashboard-quota-panel {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.guide-card {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.guide-card svg {
+  color: #276749;
+}
+
+.guide-card p {
+  color: #4d5a52;
+  line-height: 1.55;
 }
 
 .recovery-banner {
@@ -1153,6 +1238,7 @@ dd {
   .usage-session-row,
   .usage-session-row dl,
   .usage-path-grid,
+  .guide-grid,
   .import-guide,
   .import-detected-grid,
   .import-fields,
