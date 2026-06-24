@@ -42,6 +42,11 @@ function requiredElement<T extends HTMLElement>(id: string): T {
 }
 
 const hasDeleteProfileUi = document.getElementById("delete-profile-dialog") instanceof HTMLDialogElement;
+const macIconBase = "/ccswitch-icons";
+
+function macIcon(name: string, className = "cc-icon"): string {
+  return `<img class="${className}" src="${macIconBase}/${name}.svg" alt="" aria-hidden="true" />`;
+}
 
 export const elements = {
   profilesHeading: requiredElement<HTMLHeadingElement>("profiles-heading"),
@@ -598,9 +603,9 @@ export function renderProfiles(
 
         return `
           <article class="profile-card mac-account-card status-${profile.status}${unavailable ? " is-unavailable-card" : ""}">
-            <div class="mac-card-grip" aria-hidden="true"></div>
+            <div class="mac-card-grip" aria-hidden="true">${macIcon("grip-vertical", "cc-icon cc-icon--muted")}</div>
             <div class="mac-provider-mark" aria-hidden="true">
-              <span class="mac-provider-mark-core"></span>
+              <img class="cc-icon cc-icon--provider" src="${macIconBase}/openai.svg" alt="" />
             </div>
 
             <div class="mac-profile-main">
@@ -626,7 +631,7 @@ export function renderProfiles(
                 ${primaryActionAttribute}
                 ${primaryActionDisabled ? "disabled" : ""}
               >
-                <span class="mac-action-icon ${profile.status === "current" ? "mac-action-icon--gpt" : "mac-action-icon--play"}" aria-hidden="true"></span>
+                ${profile.status === "current" ? macIcon("openai", "cc-icon cc-icon--primary-action") : macIcon("play", "cc-icon cc-icon--primary-action")}
                 <span class="mac-action-label">${escapeHtml(primaryActionLabel)}</span>
               </button>
               <button
@@ -636,6 +641,7 @@ export function renderProfiles(
                 data-rename-profile="${profile.folder_name}"
                 ${renameDisabled ? "disabled" : ""}
               >
+                ${macIcon("pencil", "cc-icon cc-icon--action")}
                 <span class="mac-action-label">${t(state.locale, "rename")}</span>
               </button>
               <button
@@ -659,7 +665,7 @@ export function renderProfiles(
                 ${
                   loginRunning
                     ? `<span class="button-spinner" aria-hidden="true"></span><span class="mac-action-label">${t(state.locale, "cancel")}</span>`
-                    : `<span class="mac-action-label">${t(state.locale, "loginButton")}</span>`
+                    : `${macIcon("openai", "cc-icon cc-icon--action cc-icon--openai")}<span class="mac-action-label">${t(state.locale, "loginButton")}</span>`
                 }
               </button>
               <button
@@ -672,7 +678,7 @@ export function renderProfiles(
                 ${
                   refreshPending
                     ? '<span class="button-spinner" aria-hidden="true"></span>'
-                    : `<span class="mac-action-label">${t(state.locale, "refreshButton")}</span>`
+                    : `${macIcon("refresh-cw", "cc-icon cc-icon--action")}<span class="mac-action-label">${t(state.locale, "refreshButton")}</span>`
                 }
               </button>
               <button
@@ -690,6 +696,7 @@ export function renderProfiles(
                 data-base-url-profile="${profile.folder_name}"
                 ${baseDisabled ? "disabled" : ""}
               >
+                ${macIcon("chart-column", "cc-icon cc-icon--action")}
                 <span class="mac-action-label">${t(state.locale, "baseButton")}</span>
               </button>
               ${
@@ -701,6 +708,7 @@ export function renderProfiles(
                       data-delete-profile="${profile.folder_name}"
                       ${deleteDisabled ? "disabled" : ""}
                     >
+                      ${macIcon("trash-2", "cc-icon cc-icon--action")}
                       <span class="mac-action-label">${t(state.locale, "deleteButton")}</span>
                     </button>`
                   : ""
