@@ -1,32 +1,42 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Codex Switch",
-  "version": "0.1.0",
-  "identifier": "com.charlie.codex-switch",
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "codex_switch",
+  "version": "../package.json",
+  "identifier": "com.cmochance.codexswitch",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
-    "frontendDist": "../dist"
+    "devUrl": "http://127.0.0.1:1420",
+    "frontendDist": "../dist/web"
   },
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Codex Switch",
         "width": 1180,
-        "height": 780,
-        "minWidth": 860,
-        "minHeight": 620
+        "height": 860,
+        "minWidth": 1080,
+        "minHeight": 760,
+        "resizable": true,
+        "decorations": false
       }
     ],
     "security": {
-      "csp": null
+      "capabilities": ["default"]
     }
   },
   "bundle": {
-    "active": true,
-    "targets": "all",
-    "icon": []
+    "active": false,
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
+    }
   }
 }
-

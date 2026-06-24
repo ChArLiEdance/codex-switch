@@ -1,52 +1,27 @@
-# Dependencies
+# macOS
+.DS_Store
+
+# Secrets and runtime artifacts
+**/auth.json
+**/.active_profile
+**/.current_profile
+**/_autosave/
+
+# Local temp/test outputs
+*.log
+tmp/
+.tmp/
+.venv/
+.pytest_cache/
+__pycache__/
 node_modules/
-target/
 dist/
-dist-ssr/
 src-tauri/target/
 src-tauri/gen/
-
-# Local runtime data and credentials
-.codex-switch/
-profiles/
-profile-vault/
-backups/
-transactions/
-*.db
-*.sqlite
-*.sqlite3
-*.key
-*.pem
-*.p12
-*.token
-*.secret
-*.credential
-*.cookie
-token.*
-secret.*
-credential.*
-cookie.*
-auth.json
-
-# Logs and diagnostics
-logs/
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-crash-reports/
-
-# Local configuration
-.env
-.env.*
-!.env.example
-local.config.*
-settings.local.*
-
-# Build and editor noise
-.DS_Store
-.idea/
-.vscode/
-*.swp
-*.swo
+src-tauri/binaries/
+local_doc/
+agent/
+codex_history/
+.codex/
+.claude/
+docs/
