@@ -1,6 +1,6 @@
 use tauri::{utils::config::Color, App, Manager, TitleBarStyle, WindowEvent};
 
-const WINDOW_BG: Color = Color(244, 241, 236, 255);
+const WINDOW_BG: Color = Color(255, 255, 255, 0);
 
 pub fn install(app: &mut App) -> tauri::Result<()> {
     let Some(window) = app.get_webview_window("main") else {

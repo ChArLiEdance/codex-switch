@@ -620,13 +620,13 @@ export function renderProfiles(
 
             <div class="profile-card-actions mac-profile-actions">
               <button
-                class="profile-action-button mac-profile-primary"
+                class="profile-action-button mac-profile-primary${profile.status === "current" ? " mac-profile-primary--login" : ""}"
                 type="button"
                 title="${escapeHtml(primaryActionTitle)}"
                 ${primaryActionAttribute}
                 ${primaryActionDisabled ? "disabled" : ""}
               >
-                <span class="mac-action-icon mac-action-icon--play" aria-hidden="true"></span>
+                <span class="mac-action-icon ${profile.status === "current" ? "mac-action-icon--gpt" : "mac-action-icon--play"}" aria-hidden="true"></span>
                 <span class="mac-action-label">${escapeHtml(primaryActionLabel)}</span>
               </button>
               <button
@@ -639,7 +639,7 @@ export function renderProfiles(
                 <span class="mac-action-label">${t(state.locale, "rename")}</span>
               </button>
               <button
-                class="profile-action-button mac-icon-button mac-icon-button--login"
+                class="profile-action-button mac-icon-button mac-icon-button--gpt"
                 type="button"
                 title="${
                   loginRunning
@@ -678,8 +678,8 @@ export function renderProfiles(
               <button
                 class="${
                   profile.openai_base_url
-                    ? "profile-action-button mac-icon-button mac-icon-button--base profile-action-button-danger"
-                    : "profile-action-button mac-icon-button mac-icon-button--base"
+                    ? "profile-action-button mac-icon-button mac-icon-button--usage profile-action-button-danger"
+                    : "profile-action-button mac-icon-button mac-icon-button--usage"
                 }"
                 type="button"
                 title="${

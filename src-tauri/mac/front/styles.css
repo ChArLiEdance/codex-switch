@@ -1543,3 +1543,450 @@ button.pager-pill:disabled {
     justify-content: flex-start;
   }
 }
+
+html,
+body {
+  background: transparent;
+}
+
+body {
+  font-size: 14px;
+  -webkit-backdrop-filter: saturate(160%) blur(28px);
+  backdrop-filter: saturate(160%) blur(28px);
+}
+
+.window-shell--macos,
+.dashboard--macos,
+.window-shell .dashboard-shell {
+  background:
+    radial-gradient(circle at 8% 8%, rgba(255, 255, 255, 0.72), transparent 22rem),
+    radial-gradient(circle at 72% 2%, rgba(143, 205, 255, 0.18), transparent 20rem),
+    radial-gradient(circle at 100% 100%, rgba(255, 146, 71, 0.1), transparent 22rem),
+    rgba(248, 251, 255, 0.58);
+  -webkit-backdrop-filter: saturate(180%) blur(34px);
+  backdrop-filter: saturate(180%) blur(34px);
+}
+
+.dashboard--macos {
+  gap: 20px;
+  padding: 28px 28px 26px;
+}
+
+.mac-topbar {
+  min-height: 54px;
+}
+
+.mac-brand-cluster {
+  gap: 12px;
+}
+
+.mac-brand-title {
+  font-size: 1.48rem;
+  font-weight: 700;
+}
+
+.mac-settings-button {
+  width: 30px;
+  height: 30px;
+}
+
+.mac-top-actions {
+  gap: 14px;
+}
+
+.mac-feature-tabs {
+  gap: 5px;
+  padding: 5px;
+  border-radius: 20px;
+  background: rgba(241, 243, 247, 0.58);
+  box-shadow:
+    0 14px 34px rgba(36, 55, 84, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.mac-feature-tab {
+  min-width: 42px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 15px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.mac-feature-tab.active {
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    0 10px 24px rgba(36, 55, 84, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96);
+}
+
+.mac-add-button {
+  width: 46px;
+  height: 46px;
+  font-size: 2rem;
+  box-shadow:
+    0 16px 30px rgba(255, 116, 23, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.mac-toolbar-icon--settings {
+  width: 22px;
+  height: 22px;
+  border: 2px solid currentColor;
+}
+
+.mac-toolbar-icon--settings::before {
+  inset: 6px;
+  border: 2px solid currentColor;
+}
+
+.mac-toolbar-icon--settings::after {
+  left: 9px;
+  top: -3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow:
+    0 24px 0 currentColor,
+    12px 12px 0 currentColor,
+    -12px 12px 0 currentColor,
+    8px 3px 0 currentColor,
+    -8px 21px 0 currentColor;
+  transform: none;
+}
+
+.mac-feature-tab--skills::before {
+  width: 22px;
+  height: 7px;
+  border: 3px solid currentColor;
+  border-radius: 999px;
+  transform: rotate(-45deg);
+}
+
+.mac-feature-tab--skills::after {
+  width: 9px;
+  height: 9px;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+  transform: translate(8px, -8px);
+}
+
+.mac-feature-tab--prompts::before {
+  width: 20px;
+  height: 24px;
+  border: 3px solid currentColor;
+  border-radius: 4px;
+}
+
+.mac-feature-tab--prompts::after {
+  width: 12px;
+  height: 3px;
+  background: currentColor;
+  box-shadow: 0 7px 0 currentColor;
+}
+
+.mac-feature-tab--history::before {
+  width: 23px;
+  height: 23px;
+  border: 3px solid currentColor;
+  border-left-color: transparent;
+  border-radius: 50%;
+}
+
+.mac-feature-tab--history::after {
+  width: 10px;
+  height: 3px;
+  transform: translate(-2px, 1px) rotate(35deg);
+}
+
+.mac-profiles-header {
+  margin-bottom: 12px;
+}
+
+.profiles-grid {
+  gap: 16px;
+}
+
+.profile-card.mac-account-card {
+  grid-template-columns: 18px 46px minmax(0, 1fr) auto;
+  gap: 12px 12px;
+  min-height: 128px;
+  padding: 18px 22px;
+  border-width: 1.25px;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(233, 244, 255, 0.58), rgba(255, 255, 255, 0.52) 54%),
+    rgba(255, 255, 255, 0.42);
+  -webkit-backdrop-filter: saturate(190%) blur(30px);
+  backdrop-filter: saturate(190%) blur(30px);
+  box-shadow:
+    0 16px 34px rgba(29, 93, 165, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+}
+
+.mac-card-grip {
+  width: 12px;
+  height: 24px;
+  background-size: 6px 6px;
+}
+
+.mac-provider-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.mac-provider-mark-core {
+  width: 24px;
+  height: 24px;
+  border-width: 2.5px;
+}
+
+.mac-provider-mark-core::before,
+.mac-provider-mark-core::after {
+  border-width: 2.5px;
+}
+
+.mac-provider-mark-core::before {
+  inset: 5px 2px;
+}
+
+.mac-provider-mark-core::after {
+  inset: 2px 5px;
+}
+
+.mac-title-row {
+  gap: 10px;
+}
+
+.mac-account-card .profile-title-account {
+  font-size: 1.04rem;
+  line-height: 1.18;
+}
+
+.mac-route-badge {
+  padding: 5px 9px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+}
+
+.mac-profile-url {
+  margin-top: 5px;
+  font-size: 0.92rem;
+}
+
+.mac-quota-summary {
+  gap: 10px;
+  font-size: 0.8rem;
+}
+
+.mac-account-card .profile-quota-stack {
+  gap: 7px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.mac-account-card .profile-quota-line {
+  grid-template-columns: minmax(104px, max-content) 1fr max-content;
+  gap: 8px;
+}
+
+.mac-account-card .profile-quota-title,
+.mac-account-card .profile-quota-refresh,
+.mac-account-card .profile-quota-value {
+  font-size: 0.72rem;
+}
+
+.mac-account-card .quota-track {
+  height: 5px;
+}
+
+.profile-card-actions.mac-profile-actions {
+  gap: 12px;
+}
+
+.mac-profile-actions .profile-action-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+.mac-profile-actions .mac-profile-primary {
+  min-width: 92px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 12px;
+}
+
+.mac-profile-actions .mac-profile-primary:disabled {
+  opacity: 0.72;
+  background: rgba(20, 125, 255, 0.72);
+  color: #ffffff;
+}
+
+.mac-profile-primary .mac-action-label {
+  font-size: 0.84rem;
+}
+
+.mac-action-icon--play {
+  width: 12px;
+  height: 14px;
+  margin-right: 8px;
+}
+
+.mac-action-icon--play::before {
+  border-left-width: 13px;
+  border-top-width: 7px;
+  border-bottom-width: 7px;
+}
+
+.mac-action-icon--gpt {
+  width: 18px;
+  height: 18px;
+  margin-right: 7px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.mac-action-icon--gpt::before,
+.mac-action-icon--gpt::after,
+.mac-icon-button--gpt::before,
+.mac-icon-button--gpt::after {
+  content: "";
+  position: absolute;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+}
+
+.mac-action-icon--gpt::before {
+  inset: 4px 1px;
+  transform: rotate(35deg);
+}
+
+.mac-action-icon--gpt::after {
+  inset: 1px 4px;
+  transform: rotate(-35deg);
+}
+
+.mac-icon-button--gpt::before {
+  width: 20px;
+  height: 20px;
+  inset: auto;
+  border-radius: 50%;
+  transform: none;
+}
+
+.mac-icon-button--gpt::after {
+  width: 12px;
+  height: 22px;
+  inset: auto;
+  transform: rotate(36deg);
+}
+
+.mac-icon-button--gpt {
+  color: #10a37f;
+}
+
+.mac-icon-button--edit::before {
+  width: 17px;
+  height: 6px;
+  border-width: 2.5px;
+  border-radius: 4px;
+}
+
+.mac-icon-button--edit::after {
+  width: 11px;
+  height: 11px;
+  border-left-width: 2.5px;
+  border-bottom-width: 2.5px;
+  transform: translate(-6px, 7px);
+}
+
+.mac-icon-button--refresh::before {
+  width: 20px;
+  height: 20px;
+  border-width: 2.5px;
+  border-left-color: transparent;
+}
+
+.mac-icon-button--refresh::after {
+  width: 7px;
+  height: 7px;
+  border-top-width: 2.5px;
+  border-right-width: 2.5px;
+  transform: translate(8px, -7px) rotate(20deg);
+}
+
+.mac-icon-button--usage::before {
+  width: 22px;
+  height: 18px;
+  border-left: 2.5px solid currentColor;
+  border-bottom: 2.5px solid currentColor;
+  transform: translateY(2px);
+}
+
+.mac-icon-button--usage::after {
+  width: 3px;
+  height: 14px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow:
+    7px 4px 0 currentColor,
+    14px -3px 0 currentColor;
+  transform: translate(-6px, 2px);
+}
+
+.mac-icon-button--delete::before {
+  width: 17px;
+  height: 17px;
+  border-width: 2.5px;
+  border-top: 0;
+  transform: translateY(4px);
+}
+
+.mac-icon-button--delete::after {
+  width: 23px;
+  height: 2.5px;
+  transform: translateY(-8px);
+}
+
+.settings-panel,
+.timeline-card,
+.guide-callout,
+.guide-faq details,
+.mac-placeholder-card,
+.dialog-form,
+.toast {
+  background: rgba(255, 255, 255, 0.58);
+  -webkit-backdrop-filter: saturate(180%) blur(26px);
+  backdrop-filter: saturate(180%) blur(26px);
+}
+
+@media (max-width: 980px) {
+  .dashboard--macos {
+    padding: 24px 20px;
+  }
+
+  .profile-card.mac-account-card {
+    grid-template-columns: 16px 42px minmax(0, 1fr);
+    gap: 10px;
+  }
+}
+
+@media (max-width: 680px) {
+  .dashboard--macos {
+    padding: 20px 14px;
+  }
+
+  .mac-feature-tab {
+    min-width: 38px;
+    height: 36px;
+  }
+
+  .profile-card.mac-account-card {
+    padding: 18px;
+  }
+}
