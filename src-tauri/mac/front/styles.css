@@ -2537,3 +2537,60 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
     justify-self: start !important;
   }
 }
+
+/* Final placement pass: right-align header title cluster and card actions. */
+.mac-topbar {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center !important;
+  column-gap: 18px !important;
+}
+
+.mac-brand-cluster {
+  justify-self: end !important;
+}
+
+.mac-top-actions {
+  justify-self: end !important;
+  margin-left: 0 !important;
+}
+
+@media (min-width: 681px) {
+  .profile-card.mac-account-card,
+  .profile-card.mac-account-card.mac-account-card--expanded,
+  .profile-card.mac-account-card.mac-account-card--compact {
+    grid-template-columns: 18px 44px minmax(0, 1fr) max-content !important;
+  }
+
+  .profile-card.mac-account-card.mac-account-card--expanded {
+    grid-template-areas:
+      "grip mark main actions"
+      "grip mark summary actions"
+      "grip mark quota quota" !important;
+  }
+
+  .profile-card.mac-account-card.mac-account-card--compact {
+    grid-template-areas:
+      "grip mark main actions"
+      "grip mark summary actions" !important;
+  }
+
+  .profile-card-actions.mac-profile-actions {
+    grid-area: actions !important;
+    align-self: center !important;
+    justify-self: end !important;
+    justify-content: flex-end !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .mac-topbar {
+    grid-template-columns: 1fr;
+    row-gap: 14px;
+  }
+
+  .mac-brand-cluster,
+  .mac-top-actions {
+    justify-self: end !important;
+  }
+}
