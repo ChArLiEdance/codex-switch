@@ -465,6 +465,9 @@ export function renderThemeOptions(): void {
 }
 
 export function renderShellRoute(): void {
+  document.body.dataset.route = state.route;
+  document.body.classList.toggle("mac-detail-route", !isWindowsUiTarget && state.route !== "profiles");
+
   for (const page of elements.pages) {
     page.classList.toggle("active", page.dataset.page === state.route);
   }

@@ -14,10 +14,10 @@
       {
         "label": "main",
         "title": "Codex Switch",
-        "width": 980,
-        "height": 680,
-        "minWidth": 820,
-        "minHeight": 560,
+        "width": 1120,
+        "height": 720,
+        "minWidth": 1120,
+        "minHeight": 720,
         "resizable": true,
         "transparent": true,
         "decorations": false
