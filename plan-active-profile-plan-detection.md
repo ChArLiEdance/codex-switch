@@ -129,6 +129,6 @@ until the user clicks Refresh / Login / Switch.
 
 - `steipete/CodexBar` — uses the same `id_token.https://api.openai.com/auth.chatgpt_plan_type` source. Has an extra fallback: if missing, pulls top-level `chatgpt_plan_type` from the JWT payload. Does **not** consume `wham/usage.plan_type` for plan derivation.
 - `farion1231/cc-switch` — config-only switcher, no quota / plan logic.
-- `Cmochance/codex-app-transfer` — protocol-forwarding tool, not OAuth-account-aware.
+- A protocol-forwarding tool pattern exists, but it is not OAuth-account-aware.
 
 So **A1** (persist API plan_type) is the optimization industry peers haven't taken; **A2** (top-level fallback) is borrowing CodexBar's defensiveness.

@@ -320,10 +320,10 @@ async function invokeCommand<T>(command: string, args?: Record<string, unknown>)
       case "check_update":
         return Promise.resolve({
           ok: true,
-          current_version: "1.5.0",
-          latest_version: "1.5.0",
+          current_version: "1.0.0",
+          latest_version: "1.0.0",
           has_update: false,
-          release_url: "https://github.com/Cmochance/Codex_Account_Switch/releases",
+          release_url: "https://github.com/ChArLiEdance/codex-switch/releases",
           notes: null,
           checked_url: "preview",
         }) as Promise<T>;

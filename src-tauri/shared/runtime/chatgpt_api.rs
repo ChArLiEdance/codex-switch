@@ -5,8 +5,8 @@
 //! data after Codex makes a real request. The legacy "refresh" path forces
 //! that by running `codex exec ... "Reply with the single word OK."`, which
 //! costs the user a tiny slice of their quota and depends on a working CLI
-//! discovery pipeline. The Codex CLI itself, [Lampese/codex-switcher][1] and
-//! [steipete/CodexBar][2] all read live quota directly from the same private
+//! discovery pipeline. The Codex CLI itself and other public quota-fetch
+//! implementations read live quota directly from the same private
 //! ChatGPT backend endpoint:
 //!
 //!   GET https://chatgpt.com/backend-api/wham/usage
@@ -22,9 +22,6 @@
 //!
 //! API-key profiles are not supported here — they go through the existing
 //! per-profile flow. ChatGPT/OAuth profiles are.
-//!
-//! [1]: https://github.com/Lampese/codex-switcher/blob/main/src-tauri/src/api/usage.rs
-//! [2]: https://github.com/steipete/CodexBar/blob/main/Sources/CodexBarCore/OpenAIWeb/OpenAIDashboardFetcher.swift
 
 use std::path::Path;
 use std::time::Duration;

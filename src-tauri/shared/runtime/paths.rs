@@ -17,10 +17,10 @@ pub const LOGIN_RUNTIME_DIRNAME: &str = "login_runtime";
 pub const SWITCH_LOCK_FILENAME: &str = ".switch.lock";
 pub const WINDOWS_RUNTIME_DIRNAME: &str = "windows";
 pub const MACOS_RUNTIME_DIRNAME: &str = "macos";
-pub const CONTACT_URL: &str = "https://github.com/Cmochance/Codex_Account_Switch";
-pub const RELEASES_URL: &str = "https://github.com/Cmochance/Codex_Account_Switch/releases";
+pub const CONTACT_URL: &str = "https://github.com/ChArLiEdance/codex-switch";
+pub const RELEASES_URL: &str = "https://github.com/ChArLiEdance/codex-switch/releases";
 pub const UPDATE_CHECK_URL: &str =
-    "https://api.github.com/repos/Cmochance/Codex_Account_Switch/releases/latest";
+    "https://api.github.com/repos/ChArLiEdance/codex-switch/releases/latest";
 pub const XIAOHONGSHU_URL: &str = "https://www.xiaohongshu.com/explore/69df8fca000000002302203c";
 pub const DEFAULT_PAGE_SIZE: u32 = 8;
 
