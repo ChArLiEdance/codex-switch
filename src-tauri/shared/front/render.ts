@@ -295,6 +295,17 @@ export function planLine(planName: string | null, daysLeft: number | null): stri
   return t(state.locale, "subscriptionFallback", { days: daysLeft ?? "--" });
 }
 
+function planBadgeLabel(planName: string | null): string {
+  if (!planName) {
+    return state.locale === "zh-CN" ? "未知" : "Unknown";
+  }
+
+  return formatPlanName(planName)
+    .replace(/\s+plan$/i, "")
+    .replace(/\s+套餐$/i, "")
+    .trim();
+}
+
 /// Build a hover-time tooltip describing when the plan tier was last
 /// confirmed. `unknown_paid` plans get the prompt to re-login appended;
 /// stale plans (>36h since last confirmation) get a hint that the bulk
@@ -583,19 +594,15 @@ export function renderProfiles(
         const displayTitle = profileDisplayTitle(profile);
         const showQuotaPanel = profile.status === "current";
         const macCardMode = showQuotaPanel ? " mac-account-card--expanded" : " mac-account-card--compact";
-        const primaryActionLabel = profile.status === "current" ? t(state.locale, "loginButton") : t(state.locale, "switch");
+        const primaryActionLabel = profile.status === "current"
+          ? (state.locale === "zh-CN" ? "已登录" : "Signed in")
+          : t(state.locale, "switch");
         const primaryActionAttribute = profile.status === "current"
           ? `data-login-profile="${profile.folder_name}"`
           : `data-switch-profile="${profile.folder_name}"`;
-        const primaryActionDisabled = profile.status === "current" ? loginDisabled : switchDisabled;
+        const primaryActionDisabled = profile.status === "current" ? true : switchDisabled;
         const primaryActionTitle = profile.status === "current"
-          ? (
-              loginRunning
-                ? t(state.locale, "profileLoginCancelHint")
-                : loginDisabled
-                  ? t(state.locale, "profileLoginDisabled")
-                  : t(state.locale, "profileLoginReady")
-            )
+          ? (state.locale === "zh-CN" ? "当前账号已登录" : "Current account is signed in")
           : (
               switchDisabled
                 ? t(state.locale, "profileSwitchDisabled")
@@ -612,7 +619,7 @@ export function renderProfiles(
             <div class="mac-profile-main">
               <div class="mac-title-row">
                 <p class="profile-title-account">${escapeHtml(displayTitle)}</p>
-                <span class="mac-route-badge">${profile.openai_base_url ? "Base URL" : "Official"}</span>
+                <span class="mac-route-badge">${escapeHtml(planBadgeLabel(profile.plan_name))}</span>
               </div>
             </div>
 

@@ -2446,3 +2446,94 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login .cc-icon--prim
     justify-self: start;
   }
 }
+
+/* Keep settings with the brand; keep tool tabs and add button on the right. */
+.mac-topbar {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+}
+
+.mac-brand-cluster {
+  flex: 0 0 auto !important;
+}
+
+.mac-top-actions {
+  display: inline-flex !important;
+  flex: 0 0 auto !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  margin-left: auto !important;
+}
+
+.mac-feature-tabs {
+  flex: 0 0 auto !important;
+}
+
+/* Account controls sit to the right of the identity, above quota bars. */
+.profile-card.mac-account-card.mac-account-card--expanded {
+  grid-template-areas:
+    "grip mark main actions"
+    "grip mark summary actions"
+    "grip mark quota quota";
+}
+
+.profile-card.mac-account-card.mac-account-card--compact {
+  grid-template-areas:
+    "grip mark main actions"
+    "grip mark summary actions";
+}
+
+.profile-card-actions.mac-profile-actions {
+  align-self: center !important;
+  justify-self: end !important;
+  justify-content: flex-end !important;
+  flex-wrap: nowrap !important;
+  min-width: max-content;
+}
+
+.mac-account-card--expanded .mac-quota-summary {
+  justify-self: start;
+}
+
+.mac-account-card--compact .mac-quota-summary {
+  justify-self: start;
+}
+
+html[data-theme] .mac-profile-actions .mac-profile-primary--login,
+.mac-profile-actions .mac-profile-primary--login {
+  min-width: 104px !important;
+}
+
+html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
+.mac-profile-actions .mac-profile-primary--login:disabled {
+  background: #1683ff !important;
+  color: #ffffff !important;
+  cursor: default !important;
+}
+
+.mac-profile-primary--login .cc-icon--primary-action {
+  filter: none !important;
+}
+
+@media (max-width: 980px) {
+  .mac-topbar {
+    gap: 14px;
+  }
+
+  .profile-card.mac-account-card.mac-account-card--expanded,
+  .profile-card.mac-account-card.mac-account-card--compact {
+    grid-template-columns: 16px 40px minmax(0, 1fr);
+    grid-template-areas:
+      "grip mark main"
+      "grip mark summary"
+      "grip mark actions"
+      "grip mark quota";
+  }
+
+  .profile-card-actions.mac-profile-actions {
+    justify-self: start !important;
+  }
+}
