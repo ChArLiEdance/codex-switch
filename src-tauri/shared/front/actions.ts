@@ -5,6 +5,7 @@ import {
   getThemeOption,
   isThemeId,
   persistTheme,
+  resolveEffectiveTheme,
   resolveInitialTheme,
   type ThemeId,
 } from "@front-shared/theme";
@@ -81,6 +82,7 @@ function rerenderDashboard(): void {
     (profile) => {
       void handleLoginProfile(profile);
     },
+    handleToggleQuotaProfile,
   );
   renderCurrentCard(dashboard);
   renderPaging(dashboard.paging);
@@ -157,6 +159,7 @@ function setTheme(theme: ThemeId): void {
 
   state.theme = theme;
   applyTheme(theme);
+  document.documentElement.dataset.effectiveTheme = resolveEffectiveTheme(theme);
   persistTheme(theme);
   renderThemeOptions();
   showToast(t(state.locale, "themeChanged", { theme: t(state.locale, getThemeOption(theme).nameKey) }));
@@ -166,6 +169,22 @@ function setThemeFromValue(value: string | undefined): void {
   if (isThemeId(value)) {
     setTheme(value);
   }
+}
+
+function handleSystemThemeChange(): void {
+  if (state.theme === "system") {
+    applyTheme(state.theme);
+    document.documentElement.dataset.effectiveTheme = resolveEffectiveTheme(state.theme);
+  }
+}
+
+function handleToggleQuotaProfile(profile: string): void {
+  if (state.expandedQuotaProfiles.includes(profile)) {
+    state.expandedQuotaProfiles = state.expandedQuotaProfiles.filter((value) => value !== profile);
+  } else {
+    state.expandedQuotaProfiles = [...state.expandedQuotaProfiles, profile];
+  }
+  rerenderDashboard();
 }
 
 async function refreshCurrentQuota(showError = false): Promise<void> {
@@ -955,8 +974,12 @@ export function bootstrap(): void {
   state.theme = resolveInitialTheme();
   state.route = routeFromLocation();
   applyTheme(state.theme);
+  document.documentElement.dataset.effectiveTheme = resolveEffectiveTheme(state.theme);
   applyLocale();
   renderShellRoute();
+
+  const systemThemeMedia = globalThis.matchMedia?.("(prefers-color-scheme: dark)");
+  systemThemeMedia?.addEventListener("change", handleSystemThemeChange);
 
   window.addEventListener("hashchange", () => {
     state.route = routeFromLocation();

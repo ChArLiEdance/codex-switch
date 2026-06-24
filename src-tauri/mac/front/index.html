@@ -209,6 +209,9 @@
             <div class="settings-row">
               <strong data-i18n-key="settingsTheme">Theme</strong>
               <div class="theme-options theme-options--compact" role="group" aria-label="Theme">
+                <button class="theme-option theme-option--color theme-option--system" type="button" data-theme-option="system">
+                  <span class="theme-core-swatch" aria-hidden="true"></span>
+                </button>
                 <button class="theme-option theme-option--color" type="button" data-theme-option="classic">
                   <span class="theme-core-swatch" aria-hidden="true"></span>
                 </button>
@@ -226,6 +229,41 @@
                 </button>
               </div>
             </div>
+            <section class="settings-usage-panel" aria-labelledby="settings-usage-title">
+              <div class="settings-usage-header">
+                <div>
+                  <strong id="settings-usage-title" data-i18n-key="settingsUsageTitle">Usage Statistics</strong>
+                  <p data-i18n-key="settingsUsageSubtitle">Local profile quota overview, modeled after CC Switch usage settings.</p>
+                </div>
+                <span class="settings-usage-live-pill">Codex</span>
+              </div>
+              <div class="settings-usage-metrics">
+                <article>
+                  <span data-i18n-key="settingsUsageProfiles">Profiles</span>
+                  <strong id="settings-usage-profile-count">--</strong>
+                </article>
+                <article>
+                  <span data-i18n-key="settingsUsageReady">Ready</span>
+                  <strong id="settings-usage-ready-count">--</strong>
+                </article>
+                <article>
+                  <span data-i18n-key="settingsUsageFiveHour">Avg 5h</span>
+                  <strong id="settings-usage-five-hour">--</strong>
+                </article>
+                <article>
+                  <span data-i18n-key="settingsUsageWeekly">Avg weekly</span>
+                  <strong id="settings-usage-weekly">--</strong>
+                </article>
+              </div>
+              <div class="settings-usage-table" aria-label="Usage rows">
+                <div class="settings-usage-row settings-usage-row--head">
+                  <span data-i18n-key="settingsUsageProfile">Profile</span>
+                  <strong data-i18n-key="fiveHourAllowance">5h allowance</strong>
+                  <strong data-i18n-key="weeklyAllowance">Weekly allowance</strong>
+                </div>
+                <div id="settings-usage-rows"></div>
+              </div>
+            </section>
             <label class="settings-row settings-row--field">
               <strong data-i18n-key="settingsUpdateUrl">Update URL</strong>
               <input id="settings-update-url-input" class="settings-input" type="url" value="https://api.github.com/repos/ChArLiEdance/codex-switch/releases/latest" />

@@ -8,6 +8,7 @@ export const state = {
   refreshActiveProfiles: [] as string[],
   loginActiveProfile: null as string | null,
   currentProfile: null as string | null,
+  expandedQuotaProfiles: [] as string[],
   route: "dashboard" as ShellRoute,
   locale: "en" as Locale,
   theme: "classic" as ThemeId,

@@ -1,6 +1,6 @@
 import type { MessageKey } from "@front-shared/i18n";
 
-export type ThemeId = "classic" | "mica" | "pine" | "sea-salt" | "jade-night";
+export type ThemeId = "classic" | "mica" | "pine" | "sea-salt" | "jade-night" | "system";
 
 export interface ThemeOption {
   id: ThemeId;
@@ -12,6 +12,11 @@ const STORAGE_KEY = "codex-switch-theme";
 const DEFAULT_THEME: ThemeId = "classic";
 
 export const themeOptions: readonly ThemeOption[] = [
+  {
+    id: "system",
+    nameKey: "themeSystemName",
+    descriptionKey: "themeSystemDescription",
+  },
   {
     id: "classic",
     nameKey: "themeClassicName",
@@ -56,6 +61,16 @@ export function persistTheme(theme: ThemeId): void {
   globalThis.localStorage?.setItem(STORAGE_KEY, theme);
 }
 
+export function resolveEffectiveTheme(theme: ThemeId): Exclude<ThemeId, "system"> {
+  if (theme !== "system") {
+    return theme;
+  }
+
+  const prefersDark = globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+  return prefersDark ? "jade-night" : "classic";
+}
+
 export function applyTheme(theme: ThemeId): void {
-  document.documentElement.dataset.theme = theme;
+  document.documentElement.dataset.themeChoice = theme;
+  document.documentElement.dataset.theme = resolveEffectiveTheme(theme);
 }

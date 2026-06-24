@@ -67,6 +67,11 @@ export const elements = {
   settingsCheckUpdateButton: requiredElement<HTMLButtonElement>("settings-check-update-button"),
   settingsUpdateUrlInput: requiredElement<HTMLInputElement>("settings-update-url-input"),
   settingsVersionValue: requiredElement<HTMLSpanElement>("settings-version-value"),
+  settingsUsageProfileCount: document.getElementById("settings-usage-profile-count"),
+  settingsUsageReadyCount: document.getElementById("settings-usage-ready-count"),
+  settingsUsageFiveHour: document.getElementById("settings-usage-five-hour"),
+  settingsUsageWeekly: document.getElementById("settings-usage-weekly"),
+  settingsUsageRows: document.getElementById("settings-usage-rows"),
   updateDialog: requiredElement<HTMLDialogElement>("update-dialog"),
   updateDialogCopy: requiredElement<HTMLParagraphElement>("update-dialog-copy"),
   updateDialogLaterButton: requiredElement<HTMLButtonElement>("update-dialog-later-button"),
@@ -161,6 +166,15 @@ export const elements = {
 
 function formatPercent(value: number | null): string {
   return value == null ? "--" : `${value}%`;
+}
+
+function averagePercent(values: Array<number | null | undefined>): string {
+  const numeric = values.filter((value): value is number => typeof value === "number");
+  if (!numeric.length) {
+    return "--";
+  }
+  const average = numeric.reduce((sum, value) => sum + value, 0) / numeric.length;
+  return `${Math.round(average)}%`;
 }
 
 function formatRefresh(entry: QuotaWindow | undefined): string {
@@ -485,6 +499,7 @@ export function renderShellOverview(dashboard: DashboardViewModel | null): void 
     elements.dashboardProfileCount.textContent = "--";
     elements.dashboardReadyCount.textContent = "--";
     elements.dashboardMissingCount.textContent = "--";
+    renderSettingsUsageStats([]);
     return;
   }
 
@@ -500,6 +515,44 @@ export function renderShellOverview(dashboard: DashboardViewModel | null): void 
   elements.dashboardProfileCount.textContent = String(profiles.length);
   elements.dashboardReadyCount.textContent = String(readyCount);
   elements.dashboardMissingCount.textContent = String(Math.max(0, missingCount));
+  renderSettingsUsageStats(profiles);
+}
+
+function renderSettingsUsageStats(profiles: ProfileCard[]): void {
+  if (
+    !elements.settingsUsageProfileCount ||
+    !elements.settingsUsageReadyCount ||
+    !elements.settingsUsageFiveHour ||
+    !elements.settingsUsageWeekly ||
+    !elements.settingsUsageRows
+  ) {
+    return;
+  }
+
+  const readyCount = profiles.filter((profile) => (
+    profile.auth_present && profile.has_account_identity && profile.status !== "missing_auth"
+  )).length;
+
+  elements.settingsUsageProfileCount.textContent = String(profiles.length);
+  elements.settingsUsageReadyCount.textContent = String(readyCount);
+  elements.settingsUsageFiveHour.textContent = averagePercent(
+    profiles.map((profile) => profile.quota?.five_hour?.remaining_percent),
+  );
+  elements.settingsUsageWeekly.textContent = averagePercent(
+    profiles.map((profile) => profile.quota?.weekly?.remaining_percent),
+  );
+
+  elements.settingsUsageRows.innerHTML = profiles.length
+    ? profiles
+        .map((profile) => `
+          <div class="settings-usage-row">
+            <span>${escapeHtml(profileDisplayTitle(profile))}</span>
+            <strong>${escapeHtml(formatPercent(profile.quota?.five_hour?.remaining_percent ?? null))}</strong>
+            <strong>${escapeHtml(formatPercent(profile.quota?.weekly?.remaining_percent ?? null))}</strong>
+          </div>
+        `)
+        .join("")
+    : `<div class="settings-usage-empty">${escapeHtml(t(state.locale, "settingsUsageEmpty"))}</div>`;
 }
 
 export function renderCurrentCard(dashboard: DashboardViewModel): void {
@@ -548,6 +601,7 @@ export function renderProfiles(
   onRefresh: (profile: string) => void,
   onBaseUrl: (profile: string) => void,
   onLogin: (profile: string) => void,
+  onToggleQuota: (profile: string) => void,
 ): void {
   if (!dashboard.profiles.length) {
     elements.profilesGrid.innerHTML =
@@ -571,6 +625,7 @@ export function renderProfiles(
       const refreshDisabled =
         !profile.auth_present || state.loading || cardBusy || loginPending;
       const baseDisabled = state.loading || cardBusy;
+      const quotaToggleDisabled = state.loading || cardBusy;
       const switchDisabled =
         !profile.auth_present || state.loading || cardBusy || loginPending || profile.status === "current";
 
@@ -595,7 +650,7 @@ export function renderProfiles(
 
       if (!isWindowsUiTarget) {
         const displayTitle = profileDisplayTitle(profile);
-        const showQuotaPanel = profile.status === "current";
+        const showQuotaPanel = state.expandedQuotaProfiles.includes(profile.folder_name);
         const macCardMode = showQuotaPanel ? " mac-account-card--expanded" : " mac-account-card--compact";
         const primaryActionLabel = profile.status === "current"
           ? (state.locale === "zh-CN" ? "已登录" : "Signed in")
@@ -692,22 +747,15 @@ export function renderProfiles(
                 }
               </button>
               <button
-                class="${
-                  profile.openai_base_url
-                    ? "profile-action-button mac-icon-button mac-icon-button--usage profile-action-button-danger"
-                    : "profile-action-button mac-icon-button mac-icon-button--usage"
-                }"
+                class="profile-action-button mac-icon-button mac-icon-button--usage${showQuotaPanel ? " is-active" : ""}"
                 type="button"
-                title="${
-                  profile.openai_base_url
-                    ? t(state.locale, "profileBaseConfigured")
-                    : t(state.locale, "profileBaseReady")
-                }"
-                data-base-url-profile="${profile.folder_name}"
-                ${baseDisabled ? "disabled" : ""}
+                title="${showQuotaPanel ? t(state.locale, "profileQuotaCollapse") : t(state.locale, "profileQuotaExpand")}"
+                aria-pressed="${showQuotaPanel ? "true" : "false"}"
+                data-toggle-quota-profile="${profile.folder_name}"
+                ${quotaToggleDisabled ? "disabled" : ""}
               >
                 ${macIcon("chart-column", "cc-icon cc-icon--action")}
-                <span class="mac-action-label">${t(state.locale, "baseButton")}</span>
+                <span class="mac-action-label">${showQuotaPanel ? t(state.locale, "collapse") : t(state.locale, "usageButton")}</span>
               </button>
               ${
                 hasDeleteProfileUi
@@ -835,6 +883,7 @@ export function renderProfiles(
   bindProfileButtons("data-rename-profile", onRename);
   bindProfileButtons("data-refresh-profile", onRefresh);
   bindProfileButtons("data-login-profile", onLogin);
+  bindProfileButtons("data-toggle-quota-profile", onToggleQuota);
   bindProfileButtons("data-base-url-profile", onBaseUrl);
   bindProfileButtons("data-switch-profile", onSwitch);
 }
