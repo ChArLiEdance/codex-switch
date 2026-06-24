@@ -1,34 +1,34 @@
 # Codex Switch
 
 <p align="center">
-  <a href="README.md">简体中文</a> |
-  <a href="README.en.md">English</a> |
+  <a href="README.zh-CN.md">简体中文</a> |
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 <p align="center">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-4b5563">
+  <a href="https://github.com/ChArLiEdance/codex-switch/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/ChArLiEdance/codex-switch?style=social"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/ChArLiEdance/codex-switch"></a>
   <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-orange?logo=rust">
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white">
 </p>
 
-**Codex Switch** 是一个面向 OpenAI Codex 本地登录状态的桌面账号切换工具。当前版本已经整体迁移到 `codex-account-switch` 风格的 Tauri 实现：界面、前端结构、后端 runtime、账号卡片、登录、切换、额度读取和发布脚本都以该实现为基础，后续会在这个版本上继续做个性化修改。
+**Codex Switch** is a local desktop app for managing OpenAI Codex login profiles. This version has been migrated to the `codex-account-switch` style Tauri implementation, including its UI structure, runtime layout, account cards, login flow, switching flow, quota reading, and build scripts.
 
-项目目标很直接：在一台电脑上管理多个已经通过官方流程登录的 Codex 账号，查看当前账号、套餐、5 小时额度、周额度和历史用量，并在本地安全切换 `~/.codex` 状态。
+The goal is simple: manage multiple Codex accounts on one machine, view the current account, plan, 5-hour quota, weekly quota, and usage context, then safely switch the local `~/.codex` state.
 
-> 本项目不是 OpenAI 官方项目。它只管理本机已授权的 Codex 登录状态，不收集密码，不绕过 MFA，不抓取浏览器 Cookie，不提供共享账号能力。
+> This is not an official OpenAI project. It only manages local, already-authorized Codex login state. It does not collect passwords, bypass MFA, scrape browser cookies, or provide account sharing.
 
-## 当前状态
+## Current Status
 
-- 已迁移到 `codex-account-switch` 的前后端结构。
-- macOS 原生 Tauri 桌面端可构建、可运行。
-- 支持账号卡片、登录、切换、删除、重命名、刷新额度、Base URL 标记等核心交互。
-- 支持读取 plan / quota 信息，并在账号卡片上展示 5 小时额度和周额度。
-- 支持中英文界面文本，后续可以继续按你的产品语言重写。
-- GitHub Actions 已包含 macOS arm64、macOS x64、Windows x64、Linux x86_64 构建矩阵。
+- Migrated to the `codex-account-switch` frontend and backend structure.
+- macOS native Tauri app builds and runs locally.
+- Supports account cards, login, switching, deletion, renaming, quota refresh, and Base URL indicators.
+- Reads plan and quota metadata and displays 5-hour and weekly remaining quota on account cards.
+- Includes an English default README and a Simplified Chinese README.
+- GitHub Actions includes build jobs for macOS arm64, macOS x64, Windows x64, and Linux x86_64.
 
-当前本机验证过：
+Verified locally:
 
 ```bash
 npm run build
@@ -36,24 +36,24 @@ npm run test:rust
 npm run tauri:build:macos-app
 ```
 
-本机 `.app` 输出路径：
+Local app output:
 
 ```text
 dist/codex_switch.app
 ```
 
-## 功能
+## Features
 
-- **当前账号展示**：显示当前 Codex 账号对应的 Profile、套餐状态、额度窗口和刷新状态。
-- **多账号管理**：每个账号对应一个本地 Profile，可以添加、登录、切换、重命名、删除。
-- **额度查看**：读取 ChatGPT / Codex 账号元数据，展示 5 小时额度和周额度剩余比例。
-- **账号切换**：切换时将目标 Profile 的登录状态恢复到当前 `~/.codex`，并保留本地账号目录。
-- **登录流程**：通过官方 `codex login` / OAuth 流程完成授权，不在应用内收集密码。
-- **路径检测**：检测 Codex CLI 路径，必要时可在设置中手动指定。
-- **本地缓存**：缓存账号元数据和额度快照，减少重复请求。
-- **跨平台结构**：macOS、Windows runtime 分离，共享业务逻辑放在 `src-tauri/shared/`。
+- **Current account view**: show the active Codex profile, plan state, quota windows, and refresh state.
+- **Multiple account management**: add, log in, switch, rename, and delete local Profiles.
+- **Quota view**: read ChatGPT / Codex account metadata and display 5-hour and weekly quota percentages.
+- **Account switching**: restore a target Profile into the active `~/.codex` state while keeping local account directories.
+- **Official login flow**: use `codex login` / OAuth; the app does not collect passwords.
+- **CLI path detection**: detect the Codex CLI path and allow manual override in Settings.
+- **Local cache**: cache account metadata and quota snapshots to reduce repeated requests.
+- **Cross-platform structure**: macOS and Windows runtimes are separated, with shared logic under `src-tauri/shared/`.
 
-## 快速开始
+## Quick Start
 
 ```bash
 git clone https://github.com/ChArLiEdance/codex-switch.git
@@ -62,24 +62,24 @@ npm install
 npm run tauri:dev
 ```
 
-本机打包一个未签名的 macOS `.app`：
+Build an unsigned macOS app for local testing:
 
 ```bash
 npm run tauri:build:macos-app
 open -n dist/codex_switch.app
 ```
 
-## 使用方式
+## Usage
 
-1. 先确认本机已经安装 Codex CLI。
-2. 打开 Codex Switch。
-3. 在设置页确认 Codex CLI 路径可用。
-4. 在账号页添加一个账号 Profile。
-5. 点击该账号的登录按钮，按官方浏览器流程完成登录。
-6. 登录成功后刷新账号信息，查看套餐和额度。
-7. 添加第二个账号后，即可在账号卡片之间切换。
+1. Make sure Codex CLI is installed.
+2. Open Codex Switch.
+3. Check the Codex CLI path in Settings.
+4. Add an account Profile on the Accounts page.
+5. Click Login and finish the official browser login flow.
+6. Refresh account information to view plan and quota.
+7. Add another account and switch between account cards.
 
-账号数据默认围绕本机 Codex 目录工作：
+Local account state is centered around:
 
 ```text
 ~/.codex/
@@ -87,68 +87,66 @@ open -n dist/codex_switch.app
 ~/.codex-switch/
 ```
 
-## 仓库结构
+## Repository Layout
 
 ```text
 codex_switch/
   src-tauri/
-    mac/              macOS 前端壳与 runtime
-    win/              Windows 前端壳与 runtime
-    shared/           共享前端、Tauri command、业务 runtime
-    src/              Tauri 入口
-    capabilities/     Tauri 权限配置
-    icons/            应用图标
-  scripts/            版本同步、macOS 产物整理、pkg 生成脚本
-  macOS-backup/       旧 shell 切换流程的备份脚本
-  examples/           示例账号目录结构
-  .github/workflows/  CI 与多平台构建
+    mac/              macOS frontend shell and runtime
+    win/              Windows frontend shell and runtime
+    shared/           shared frontend, Tauri commands, and runtime logic
+    src/              Tauri entrypoint
+    capabilities/     Tauri capability config
+    icons/            app icons
+  scripts/            version sync, macOS artifact layout, pkg scripts
+  macOS-backup/       backup shell workflow
+  examples/           example account directory structure
+  .github/workflows/  CI build workflow
 ```
 
-## 开发命令
+## Development
 
 ```bash
-npm install                         # 安装前端/Tauri CLI 依赖
+npm install                         # install frontend and Tauri CLI dependencies
 npm run build                       # TypeScript + Vite production build
-npm run test:rust                   # Rust 单元测试
-npm run tauri:dev                   # 本地桌面开发模式
-npm run tauri:build:macos-app       # 本机生成未签名 macOS app
+npm run test:rust                   # Rust unit tests
+npm run tauri:dev                   # desktop development mode
+npm run tauri:build:macos-app       # unsigned macOS app for local testing
 ```
 
-Windows / Linux 构建主要交给 GitHub Actions：
+Windows / Linux builds are mainly handled by GitHub Actions:
 
 ```bash
 npm run tauri:build:windows
 npm run tauri:build:linux
 ```
 
-## 本机测试版
-
-如果只是自己测试：
+## Local Test Build
 
 ```bash
 npm run tauri:build:macos-app
 open -n dist/codex_switch.app
 ```
 
-该产物没有正式签名，macOS 首次打开可能需要在「系统设置 -> 隐私与安全」中允许。
+The local app is unsigned. On first launch, macOS may require allowing it from System Settings -> Privacy & Security.
 
-## 隐私与安全
+## Privacy And Safety
 
-- 不收集 OpenAI 密码。
-- 不自动化网页登录。
-- 不绕过 MFA。
-- 不抓取浏览器 Cookie。
-- 不把 token、API key、密码、Cookie 写入 Git。
-- 账号登录状态只用于本机 Profile 切换和额度查询。
+- Does not collect OpenAI passwords.
+- Does not automate web login.
+- Does not bypass MFA.
+- Does not scrape browser cookies.
+- Does not write tokens, API keys, passwords, or cookies to Git.
+- Login state is used only for local Profile switching and quota lookup.
 
-## 技术栈
+## Stack
 
 - Rust + Tauri 2
 - TypeScript + Vite
-- 原生 HTML/CSS 前端结构
-- ChatGPT / Codex account metadata 读取
-- GitHub Actions 多平台构建
+- Native HTML/CSS frontend structure
+- ChatGPT / Codex account metadata lookup
+- GitHub Actions multi-platform builds
 
 ## License
 
-MIT License。完整文本见 [LICENSE](LICENSE)。
+MIT License. See [LICENSE](LICENSE).
