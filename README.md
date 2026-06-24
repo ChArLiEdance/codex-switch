@@ -2,16 +2,15 @@
 
 <p align="center">
   <a href="README.md">简体中文</a> |
-  <a href="CHANGELOG.md">Changelog</a> |
-  <a href="https://github.com/ChArLiEdance/codex-switch/releases">Releases</a>
+  <a href="README.en.md">English</a> |
+  <a href="CHANGELOG.md">Changelog</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/ChArLiEdance/codex-switch/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/ChArLiEdance/codex-switch?style=social"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/ChArLiEdance/codex-switch"></a>
-  <a href="https://www.rust-lang.org/"><img alt="Rust" src="https://img.shields.io/badge/Rust-stable-orange?logo=rust"></a>
-  <a href="https://v2.tauri.app/"><img alt="Tauri" src="https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri"></a>
-  <a href="https://github.com/ChArLiEdance/codex-switch/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/ChArLiEdance/codex-switch/total?label=downloads"></a>
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-4b5563">
+  <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-orange?logo=rust">
+  <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white">
 </p>
 
 **Codex Switch** 是一个面向 OpenAI Codex 本地登录状态的桌面账号切换工具。当前版本已经整体迁移到 `codex-account-switch` 风格的 Tauri 实现：界面、前端结构、后端 runtime、账号卡片、登录、切换、额度读取和发布脚本都以该实现为基础，后续会在这个版本上继续做个性化修改。
@@ -27,7 +26,7 @@
 - 支持账号卡片、登录、切换、删除、重命名、刷新额度、Base URL 标记等核心交互。
 - 支持读取 plan / quota 信息，并在账号卡片上展示 5 小时额度和周额度。
 - 支持中英文界面文本，后续可以继续按你的产品语言重写。
-- Release workflow 已包含 macOS arm64、macOS x64、Windows x64、Linux x86_64 构建矩阵。
+- GitHub Actions 已包含 macOS arm64、macOS x64、Windows x64、Linux x86_64 构建矩阵。
 
 当前本机验证过：
 
@@ -102,7 +101,7 @@ codex_switch/
   scripts/            版本同步、macOS 产物整理、pkg 生成脚本
   macOS-backup/       旧 shell 切换流程的备份脚本
   examples/           示例账号目录结构
-  .github/workflows/  CI 与 Release 构建
+  .github/workflows/  CI 与多平台构建
 ```
 
 ## 开发命令
@@ -122,76 +121,9 @@ npm run tauri:build:windows
 npm run tauri:build:linux
 ```
 
-## 如何发布 Release
+## 本机测试版
 
-Release 版本号来源是 `package.json`。推荐流程如下。
-
-### 1. 修改版本号
-
-例如发布 `1.5.12`：
-
-```bash
-npm run version:set -- 1.5.12
-```
-
-这个命令会同步：
-
-```text
-package.json
-package-lock.json
-src-tauri/Cargo.toml
-src-tauri/Cargo.lock
-```
-
-### 2. 本地验证
-
-```bash
-npm run build
-npm run test:rust
-npm run tauri:build:macos-app
-```
-
-本地手测：
-
-```bash
-open -n dist/codex_switch.app
-```
-
-### 3. 提交版本变更
-
-```bash
-git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock README.md
-git commit -m "release 1.5.12"
-git push
-```
-
-### 4. 打 tag 并推送
-
-```bash
-git tag v1.5.12
-git push origin v1.5.12
-```
-
-推送 tag 后，`.github/workflows/build.yml` 会自动构建：
-
-```text
-macOS Apple Silicon  -> dmg + pkg
-macOS Intel          -> dmg + pkg
-Windows x64          -> exe
-Linux x86_64         -> deb + AppImage
-```
-
-构建完成后，GitHub 会创建一个 **Draft Release**。进入 GitHub Releases 页面检查产物、编辑说明，然后手动 Publish。
-
-Release 页面：
-
-```text
-https://github.com/ChArLiEdance/codex-switch/releases
-```
-
-### 5. 只做本机测试版
-
-如果只是自己测试，不需要 GitHub Release：
+如果只是自己测试：
 
 ```bash
 npm run tauri:build:macos-app
@@ -199,20 +131,6 @@ open -n dist/codex_switch.app
 ```
 
 该产物没有正式签名，macOS 首次打开可能需要在「系统设置 -> 隐私与安全」中允许。
-
-## 产物命名
-
-Release workflow 会上传类似这些文件：
-
-```text
-codex_switch_<版本>_aarch64.dmg
-codex_switch_<版本>_aarch64.pkg
-codex_switch_<版本>_x64.dmg
-codex_switch_<版本>_x64.pkg
-codex_switch_<版本>_x64-setup.exe
-codex_switch_<版本>_amd64.deb
-codex_switch_<版本>_amd64.AppImage
-```
 
 ## 隐私与安全
 
