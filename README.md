@@ -7,8 +7,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ChArLiEdance/codex-switch/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/ChArLiEdance/codex-switch?style=social"></a>
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/ChArLiEdance/codex-switch"></a>
+  <a href="https://github.com/ChArLiEdance/codex-switch/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/ChArLiEdance/codex-switch?style=flat&amp;logo=github"></a>
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/dynamic/json?color=blue&amp;label=license&amp;query=$.license.spdx_id&amp;url=https%3A%2F%2Fapi.github.com%2Frepos%2FChArLiEdance%2Fcodex-switch"></a>
+  <a href="https://github.com/ChArLiEdance/codex-switch/releases"><img alt="Downloads" src="https://img.shields.io/github/downloads/ChArLiEdance/codex-switch/total?cacheSeconds=60"></a>
   <img alt="Rust" src="https://img.shields.io/badge/Rust-stable-orange?logo=rust">
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2.x-24C8DB?logo=tauri">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white">
