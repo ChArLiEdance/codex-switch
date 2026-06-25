@@ -1458,7 +1458,7 @@ export function bootstrap(): void {
   systemThemeMedia?.addEventListener("change", handleSystemThemeChange);
   activateSettingsTab("general");
 
-  window.addEventListener("hashchange", () => {
+  const syncRouteFromLocation = () => {
     state.route = routeFromLocation();
     renderShellRoute();
     if (state.route === "history") {
@@ -1472,7 +1472,23 @@ export function bootstrap(): void {
         }
       }
     }
-  });
+  };
+
+  window.addEventListener("hashchange", syncRouteFromLocation);
+  for (const tab of elements.routeTabs) {
+    tab.addEventListener("click", (event) => {
+      const route = tab.dataset.routeTab;
+      if (!route) {
+        return;
+      }
+      event.preventDefault();
+      if (window.location.hash === `#${route}`) {
+        syncRouteFromLocation();
+      } else {
+        window.location.hash = route;
+      }
+    });
+  }
 
   elements.previousPageButton.addEventListener("click", () => {
     state.page -= 1;

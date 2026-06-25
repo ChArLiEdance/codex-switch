@@ -4856,3 +4856,182 @@ html[data-theme="jade-night"] .mac-detail-route .settings-panel.settings-panel--
     color 160ms ease-out,
     box-shadow 160ms ease-out !important;
 }
+
+/* Hairline surface pass: visual card edges are elevation shadows, not heavy borders. */
+.dashboard--macos {
+  --cc-hairline-surface:
+    0 0 0 1px rgb(15 23 42 / 0.065),
+    0 1px 2px rgb(15 23 42 / 0.07),
+    0 10px 28px rgb(15 23 42 / 0.075);
+  --cc-hairline-surface-strong:
+    inset 0 1px 0 rgb(255 255 255 / 0.68),
+    0 0 0 1px rgb(15 23 42 / 0.07),
+    0 1px 2px rgb(15 23 42 / 0.07),
+    0 14px 34px rgb(15 23 42 / 0.08);
+  --cc-hairline-compact:
+    0 0 0 1px rgb(15 23 42 / 0.075),
+    0 1px 2px rgb(15 23 42 / 0.07),
+    0 5px 14px rgb(15 23 42 / 0.06);
+  --cc-hairline-blue:
+    inset 0 1px 0 rgb(255 255 255 / 0.7),
+    0 0 0 1px rgb(22 131 255 / 0.28),
+    0 1px 2px rgb(22 131 255 / 0.1),
+    0 14px 34px rgb(29 93 165 / 0.11);
+}
+
+.mac-brand-cluster {
+  position: relative !important;
+  z-index: 3 !important;
+}
+
+.mac-settings-button {
+  pointer-events: auto !important;
+}
+
+.mac-top-actions {
+  z-index: 2 !important;
+  pointer-events: none !important;
+}
+
+.mac-feature-tabs,
+.mac-add-button {
+  pointer-events: auto !important;
+}
+
+.cc-icon,
+.cc-icon--codex-desktop {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -webkit-user-drag: none !important;
+}
+
+.mac-feature-tab--account.active {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.mac-feature-tab .cc-icon--codex-desktop,
+html[data-theme="jade-night"] .mac-feature-tab .cc-icon--codex-desktop {
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+.mac-feature-tabs,
+.mac-provider-mark,
+.mac-account-card .profile-quota-stack,
+.settings-tab-strip,
+.settings-section-card,
+.usage-hero-panel,
+.usage-mini-metrics article,
+.usage-metric-grid article,
+.usage-cache-rate,
+.usage-chart-panel,
+.usage-session-panel,
+.usage-session-table,
+.history-panel,
+.history-summary-grid article,
+.history-session-table,
+.session-sidebar,
+.session-detail,
+.session-message-card,
+.mac-placeholder-card,
+.timeline-card,
+.dialog-form {
+  border: 0 !important;
+  box-shadow: var(--cc-hairline-surface) !important;
+}
+
+.profile-card.mac-account-card,
+.profile-card.mac-account-card.mac-account-card--compact,
+.profile-card.mac-account-card.mac-account-card--expanded {
+  border: 0 !important;
+  box-shadow: var(--cc-hairline-blue) !important;
+}
+
+.mac-add-button,
+.session-action-button--primary,
+.mac-profile-actions .mac-profile-primary {
+  border: 0 !important;
+  box-shadow:
+    0 0 0 1px rgb(22 131 255 / 0.16),
+    0 1px 2px rgb(22 131 255 / 0.14),
+    0 12px 26px rgb(22 131 255 / 0.2) !important;
+}
+
+.settings-action-button,
+.session-action-button,
+.session-toolbar-button,
+.profile-action-button:not(.mac-profile-primary),
+.ghost-button,
+.primary-button {
+  box-shadow: var(--cc-hairline-compact) !important;
+}
+
+.mac-profile-actions .profile-action-button:not(.mac-profile-primary) {
+  border: 0 !important;
+  background-color: transparent !important;
+}
+
+.mac-icon-button--usage.is-active,
+.session-list-item.is-active,
+.theme-option.is-active,
+.locale-pill.is-active,
+.settings-tab-button.is-active {
+  box-shadow:
+    0 0 0 1px rgb(22 131 255 / 0.22),
+    0 1px 2px rgb(22 131 255 / 0.11),
+    0 10px 24px rgb(22 131 255 / 0.16) !important;
+}
+
+html[data-theme="jade-night"] .dashboard--macos {
+  --cc-hairline-surface:
+    0 0 0 1px rgb(255 255 255 / 0.08),
+    0 1px 2px rgb(0 0 0 / 0.28),
+    0 14px 34px rgb(0 0 0 / 0.28);
+  --cc-hairline-surface-strong:
+    inset 0 1px 0 rgb(255 255 255 / 0.055),
+    0 0 0 1px rgb(255 255 255 / 0.085),
+    0 1px 2px rgb(0 0 0 / 0.3),
+    0 16px 38px rgb(0 0 0 / 0.34);
+  --cc-hairline-compact:
+    0 0 0 1px rgb(255 255 255 / 0.08),
+    0 1px 2px rgb(0 0 0 / 0.26),
+    0 6px 16px rgb(0 0 0 / 0.22);
+  --cc-hairline-blue:
+    inset 0 1px 0 rgb(255 255 255 / 0.055),
+    0 0 0 1px rgb(69 126 255 / 0.48),
+    0 1px 2px rgb(0 0 0 / 0.3),
+    0 16px 38px rgb(0 0 0 / 0.32);
+}
+
+html[data-theme="jade-night"] .mac-feature-tabs,
+html[data-theme="jade-night"] .mac-provider-mark,
+html[data-theme="jade-night"] .mac-account-card .profile-quota-stack,
+html[data-theme="jade-night"] .settings-tab-strip,
+html[data-theme="jade-night"] .settings-section-card,
+html[data-theme="jade-night"] .usage-hero-panel,
+html[data-theme="jade-night"] .usage-mini-metrics article,
+html[data-theme="jade-night"] .usage-metric-grid article,
+html[data-theme="jade-night"] .usage-cache-rate,
+html[data-theme="jade-night"] .usage-chart-panel,
+html[data-theme="jade-night"] .usage-session-panel,
+html[data-theme="jade-night"] .usage-session-table,
+html[data-theme="jade-night"] .history-panel,
+html[data-theme="jade-night"] .history-summary-grid article,
+html[data-theme="jade-night"] .history-session-table,
+html[data-theme="jade-night"] .session-sidebar,
+html[data-theme="jade-night"] .session-detail,
+html[data-theme="jade-night"] .session-message-card,
+html[data-theme="jade-night"] .mac-placeholder-card,
+html[data-theme="jade-night"] .timeline-card,
+html[data-theme="jade-night"] .dialog-form {
+  border: 0 !important;
+  box-shadow: var(--cc-hairline-surface) !important;
+}
+
+html[data-theme="jade-night"] .profile-card.mac-account-card,
+html[data-theme="jade-night"] .profile-card.mac-account-card.mac-account-card--compact,
+html[data-theme="jade-night"] .profile-card.mac-account-card.mac-account-card--expanded {
+  border: 0 !important;
+  box-shadow: var(--cc-hairline-blue) !important;
+}
