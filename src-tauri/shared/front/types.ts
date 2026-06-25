@@ -129,6 +129,10 @@ export interface UsageStatsPayload {
   end_at: number | null;
 }
 
+export type UsageStatsRangePreset = "today" | "1d" | "7d" | "14d" | "30d" | "custom";
+
+export type UsageStatsRefreshSeconds = 0 | 5 | 10 | 30 | 60;
+
 export interface UsageTotals {
   request_count: number;
   input_tokens: number;

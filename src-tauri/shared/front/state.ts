@@ -5,11 +5,20 @@ import type {
   QuotaSummary,
   ShellRoute,
   UsageQuerySettings,
+  UsageStatsRangePreset,
+  UsageStatsRefreshSeconds,
   UsageStatsResponse,
 } from "@front-shared/types";
 import type { Locale } from "@front-shared/i18n";
 import type { ThemeId } from "@front-shared/theme";
-import { resolveInitialShowAccountDetail } from "@front-shared/preferences";
+import {
+  resolveInitialShowAccountDetail,
+  resolveInitialUsageStatsCustomRange,
+  resolveInitialUsageStatsRange,
+  resolveInitialUsageStatsRefreshSeconds,
+} from "@front-shared/preferences";
+
+const initialUsageStatsCustomRange = resolveInitialUsageStatsCustomRange();
 
 export const state = {
   page: 1,
@@ -28,7 +37,10 @@ export const state = {
   currentQuota: null as QuotaSummary | null,
   usageStats: null as UsageStatsResponse | null,
   usageStatsProfile: null as string | null,
-  usageStatsRange: "today" as "today" | "7d" | "30d",
+  usageStatsRange: resolveInitialUsageStatsRange() as UsageStatsRangePreset,
+  usageStatsCustomStartAt: initialUsageStatsCustomRange.startAt as number | null,
+  usageStatsCustomEndAt: initialUsageStatsCustomRange.endAt as number | null,
+  usageStatsRefreshSeconds: resolveInitialUsageStatsRefreshSeconds() as UsageStatsRefreshSeconds,
   historyStats: null as UsageStatsResponse | null,
   historyStatsProfile: null as string | null,
   historyStatsRange: "today" as "today" | "7d" | "30d",

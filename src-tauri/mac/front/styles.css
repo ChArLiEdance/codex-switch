@@ -3002,6 +3002,37 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   min-width: 128px;
 }
 
+.usage-refresh-select {
+  min-width: 104px;
+}
+
+.usage-custom-range-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr)) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(220, 226, 234, 0.72);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.usage-custom-range-panel[hidden] {
+  display: none !important;
+}
+
+.usage-custom-range-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.usage-custom-range-field span {
+  color: #6f7786;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
 .usage-hero-panel {
   display: flex;
   align-items: center;
@@ -3200,12 +3231,14 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
 }
 
 .usage-trend-chart:hover .usage-point,
-.usage-point-group:focus .usage-point {
+.usage-point-group:focus .usage-point,
+.usage-point-group.is-active .usage-point {
   opacity: 1;
 }
 
 .usage-point-group:hover .usage-point,
-.usage-point-group:focus .usage-point {
+.usage-point-group:focus .usage-point,
+.usage-point-group.is-active .usage-point {
   r: 6;
   filter: drop-shadow(0 3px 8px rgba(168, 85, 247, 0.28));
 }
@@ -3243,7 +3276,9 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
 .usage-point-group:hover .usage-hover-line,
 .usage-point-group:hover .usage-hover-tooltip,
 .usage-point-group:focus .usage-hover-line,
-.usage-point-group:focus .usage-hover-tooltip {
+.usage-point-group:focus .usage-hover-tooltip,
+.usage-point-group.is-active .usage-hover-line,
+.usage-point-group.is-active .usage-hover-tooltip {
   opacity: 1;
 }
 
@@ -4090,7 +4125,8 @@ html[data-theme="jade-night"] .usage-chart-panel,
 html[data-theme="jade-night"] .usage-session-panel,
 html[data-theme="jade-night"] .usage-session-table,
 html[data-theme="jade-night"] .usage-config-enable-row,
-html[data-theme="jade-night"] .usage-config-preset {
+html[data-theme="jade-night"] .usage-config-preset,
+html[data-theme="jade-night"] .usage-custom-range-panel {
   border-color: rgba(255, 255, 255, 0.12) !important;
   background: rgba(32, 34, 39, 0.68) !important;
 }
@@ -4113,6 +4149,7 @@ html[data-theme="jade-night"] .usage-mini-metrics span,
 html[data-theme="jade-night"] .usage-metric-grid span,
 html[data-theme="jade-night"] .usage-cache-rate-head span,
 html[data-theme="jade-night"] .usage-chart-head span,
+html[data-theme="jade-night"] .usage-custom-range-field span,
 html[data-theme="jade-night"] .usage-session-row,
 html[data-theme="jade-night"] .usage-axis-label {
   color: #c4cad5 !important;

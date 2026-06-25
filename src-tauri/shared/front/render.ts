@@ -10,6 +10,8 @@ import type {
   ShellRoute,
   UpdateCheckResponse,
   UsageStatsResponse,
+  UsageStatsRangePreset,
+  UsageStatsRefreshSeconds,
 } from "@front-shared/types";
 import { t, type MessageKey } from "@front-shared/i18n";
 import { state } from "@front-shared/state";
@@ -77,7 +79,12 @@ export const elements = {
   settingsUsageSaveButton: document.getElementById("settings-usage-save-button") as HTMLButtonElement | null,
   usageProfileFilter: document.getElementById("usage-profile-filter") as HTMLSelectElement | null,
   usageRangeFilter: document.getElementById("usage-range-filter") as HTMLSelectElement | null,
+  usageRefreshIntervalFilter: document.getElementById("usage-refresh-interval-filter") as HTMLSelectElement | null,
   usageRefreshButton: document.getElementById("usage-refresh-button") as HTMLButtonElement | null,
+  usageCustomRangePanel: document.getElementById("usage-custom-range-panel") as HTMLDivElement | null,
+  usageCustomStartInput: document.getElementById("usage-custom-start-input") as HTMLInputElement | null,
+  usageCustomEndInput: document.getElementById("usage-custom-end-input") as HTMLInputElement | null,
+  usageCustomApplyButton: document.getElementById("usage-custom-apply-button") as HTMLButtonElement | null,
   usageRealTotal: document.getElementById("usage-real-total"),
   usageRealTotalCompact: document.getElementById("usage-real-total-compact"),
   usageRequestCount: document.getElementById("usage-request-count"),
@@ -607,6 +614,16 @@ function formatMoney(value: number): string {
   return `$${value.toFixed(4)}`;
 }
 
+function formatDateOnly(seconds: number): string {
+  if (!seconds) {
+    return "--";
+  }
+  return new Date(seconds * 1000).toLocaleDateString(state.locale === "zh-CN" ? "zh-CN" : "en-US", {
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
 function formatDateTime(seconds: number): string {
   if (!seconds) {
     return "--";
@@ -617,6 +634,19 @@ function formatDateTime(seconds: number): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatTrendAxisLabel(seconds: number, showDateOnly: boolean): string {
+  return showDateOnly ? formatDateOnly(seconds) : formatDateTime(seconds);
+}
+
+function toDateTimeLocalValue(seconds: number | null): string {
+  if (!seconds) {
+    return "";
+  }
+  const date = new Date(seconds * 1000);
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
 }
 
 function formatSessionDateTime(seconds: number | null): string {
@@ -680,11 +710,30 @@ function renderStatsFilters(options: {
   stats: UsageStatsResponse | null;
   profileSelect: HTMLSelectElement | null;
   rangeSelect: HTMLSelectElement | null;
+  refreshSelect?: HTMLSelectElement | null;
+  customPanel?: HTMLElement | null;
+  customStartInput?: HTMLInputElement | null;
+  customEndInput?: HTMLInputElement | null;
   selectedProfile: string | null;
-  selectedRange: "today" | "7d" | "30d";
+  selectedRange: UsageStatsRangePreset;
+  selectedRefreshSeconds?: UsageStatsRefreshSeconds;
+  customStartAt?: number | null;
+  customEndAt?: number | null;
 }): void {
   if (options.rangeSelect) {
     options.rangeSelect.value = options.selectedRange;
+  }
+  if (options.refreshSelect && options.selectedRefreshSeconds !== undefined) {
+    options.refreshSelect.value = String(options.selectedRefreshSeconds);
+  }
+  if (options.customPanel) {
+    options.customPanel.hidden = options.selectedRange !== "custom";
+  }
+  if (options.customStartInput) {
+    options.customStartInput.value = toDateTimeLocalValue(options.customStartAt ?? null);
+  }
+  if (options.customEndInput) {
+    options.customEndInput.value = toDateTimeLocalValue(options.customEndAt ?? null);
   }
   const select = options.profileSelect;
   if (!select || !options.stats) {
@@ -703,8 +752,15 @@ function renderUsageFilters(stats: UsageStatsResponse | null): void {
     stats,
     profileSelect: elements.usageProfileFilter,
     rangeSelect: elements.usageRangeFilter,
+    refreshSelect: elements.usageRefreshIntervalFilter,
+    customPanel: elements.usageCustomRangePanel,
+    customStartInput: elements.usageCustomStartInput,
+    customEndInput: elements.usageCustomEndInput,
     selectedProfile: state.usageStatsProfile,
     selectedRange: state.usageStatsRange,
+    selectedRefreshSeconds: state.usageStatsRefreshSeconds,
+    customStartAt: state.usageStatsCustomStartAt,
+    customEndAt: state.usageStatsCustomEndAt,
   });
 }
 
@@ -749,6 +805,7 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
   const costPath = stats.trends.map((point, index) => `${index === 0 ? "M" : "L"}${x(index).toFixed(1)} ${yCost(point.total_cost_usd).toFixed(1)}`).join(" ");
   const areaPath = `${tokenPath} L${x(stats.trends.length - 1).toFixed(1)} ${height - pad.bottom} L${pad.left} ${height - pad.bottom} Z`;
   const ticks = stats.trends.filter((_, index) => index === 0 || index === stats.trends.length - 1 || index % Math.ceil(stats.trends.length / 4) === 0);
+  const showDateOnly = stats.end_at - stats.start_at > 24 * 60 * 60;
   const points = stats.trends.map((point, index) => {
     const pointX = x(index);
     const pointY = yToken(point.real_total_tokens);
@@ -769,7 +826,7 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
       [usageLineColor("cost"), t(state.locale, "usageCost"), formatMoney(point.total_cost_usd)],
     ];
     return `
-      <g class="usage-point-group" tabindex="0">
+      <g class="usage-point-group" data-usage-index="${index}" tabindex="0">
         <rect x="${hitStart.toFixed(1)}" y="${pad.top}" width="${hitWidth.toFixed(1)}" height="${height - pad.top - pad.bottom}" class="usage-hover-hitbox" />
         <line x1="${pointX.toFixed(1)}" y1="${pad.top}" x2="${pointX.toFixed(1)}" y2="${height - pad.bottom}" class="usage-hover-line" />
         <circle cx="${pointX.toFixed(1)}" cy="${pointY.toFixed(1)}" r="5" class="usage-point usage-point--cache" />
@@ -802,7 +859,7 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
       <path d="${inputPath}" class="usage-line usage-line--input" />
       <path d="${outputPath}" class="usage-line usage-line--output" />
       ${points}
-      ${ticks.map((point, index) => `<text x="${x(stats.trends.indexOf(point))}" y="${height - 12}" class="usage-axis-label" text-anchor="${index === 0 ? "start" : "middle"}">${escapeHtml(formatDateTime(point.timestamp))}</text>`).join("")}
+      ${ticks.map((point, index) => `<text x="${x(stats.trends.indexOf(point))}" y="${height - 12}" class="usage-axis-label" text-anchor="${index === 0 ? "start" : "middle"}">${escapeHtml(formatTrendAxisLabel(point.timestamp, showDateOnly))}</text>`).join("")}
       <text x="${pad.left}" y="${pad.top + 8}" class="usage-axis-label">tokens</text>
       <text x="${width - pad.right}" y="${pad.top + 8}" class="usage-axis-label" text-anchor="end">$</text>
     </svg>
@@ -813,6 +870,38 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
       <span class="legend-output">${escapeHtml(t(state.locale, "usageOutput"))}</span>
     </div>
   `;
+
+  const svg = container.querySelector<SVGSVGElement>("svg");
+  const groups = Array.from(container.querySelectorAll<SVGGElement>(".usage-point-group"));
+  const setActivePoint = (activeIndex: number | null) => {
+    for (const group of groups) {
+      group.classList.toggle("is-active", group.dataset.usageIndex === String(activeIndex));
+    }
+  };
+  const nearestIndexForClientX = (clientX: number): number => {
+    if (!svg) {
+      return stats.trends.length - 1;
+    }
+    const rect = svg.getBoundingClientRect();
+    const relativeX = ((clientX - rect.left) / Math.max(1, rect.width)) * width;
+    let nearestIndex = 0;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+    stats.trends.forEach((_, index) => {
+      const distance = Math.abs(relativeX - x(index));
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    });
+    return nearestIndex;
+  };
+  setActivePoint(stats.trends.length - 1);
+  svg?.addEventListener("pointermove", (event) => {
+    setActivePoint(nearestIndexForClientX(event.clientX));
+  });
+  svg?.addEventListener("pointerleave", () => {
+    setActivePoint(stats.trends.length - 1);
+  });
 }
 
 export function renderUsageStats(): void {

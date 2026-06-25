@@ -9,7 +9,14 @@ import {
   resolveInitialTheme,
   type ThemeId,
 } from "@front-shared/theme";
-import { persistShowAccountDetail } from "@front-shared/preferences";
+import {
+  isUsageStatsRangePreset,
+  normalizeUsageStatsRefreshSeconds,
+  persistShowAccountDetail,
+  persistUsageStatsCustomRange,
+  persistUsageStatsRange,
+  persistUsageStatsRefreshSeconds,
+} from "@front-shared/preferences";
 import {
   applyCurrentQuota,
   applySnapshot,
@@ -54,6 +61,7 @@ import type {
   CodexCliStatus,
   ProfileCard,
   UsageQuerySettings,
+  UsageStatsRangePreset,
 } from "@front-shared/types";
 import {
   applyLocale,
@@ -126,19 +134,55 @@ function defaultUsageSettings(): UsageQuerySettings {
   };
 }
 
-function usageRangeBounds(range: "today" | "7d" | "30d"): { start_at: number; end_at: number } {
-  const now = new Date();
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
-  if (range === "7d") {
-    start.setDate(start.getDate() - 6);
-  } else if (range === "30d") {
-    start.setDate(start.getDate() - 29);
+const DAY_SECONDS = 24 * 60 * 60;
+const DAY_MS = DAY_SECONDS * 1000;
+
+function startOfLocalDaySeconds(nowMs: number): number {
+  const date = new Date(nowMs);
+  return Math.floor(new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() / 1000);
+}
+
+function usageRangeBounds(range: UsageStatsRangePreset): { start_at: number; end_at: number } {
+  const nowMs = Date.now();
+  const endAt = Math.floor(nowMs / 1000);
+  if (range === "custom") {
+    const startAt = state.usageStatsCustomStartAt ?? endAt - DAY_SECONDS;
+    const customEndAt = state.usageStatsCustomEndAt ?? endAt;
+    return {
+      start_at: Math.min(startAt, customEndAt),
+      end_at: Math.max(startAt, customEndAt),
+    };
   }
+  if (range === "1d") {
+    return {
+      start_at: endAt - DAY_SECONDS,
+      end_at: endAt,
+    };
+  }
+  const presetDays = range === "7d" ? 7 : range === "14d" ? 14 : range === "30d" ? 30 : 1;
+  const startAt = startOfLocalDaySeconds(nowMs - (presetDays - 1) * DAY_MS);
   return {
-    start_at: Math.floor(start.getTime() / 1000),
-    end_at: Math.floor(now.getTime() / 1000),
+    start_at: startAt,
+    end_at: endAt,
   };
+}
+
+function parseDateTimeLocalSeconds(value: string): number | null {
+  if (!value) {
+    return null;
+  }
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+}
+
+function ensureCustomUsageRangeDefaults(): void {
+  if (state.usageStatsCustomStartAt && state.usageStatsCustomEndAt) {
+    return;
+  }
+  const nowMs = Date.now();
+  state.usageStatsCustomStartAt = startOfLocalDaySeconds(nowMs);
+  state.usageStatsCustomEndAt = Math.floor(nowMs / 1000);
+  persistUsageStatsCustomRange(state.usageStatsCustomStartAt, state.usageStatsCustomEndAt);
 }
 
 async function ensureUsageSettings(profile: string): Promise<UsageQuerySettings> {
@@ -365,7 +409,7 @@ async function saveSettingsUsageProfile(): Promise<void> {
   }
 }
 
-function openUsageConfigDialog(profile: string): void {
+async function openUsageConfigDialog(profile: string): Promise<void> {
   if (
     !elements.usageConfigDialog ||
     !elements.usageConfigForm ||
@@ -377,7 +421,12 @@ function openUsageConfigDialog(profile: string): void {
     return;
   }
   usageConfigSourceProfile = profile;
-  const settings = state.usageSettingsByProfile[profile] ?? defaultUsageSettings();
+  let settings = state.usageSettingsByProfile[profile] ?? defaultUsageSettings();
+  try {
+    settings = await ensureUsageSettings(profile);
+  } catch {
+    settings = state.usageSettingsByProfile[profile] ?? defaultUsageSettings();
+  }
   clearDialogError(elements.usageConfigDialogError);
   elements.usageConfigForm.reset();
   elements.usageConfigEnabledToggle.checked = settings.enabled;
@@ -399,6 +448,16 @@ function closeUsageConfigDialog(): void {
 
 function scheduleUsageStatsRefresh(): void {
   window.setInterval(() => {
+    const panelSeconds = state.usageStatsRefreshSeconds;
+    if (panelSeconds > 0 && routeFromLocation() === "settings") {
+      const now = Date.now();
+      const lastPanelRun = Number(document.body.dataset.usageStatsPanelLastRun ?? "0");
+      if (now - lastPanelRun >= panelSeconds * 1000) {
+        document.body.dataset.usageStatsPanelLastRun = String(now);
+        void refreshUsageStats(false);
+      }
+    }
+
     const intervals = Object.values(state.usageSettingsByProfile)
       .filter((settings) => settings.enabled && settings.auto_query_interval_minutes > 0)
       .map((settings) => settings.auto_query_interval_minutes);
@@ -415,7 +474,7 @@ function scheduleUsageStatsRefresh(): void {
     document.body.dataset.usageStatsLastRun = String(now);
     void refreshUsageStats(false);
     void refreshHistoryStats(false);
-  }, 60_000);
+  }, 1_000);
 }
 
 async function handleSubmitUsageConfig(event: SubmitEvent): Promise<void> {
@@ -538,7 +597,7 @@ async function handleToggleQuotaProfile(profile: string): Promise<void> {
   }
 
   if (!settings.enabled && !state.expandedQuotaProfiles.includes(profile)) {
-    openUsageConfigDialog(profile);
+    void openUsageConfigDialog(profile);
     return;
   }
 
@@ -1531,10 +1590,35 @@ export function bootstrap(): void {
   });
   elements.usageRangeFilter?.addEventListener("change", () => {
     const value = elements.usageRangeFilter?.value;
-    if (value === "today" || value === "7d" || value === "30d") {
+    if (isUsageStatsRangePreset(value)) {
       state.usageStatsRange = value;
+      if (value === "custom") {
+        ensureCustomUsageRangeDefaults();
+      }
+      persistUsageStatsRange(value);
+      rerenderDashboard();
       void refreshUsageStats(true);
     }
+  });
+  elements.usageRefreshIntervalFilter?.addEventListener("change", () => {
+    state.usageStatsRefreshSeconds = normalizeUsageStatsRefreshSeconds(elements.usageRefreshIntervalFilter?.value);
+    persistUsageStatsRefreshSeconds(state.usageStatsRefreshSeconds);
+    document.body.dataset.usageStatsPanelLastRun = "0";
+    rerenderDashboard();
+  });
+  elements.usageCustomApplyButton?.addEventListener("click", () => {
+    const startAt = parseDateTimeLocalSeconds(elements.usageCustomStartInput?.value ?? "");
+    const endAt = parseDateTimeLocalSeconds(elements.usageCustomEndInput?.value ?? "");
+    if (!startAt || !endAt || startAt >= endAt) {
+      showToast(t(state.locale, "usageCustomInvalid"), true);
+      return;
+    }
+    state.usageStatsRange = "custom";
+    state.usageStatsCustomStartAt = startAt;
+    state.usageStatsCustomEndAt = endAt;
+    persistUsageStatsRange("custom");
+    persistUsageStatsCustomRange(startAt, endAt);
+    void refreshUsageStats(true);
   });
   elements.usageRefreshButton?.addEventListener("click", () => {
     void refreshUsageStats(true);
