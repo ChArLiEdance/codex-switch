@@ -4,6 +4,8 @@ import type {
   ActionResponse,
   CodexCliRedetectResult,
   CodexCliStatus,
+  CodexSessionMessage,
+  CodexSessionMeta,
   CommandError,
   CurrentCard,
   CurrentQuotaResponse,
@@ -166,6 +168,49 @@ function mockAction(message: string, path: string | null = null): Promise<Action
 
 const previewUsageSettings = new Map<string, UsageQuerySettings>();
 
+const previewCodexSessions: CodexSessionMeta[] = [
+  {
+    session_id: "019ef3ca-10c4-7973-a7b8-bfd082573ca4",
+    title: "<codex_internal_context source=\"goal\"> Continue working on Codex Switch",
+    summary: "Refine the desktop app session manager and account switching UI.",
+    project_dir: "/Users/charlie/Documents/CharlieCode/codex_switch",
+    created_at: Math.floor(Date.now() / 1000) - 240,
+    last_active_at: Math.floor(Date.now() / 1000) - 42,
+    source_path: "/preview/sessions/019ef3ca-10c4-7973-a7b8-bfd082573ca4.jsonl",
+    resume_command: "codex resume 019ef3ca-10c4-7973-a7b8-bfd082573ca4",
+    profile: "workspace-alpha",
+  },
+  {
+    session_id: "01-preview-usage-stats",
+    title: "Use CCSwitch layout for session history",
+    summary: "Build a split session list and detail reader with local Codex JSONL data.",
+    project_dir: "/Users/charlie/Documents/CharlieCode",
+    created_at: Math.floor(Date.now() / 1000) - 14_400,
+    last_active_at: Math.floor(Date.now() / 1000) - 13_800,
+    source_path: "/preview/sessions/01-preview-usage-stats.jsonl",
+    resume_command: "codex resume 01-preview-usage-stats",
+    profile: "workspace-beta",
+  },
+];
+
+const previewCodexMessages: CodexSessionMessage[] = [
+  {
+    role: "developer",
+    content: "<permissions instructions>\nFilesystem sandboxing defines which files can be read or written.\nNetwork access is enabled.",
+    ts: Math.floor(Date.now() / 1000) - 220,
+  },
+  {
+    role: "user",
+    content: "会话记录参考ccswitch做成这个样子的",
+    ts: Math.floor(Date.now() / 1000) - 180,
+  },
+  {
+    role: "assistant",
+    content: "我会把会话记录做成左侧列表、右侧详情，并从本地 Codex 会话 JSONL 中读取记录。",
+    ts: Math.floor(Date.now() / 1000) - 120,
+  },
+];
+
 function defaultUsageSettings(): UsageQuerySettings {
   return {
     enabled: false,
@@ -288,6 +333,10 @@ async function invokeCommand<T>(command: string, args?: Record<string, unknown>)
         return 0 as T;
       case "get_usage_stats":
         return makePreviewUsageStats(args?.payload as UsageStatsPayload | undefined) as T;
+      case "list_codex_sessions":
+        return clone(previewCodexSessions) as T;
+      case "get_codex_session_messages":
+        return clone(previewCodexMessages) as T;
       case "get_usage_query_settings": {
         const profile = (args?.profile as string | undefined) ?? "";
         return clone(previewUsageSettings.get(profile) ?? defaultUsageSettings()) as T;
@@ -486,6 +535,16 @@ export function refreshAllOauthProfilePlansSilent(): Promise<number> {
 
 export function getUsageStats(payload: UsageStatsPayload): Promise<UsageStatsResponse> {
   return invokeCommand<UsageStatsResponse>("get_usage_stats", { payload });
+}
+
+export function listCodexSessions(): Promise<CodexSessionMeta[]> {
+  return invokeCommand<CodexSessionMeta[]>("list_codex_sessions");
+}
+
+export function getCodexSessionMessages(sourcePath: string): Promise<CodexSessionMessage[]> {
+  return invokeCommand<CodexSessionMessage[]>("get_codex_session_messages", {
+    sourcePath,
+  });
 }
 
 export function getUsageQuerySettings(profile: string): Promise<UsageQuerySettings> {

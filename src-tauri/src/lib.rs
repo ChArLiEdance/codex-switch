@@ -42,6 +42,8 @@ pub fn run() {
             commands::dashboard::get_usage_stats,
             commands::dashboard::get_usage_query_settings,
             commands::dashboard::save_usage_query_settings,
+            commands::dashboard::list_codex_sessions,
+            commands::dashboard::get_codex_session_messages,
             commands::dashboard::refresh_active_profile_quota_silent,
             commands::dashboard::refresh_all_oauth_profile_plans_silent,
             commands::actions::open_codex,

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -7,8 +8,9 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::models::{
-    QuotaSummary, QuotaWindow, UsageProfileOption, UsageQuerySettings, UsageSessionRow,
-    UsageStatsPayload, UsageStatsResponse, UsageTotals, UsageTrendPoint,
+    CodexSessionMessage, CodexSessionMeta, QuotaSummary, QuotaWindow, UsageProfileOption,
+    UsageQuerySettings, UsageSessionRow, UsageStatsPayload, UsageStatsResponse, UsageTotals,
+    UsageTrendPoint,
 };
 
 use super::paths::get_codex_home;
@@ -17,6 +19,10 @@ use super::quota_routing::{slot_from_window_minutes, QuotaSlot};
 use super::session_files::{collect_jsonl_files, file_modified_ms};
 
 const USAGE_SETTINGS_FILENAME: &str = "usage_settings.json";
+const TITLE_MAX_CHARS: usize = 80;
+const SUMMARY_MAX_CHARS: usize = 160;
+const VSCODE_CONTEXT_PREFIX: &str = "# Context from my IDE setup:";
+const CODEX_REQUEST_MARKER: &str = "my request for codex";
 
 #[derive(Clone, Debug)]
 pub struct LocalQuotaSnapshot {
@@ -310,6 +316,133 @@ fn parse_session_timestamp(value: &Value, fallback: i64) -> i64 {
         .unwrap_or(fallback)
 }
 
+fn parse_timestamp_value_to_seconds(value: &Value) -> Option<i64> {
+    if let Some(value) = value.as_i64() {
+        return Some(if value > 1_000_000_000_000 {
+            value / 1000
+        } else {
+            value
+        });
+    }
+    value
+        .as_str()
+        .and_then(|raw| DateTime::parse_from_rfc3339(raw).ok())
+        .map(|datetime| datetime.timestamp())
+}
+
+fn extract_text(value: &Value) -> String {
+    match value {
+        Value::String(text) => text.to_string(),
+        Value::Array(items) => items
+            .iter()
+            .map(extract_text)
+            .filter(|text| !text.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n"),
+        Value::Object(map) => map
+            .get("text")
+            .or_else(|| map.get("input_text"))
+            .or_else(|| map.get("output_text"))
+            .or_else(|| map.get("content"))
+            .map(extract_text)
+            .unwrap_or_default(),
+        _ => String::new(),
+    }
+}
+
+fn truncate_summary(text: &str, max_chars: usize) -> String {
+    let trimmed = text.trim();
+    if trimmed.chars().count() <= max_chars {
+        return trimmed.to_string();
+    }
+    let mut value = trimmed.chars().take(max_chars).collect::<String>();
+    value.push_str("...");
+    value
+}
+
+fn path_basename(value: &str) -> Option<String> {
+    let trimmed = value.trim().trim_end_matches(['/', '\\']);
+    trimmed
+        .split(['/', '\\'])
+        .next_back()
+        .filter(|segment| !segment.is_empty())
+        .map(str::to_string)
+}
+
+fn codex_request_heading_payload(line: &str) -> Option<&str> {
+    let trimmed = line.trim();
+    if !trimmed.starts_with('#') {
+        return None;
+    }
+    let heading = trimmed.trim_start_matches('#').trim_start();
+    let lowered = heading.to_ascii_lowercase();
+    if !lowered.starts_with(CODEX_REQUEST_MARKER) {
+        return None;
+    }
+    let suffix = heading[CODEX_REQUEST_MARKER.len()..].trim_start();
+    if suffix.is_empty() {
+        return Some("");
+    }
+    let separator = suffix.chars().next()?;
+    if !matches!(separator, ':' | '：' | '-' | '—') {
+        return None;
+    }
+    Some(
+        suffix
+            .trim_start_matches(|c: char| c.is_whitespace() || matches!(c, ':' | '：' | '-' | '—'))
+            .trim(),
+    )
+}
+
+fn extract_codex_prompt_from_ide_context(text: &str) -> Option<String> {
+    let normalized = text.replace("\r\n", "\n");
+    let lines = normalized.lines().collect::<Vec<_>>();
+    let mut prompt: Option<String> = None;
+    for (index, line) in lines.iter().enumerate() {
+        let Some(inline_prompt) = codex_request_heading_payload(line) else {
+            continue;
+        };
+        if !inline_prompt.is_empty() {
+            prompt = Some(inline_prompt.to_string());
+            continue;
+        }
+        let following_prompt = lines[index + 1..].join("\n").trim().to_string();
+        prompt = (!following_prompt.is_empty()).then_some(following_prompt);
+    }
+    prompt
+}
+
+fn title_candidate_from_user_message(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty()
+        || trimmed.starts_with("# AGENTS.md")
+        || trimmed.starts_with("<environment_context>")
+    {
+        return None;
+    }
+    if trimmed.starts_with(VSCODE_CONTEXT_PREFIX) {
+        return extract_codex_prompt_from_ide_context(trimmed);
+    }
+    Some(trimmed.to_string())
+}
+
+fn infer_session_id_from_filename(path: &Path) -> Option<String> {
+    let file_name = path.file_name()?.to_string_lossy();
+    let stem = file_name.trim_end_matches(".jsonl");
+    stem.rsplit('-')
+        .next()
+        .filter(|value| value.len() >= 8)
+        .map(str::to_string)
+        .or_else(|| path.file_stem()?.to_str().map(str::to_string))
+}
+
+fn is_subagent_source(source: Option<&Value>) -> bool {
+    source
+        .and_then(Value::as_object)
+        .map(|source| source.contains_key("subagent"))
+        .unwrap_or(false)
+}
+
 fn normalize_model_name(raw: &str) -> String {
     let mut name = raw.trim().to_lowercase();
     if let Some((_, tail)) = name.rsplit_once('/') {
@@ -522,6 +655,247 @@ fn collect_usage_files_for_profile(
     files.sort();
     files.dedup();
     files
+}
+
+fn parse_session_meta(path: &Path, profile: Option<&str>) -> Option<CodexSessionMeta> {
+    let raw = fs::read_to_string(path).ok()?;
+    let lines = raw.lines().collect::<Vec<_>>();
+    let mut session_id: Option<String> = None;
+    let mut project_dir: Option<String> = None;
+    let mut created_at: Option<i64> = None;
+    let mut last_active_at: Option<i64> = None;
+    let mut first_user_message: Option<String> = None;
+    let mut summary: Option<String> = None;
+
+    for line in lines.iter().take(80) {
+        let Ok(value) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        if created_at.is_none() {
+            created_at = value
+                .get("timestamp")
+                .and_then(parse_timestamp_value_to_seconds);
+        }
+        if value.get("type").and_then(Value::as_str) == Some("session_meta") {
+            if let Some(payload) = value.get("payload") {
+                if is_subagent_source(payload.get("source")) {
+                    return None;
+                }
+                session_id = session_id.or_else(|| {
+                    payload
+                        .get("session_id")
+                        .or_else(|| payload.get("id"))
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                });
+                project_dir = project_dir.or_else(|| {
+                    payload
+                        .get("cwd")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                });
+                created_at = created_at.or_else(|| {
+                    payload
+                        .get("timestamp")
+                        .and_then(parse_timestamp_value_to_seconds)
+                });
+            }
+        }
+        if first_user_message.is_none()
+            && value.get("type").and_then(Value::as_str) == Some("response_item")
+        {
+            if let Some(payload) = value.get("payload") {
+                if payload.get("type").and_then(Value::as_str) == Some("message")
+                    && payload.get("role").and_then(Value::as_str) == Some("user")
+                {
+                    let text = payload.get("content").map(extract_text).unwrap_or_default();
+                    first_user_message = title_candidate_from_user_message(&text);
+                }
+            }
+        }
+    }
+
+    for line in lines.iter().rev().take(80) {
+        let Ok(value) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        if last_active_at.is_none() {
+            last_active_at = value
+                .get("timestamp")
+                .and_then(parse_timestamp_value_to_seconds);
+        }
+        if summary.is_none() && value.get("type").and_then(Value::as_str) == Some("response_item") {
+            if let Some(payload) = value.get("payload") {
+                if payload.get("type").and_then(Value::as_str) == Some("message") {
+                    let text = payload.get("content").map(extract_text).unwrap_or_default();
+                    if !text.trim().is_empty() {
+                        summary = Some(text);
+                    }
+                }
+            }
+        }
+        if last_active_at.is_some() && summary.is_some() {
+            break;
+        }
+    }
+
+    let session_id = session_id.or_else(|| infer_session_id_from_filename(path))?;
+    let title = first_user_message
+        .map(|title| truncate_summary(&title, TITLE_MAX_CHARS))
+        .or_else(|| {
+            project_dir
+                .as_deref()
+                .and_then(path_basename)
+                .map(|value| value.to_string())
+        });
+    let summary = summary.map(|value| truncate_summary(&value, SUMMARY_MAX_CHARS));
+    Some(CodexSessionMeta {
+        session_id: session_id.clone(),
+        title,
+        summary,
+        project_dir,
+        created_at,
+        last_active_at,
+        source_path: path.to_string_lossy().to_string(),
+        resume_command: format!("codex resume {session_id}"),
+        profile: profile.map(str::to_string),
+    })
+}
+
+pub fn list_codex_sessions(
+    codex_home: Option<&Path>,
+) -> crate::errors::AppResult<Vec<CodexSessionMeta>> {
+    let codex_home = codex_home
+        .map(Path::to_path_buf)
+        .unwrap_or_else(get_codex_home);
+    let index = super::profiles_index::load_profiles_index(Some(&codex_home))?;
+    let backup_root = super::paths::get_backup_root(Some(&codex_home));
+    let mut files: Vec<(PathBuf, Option<String>)> = Vec::new();
+    let mut live_files = Vec::new();
+    collect_jsonl_files(&codex_home.join("sessions"), &mut live_files);
+    collect_jsonl_files(&codex_home.join("archived_sessions"), &mut live_files);
+    files.extend(live_files.into_iter().map(|path| (path, None)));
+
+    for profile in &index.profiles {
+        let mut profile_files = Vec::new();
+        collect_jsonl_files(
+            &backup_root.join(&profile.folder_name).join("sessions"),
+            &mut profile_files,
+        );
+        files.extend(
+            profile_files
+                .into_iter()
+                .map(|path| (path, Some(profile.folder_name.clone()))),
+        );
+    }
+
+    let mut seen = HashSet::new();
+    let mut sessions = Vec::new();
+    for (path, profile) in files {
+        let key = path.to_string_lossy().to_string();
+        if !seen.insert(key) {
+            continue;
+        }
+        if let Some(meta) = parse_session_meta(&path, profile.as_deref()) {
+            sessions.push(meta);
+        }
+    }
+    sessions.sort_by(|left, right| {
+        let left_ts = left.last_active_at.or(left.created_at).unwrap_or(0);
+        let right_ts = right.last_active_at.or(right.created_at).unwrap_or(0);
+        right_ts.cmp(&left_ts)
+    });
+    sessions.truncate(300);
+    Ok(sessions)
+}
+
+fn session_path_allowed(path: &Path, codex_home: &Path) -> bool {
+    let Ok(canonical_path) = path.canonicalize() else {
+        return false;
+    };
+    let candidates = [
+        codex_home.join("sessions"),
+        codex_home.join("archived_sessions"),
+        super::paths::get_backup_root(Some(codex_home)),
+    ];
+    candidates.iter().any(|root| {
+        root.canonicalize()
+            .map(|canonical_root| canonical_path.starts_with(canonical_root))
+            .unwrap_or(false)
+    })
+}
+
+pub fn load_codex_session_messages(
+    source_path: &str,
+    codex_home: Option<&Path>,
+) -> crate::errors::AppResult<Vec<CodexSessionMessage>> {
+    let codex_home = codex_home
+        .map(Path::to_path_buf)
+        .unwrap_or_else(get_codex_home);
+    let path = PathBuf::from(source_path);
+    if !session_path_allowed(&path, &codex_home) {
+        return Err(crate::errors::AppError::new(
+            "SESSION_PATH_NOT_ALLOWED",
+            "Session path is outside managed Codex session directories.",
+        ));
+    }
+    let raw = fs::read_to_string(&path).map_err(|error| {
+        crate::errors::AppError::new(
+            "SESSION_READ_FAILED",
+            format!("Failed to read session file: {error}"),
+        )
+    })?;
+    let mut messages = Vec::new();
+    for line in raw.lines() {
+        let Ok(value) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        if value.get("type").and_then(Value::as_str) != Some("response_item") {
+            continue;
+        }
+        let Some(payload) = value.get("payload") else {
+            continue;
+        };
+        let payload_type = payload.get("type").and_then(Value::as_str).unwrap_or("");
+        let (role, content) = match payload_type {
+            "message" => {
+                let role = payload
+                    .get("role")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown")
+                    .to_string();
+                let content = payload.get("content").map(extract_text).unwrap_or_default();
+                (role, content)
+            }
+            "function_call" => {
+                let name = payload
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown");
+                ("assistant".to_string(), format!("[Tool: {name}]"))
+            }
+            "function_call_output" => {
+                let output = payload
+                    .get("output")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .to_string();
+                ("tool".to_string(), output)
+            }
+            _ => continue,
+        };
+        if content.trim().is_empty() {
+            continue;
+        }
+        messages.push(CodexSessionMessage {
+            role,
+            content,
+            ts: value
+                .get("timestamp")
+                .and_then(parse_timestamp_value_to_seconds),
+        });
+    }
+    Ok(messages)
 }
 
 fn default_usage_range() -> (i64, i64) {

@@ -1,4 +1,6 @@
 import type {
+  CodexSessionMessage,
+  CodexSessionMeta,
   CurrentCard,
   DashboardViewModel,
   PagingInfo,
@@ -96,6 +98,21 @@ export const elements = {
   historyTokenCount: document.getElementById("history-token-count"),
   historyCostTotal: document.getElementById("history-cost-total"),
   historySessionRows: document.getElementById("history-session-rows"),
+  historySessionCount: document.getElementById("history-session-count"),
+  historySearchButton: document.getElementById("history-search-button") as HTMLButtonElement | null,
+  historySearchInput: document.getElementById("history-search-input") as HTMLInputElement | null,
+  historyRefreshSessionsButton: document.getElementById("history-refresh-sessions-button") as HTMLButtonElement | null,
+  historySessionList: document.getElementById("history-session-list"),
+  historyDetailEmpty: document.getElementById("history-detail-empty"),
+  historyDetailBody: document.getElementById("history-detail-body"),
+  historyDetailTitle: document.getElementById("history-detail-title"),
+  historyDetailMeta: document.getElementById("history-detail-meta"),
+  historyResumeCommand: document.getElementById("history-resume-command"),
+  historyCopyResumeButton: document.getElementById("history-copy-resume-button") as HTMLButtonElement | null,
+  historyResumeButton: document.getElementById("history-resume-button") as HTMLButtonElement | null,
+  historyDeleteButton: document.getElementById("history-delete-button") as HTMLButtonElement | null,
+  historyMessageCount: document.getElementById("history-message-count"),
+  historyMessageList: document.getElementById("history-message-list"),
   settingsShowAccountDetailToggle: document.getElementById("settings-show-account-detail-toggle"),
   updateDialog: requiredElement<HTMLDialogElement>("update-dialog"),
   updateDialogCopy: requiredElement<HTMLParagraphElement>("update-dialog-copy"),
@@ -533,7 +550,7 @@ export function renderShellOverview(dashboard: DashboardViewModel | null): void 
     elements.dashboardReadyCount.textContent = "--";
     elements.dashboardMissingCount.textContent = "--";
     renderUsageStats();
-    renderHistoryStats();
+    renderSessionManager();
     return;
   }
 
@@ -551,7 +568,7 @@ export function renderShellOverview(dashboard: DashboardViewModel | null): void 
   elements.dashboardMissingCount.textContent = String(Math.max(0, missingCount));
   renderUsageSettingsControls(profiles);
   renderUsageStats();
-  renderHistoryStats();
+  renderSessionManager();
 }
 
 function formatCompactNumber(value: number): string {
@@ -598,6 +615,37 @@ function formatDateTime(seconds: number): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatSessionDateTime(seconds: number | null): string {
+  if (!seconds) {
+    return "--";
+  }
+  return new Date(seconds * 1000).toLocaleString(state.locale === "zh-CN" ? "zh-CN" : "en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function formatRelativeSessionTime(seconds: number | null): string {
+  if (!seconds) {
+    return "--";
+  }
+  const diff = Math.max(0, Math.floor(Date.now() / 1000) - seconds);
+  if (diff < 60) {
+    return t(state.locale, "sessionJustNow");
+  }
+  if (diff < 3600) {
+    return t(state.locale, "sessionMinutesAgo", { value: String(Math.floor(diff / 60)) });
+  }
+  if (diff < 86_400) {
+    return t(state.locale, "sessionHoursAgo", { value: String(Math.floor(diff / 3600)) });
+  }
+  return t(state.locale, "sessionDaysAgo", { value: String(Math.floor(diff / 86_400)) });
 }
 
 function renderUsageSettingsControls(profiles: ProfileCard[]): void {
@@ -781,38 +829,123 @@ export function renderUsageStats(): void {
 }
 
 export function renderHistoryStats(): void {
-  const stats = state.historyStats;
-  renderStatsFilters({
-    stats,
-    profileSelect: elements.historyProfileFilter,
-    rangeSelect: elements.historyRangeFilter,
-    selectedProfile: state.historyStatsProfile,
-    selectedRange: state.historyStatsRange,
-  });
-  if (
-    !stats ||
-    !elements.historyRequestCount ||
-    !elements.historyTokenCount ||
-    !elements.historyCostTotal ||
-    !elements.historySessionRows
-  ) {
+  renderSessionManager();
+}
+
+function sessionTitle(session: CodexSessionMeta): string {
+  return session.title || session.summary || session.session_id;
+}
+
+function sessionSearchBlob(session: CodexSessionMeta): string {
+  return [
+    session.session_id,
+    session.title,
+    session.summary,
+    session.project_dir,
+    session.profile,
+    session.resume_command,
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function roleLabel(role: string): string {
+  const normalized = role.toLowerCase();
+  if (normalized === "assistant") {
+    return t(state.locale, "sessionRoleAssistant");
+  }
+  if (normalized === "user") {
+    return t(state.locale, "sessionRoleUser");
+  }
+  if (normalized === "developer") {
+    return t(state.locale, "sessionRoleDeveloper");
+  }
+  if (normalized === "tool") {
+    return t(state.locale, "sessionRoleTool");
+  }
+  return role || "unknown";
+}
+
+function renderSessionMessage(message: CodexSessionMessage): string {
+  return `
+    <article class="session-message-card">
+      <div class="session-message-head">
+        <strong>${escapeHtml(roleLabel(message.role))}</strong>
+        <span>${escapeHtml(formatSessionDateTime(message.ts))}</span>
+      </div>
+      <pre>${escapeHtml(message.content)}</pre>
+    </article>
+  `;
+}
+
+export function renderSessionManager(): void {
+  if (!elements.historySessionList) {
     return;
   }
 
-  elements.historyRequestCount.textContent = stats.totals.request_count.toLocaleString();
-  elements.historyTokenCount.textContent = formatFullNumber(stats.totals.real_total_tokens);
-  elements.historyCostTotal.textContent = formatMoney(stats.totals.total_cost_usd);
-  elements.historySessionRows.innerHTML = stats.sessions.length
-    ? stats.sessions.map((row) => `
-        <div class="usage-session-row">
-          <span title="${escapeHtml(row.session_id)}">${escapeHtml(row.session_id.slice(0, 14))}</span>
-          <span>${escapeHtml(row.profile)}</span>
-          <span>${escapeHtml(row.model)}</span>
-          <span>${escapeHtml(formatDateTime(row.started_at))}</span>
-          <strong title="${escapeHtml(formatMoney(row.total_cost_usd))}">${escapeHtml(formatFullNumber(row.real_total_tokens))}</strong>
-        </div>
-      `).join("")
-    : `<div class="settings-usage-empty">${escapeHtml(t(state.locale, "usageEmpty"))}</div>`;
+  const query = state.sessionSearch.trim().toLowerCase();
+  const sessions = query
+    ? state.codexSessions.filter((session) => sessionSearchBlob(session).includes(query))
+    : state.codexSessions;
+
+  if (elements.historySessionCount) {
+    elements.historySessionCount.textContent = String(sessions.length);
+  }
+  if (elements.historySearchInput && elements.historySearchInput.value !== state.sessionSearch) {
+    elements.historySearchInput.value = state.sessionSearch;
+  }
+
+  elements.historySessionList.innerHTML = sessions.length
+    ? sessions.map((session) => {
+      const active = session.source_path === state.selectedCodexSessionPath;
+      const title = sessionTitle(session);
+      const time = formatRelativeSessionTime(session.last_active_at ?? session.created_at);
+      const project = session.project_dir ? session.project_dir.split("/").filter(Boolean).pop() : "--";
+      return `
+        <button class="session-list-item${active ? " is-active" : ""}" type="button" data-session-path="${escapeHtml(session.source_path)}">
+          <div class="session-list-icon">${macIcon("openai", "cc-icon cc-icon--openai")}</div>
+          <div class="session-list-copy">
+            <strong>${escapeHtml(title)}</strong>
+            <span class="session-list-meta">${escapeHtml(time)} · ${escapeHtml(project || "--")}</span>
+            ${session.summary ? `<span class="session-list-summary">${escapeHtml(session.summary)}</span>` : ""}
+          </div>
+          <span class="session-list-chevron">›</span>
+        </button>
+      `;
+    }).join("")
+    : `<div class="session-empty">${escapeHtml(t(state.locale, "sessionNoSessions"))}</div>`;
+
+  const selected = state.codexSessions.find((session) => session.source_path === state.selectedCodexSessionPath) ?? null;
+  const hasSelected = Boolean(selected);
+  elements.historyDetailEmpty?.toggleAttribute("hidden", hasSelected);
+  elements.historyDetailBody?.toggleAttribute("hidden", !hasSelected);
+  if (!selected) {
+    if (elements.historyMessageList) {
+      elements.historyMessageList.innerHTML = "";
+    }
+    return;
+  }
+
+  if (elements.historyDetailTitle) {
+    elements.historyDetailTitle.textContent = sessionTitle(selected);
+  }
+  if (elements.historyDetailMeta) {
+    const project = selected.project_dir || "--";
+    const timestamp = selected.last_active_at ?? selected.created_at;
+    elements.historyDetailMeta.innerHTML = `
+      <span>${macIcon("history", "cc-icon cc-icon--inline")}${escapeHtml(formatSessionDateTime(timestamp))}</span>
+      <span>${macIcon("book-open", "cc-icon cc-icon--inline")}${escapeHtml(project)}</span>
+    `;
+  }
+  if (elements.historyResumeCommand) {
+    elements.historyResumeCommand.textContent = selected.resume_command;
+  }
+  if (elements.historyMessageCount) {
+    elements.historyMessageCount.textContent = String(state.codexSessionMessages.length);
+  }
+  if (elements.historyMessageList) {
+    elements.historyMessageList.innerHTML = state.codexSessionMessages.length
+      ? state.codexSessionMessages.map(renderSessionMessage).join("")
+      : `<div class="session-empty">${escapeHtml(t(state.locale, "sessionNoMessages"))}</div>`;
+  }
 }
 
 export function renderCurrentCard(dashboard: DashboardViewModel): void {
@@ -1366,4 +1499,19 @@ export function applyLocale(): void {
   // `__CODEX_APP_VERSION__` is injected by Vite from `package.json` so
   // it stays in lock-step with the Cargo version automatically.
   elements.settingsVersionValue.textContent = __CODEX_APP_VERSION__;
+  if (elements.historySearchInput) {
+    elements.historySearchInput.placeholder = t(state.locale, "sessionSearch");
+  }
+  if (elements.historySearchButton) {
+    elements.historySearchButton.title = t(state.locale, "sessionSearch");
+    elements.historySearchButton.setAttribute("aria-label", t(state.locale, "sessionSearch"));
+  }
+  if (elements.historyRefreshSessionsButton) {
+    elements.historyRefreshSessionsButton.title = t(state.locale, "sessionRefresh");
+    elements.historyRefreshSessionsButton.setAttribute("aria-label", t(state.locale, "sessionRefresh"));
+  }
+  if (elements.historyCopyResumeButton) {
+    elements.historyCopyResumeButton.title = t(state.locale, "sessionCopyCommand");
+    elements.historyCopyResumeButton.setAttribute("aria-label", t(state.locale, "sessionCopyCommand"));
+  }
 }

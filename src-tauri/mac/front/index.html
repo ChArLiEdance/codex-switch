@@ -181,47 +181,60 @@
             </a>
             <h2 class="mac-detail-title" data-i18n-key="navHistory">Sessions</h2>
           </header>
-          <article class="history-panel">
-            <div class="history-panel-head">
-              <div>
-                <p class="page-kicker" data-i18n-key="navHistory">Sessions</p>
-                <h2 class="section-title" data-i18n-key="historyTitle">Session History</h2>
-                <p class="page-copy" data-i18n-key="historySubtitle">Review local Codex sessions and token usage by account and date.</p>
+          <article class="session-manager-panel">
+            <aside class="session-sidebar">
+              <div class="session-sidebar-head">
+                <div class="session-list-title">
+                  <strong data-i18n-key="sessionList">Session list</strong>
+                  <span id="history-session-count" class="session-count-pill">0</span>
+                </div>
+                <div class="session-toolbar">
+                  <button id="history-search-button" class="session-toolbar-button" type="button" data-i18n-key-title="sessionSearch" title="Search">
+                    <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/history.svg" alt="" aria-hidden="true" />
+                  </button>
+                  <button id="history-refresh-sessions-button" class="session-toolbar-button" type="button" data-i18n-key-title="sessionRefresh" title="Refresh">
+                    <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/refresh-cw.svg" alt="" aria-hidden="true" />
+                  </button>
+                </div>
+                <input id="history-search-input" class="settings-input session-search-input" type="search" placeholder="Search sessions" data-i18n-key-placeholder="sessionSearch" hidden />
               </div>
-              <div class="usage-filter-bar">
-                <select id="history-profile-filter" class="settings-input usage-filter-select"></select>
-                <select id="history-range-filter" class="settings-input usage-filter-select">
-                  <option value="today" data-i18n-key="usageRangeToday">Today</option>
-                  <option value="7d" data-i18n-key="usageRange7d">7 days</option>
-                  <option value="30d" data-i18n-key="usageRange30d">30 days</option>
-                </select>
-                <button id="history-refresh-button" class="settings-action-button" type="button" data-i18n-key="usageRefresh">Refresh usage</button>
+              <div id="history-session-list" class="session-list"></div>
+            </aside>
+            <section class="session-detail">
+              <div id="history-detail-empty" class="session-detail-empty" data-i18n-key="sessionSelectEmpty">Select a session to view the conversation.</div>
+              <div id="history-detail-body" class="session-detail-body" hidden>
+                <div class="session-detail-top">
+                  <div class="session-detail-title-row">
+                    <img class="cc-icon cc-icon--openai" src="/ccswitch-icons/openai.svg" alt="" aria-hidden="true" />
+                    <div>
+                      <h3 id="history-detail-title">--</h3>
+                      <p id="history-detail-meta" class="session-detail-meta"></p>
+                    </div>
+                  </div>
+                  <div class="session-detail-actions">
+                    <button id="history-resume-button" class="session-action-button session-action-button--primary" type="button">
+                      <img class="cc-icon cc-icon--primary-action" src="/ccswitch-icons/play.svg" alt="" aria-hidden="true" />
+                      <span data-i18n-key="sessionResume">Resume session</span>
+                    </button>
+                    <button id="history-delete-button" class="session-action-button session-action-button--danger" type="button">
+                      <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/trash-2.svg" alt="" aria-hidden="true" />
+                      <span data-i18n-key="sessionDelete">Delete session</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="session-command-row">
+                  <code id="history-resume-command">codex resume</code>
+                  <button id="history-copy-resume-button" class="session-toolbar-button" type="button" data-i18n-key-title="sessionCopyCommand" title="Copy command">
+                    <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/copy.svg" alt="" aria-hidden="true" />
+                  </button>
+                </div>
+                <div class="session-message-heading">
+                  <strong data-i18n-key="sessionConversation">Conversation</strong>
+                  <span id="history-message-count" class="session-count-pill">0</span>
+                </div>
+                <div id="history-message-list" class="session-message-list"></div>
               </div>
-            </div>
-            <div class="history-summary-grid">
-              <article>
-                <span data-i18n-key="usageRequests">Total requests</span>
-                <strong id="history-request-count">--</strong>
-              </article>
-              <article>
-                <span data-i18n-key="usageTokens">Tokens</span>
-                <strong id="history-token-count">--</strong>
-              </article>
-              <article>
-                <span data-i18n-key="usageCost">Estimated cost</span>
-                <strong id="history-cost-total">--</strong>
-              </article>
-            </div>
-            <div class="usage-session-table history-session-table">
-              <div class="usage-session-row usage-session-row--head">
-                <span data-i18n-key="usageSession">Session</span>
-                <span data-i18n-key="settingsUsageProfileSelect">Account</span>
-                <span data-i18n-key="usageModel">Model</span>
-                <span data-i18n-key="usageStartedAt">Date</span>
-                <strong data-i18n-key="usageTokens">Tokens</strong>
-              </div>
-              <div id="history-session-rows"></div>
-            </div>
+            </section>
           </article>
         </section>
 

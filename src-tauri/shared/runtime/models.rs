@@ -337,3 +337,23 @@ pub struct UsageStatsResponse {
     pub trends: Vec<UsageTrendPoint>,
     pub sessions: Vec<UsageSessionRow>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexSessionMeta {
+    pub session_id: String,
+    pub title: Option<String>,
+    pub summary: Option<String>,
+    pub project_dir: Option<String>,
+    pub created_at: Option<i64>,
+    pub last_active_at: Option<i64>,
+    pub source_path: String,
+    pub resume_command: String,
+    pub profile: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexSessionMessage {
+    pub role: String,
+    pub content: String,
+    pub ts: Option<i64>,
+}

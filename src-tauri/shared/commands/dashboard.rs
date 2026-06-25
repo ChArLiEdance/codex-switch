@@ -2,8 +2,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::errors::CommandError;
 use crate::models::{
-    CurrentQuotaResponse, ProfilesSnapshotResponse, UsageQuerySettings, UsageQuerySettingsPayload,
-    UsageStatsPayload, UsageStatsResponse,
+    CodexSessionMessage, CodexSessionMeta, CurrentQuotaResponse, ProfilesSnapshotResponse,
+    UsageQuerySettings, UsageQuerySettingsPayload, UsageStatsPayload, UsageStatsResponse,
 };
 
 #[cfg(target_os = "macos")]
@@ -51,6 +51,19 @@ pub fn save_usage_query_settings(
         None,
     )
     .map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn list_codex_sessions() -> Result<Vec<CodexSessionMeta>, CommandError> {
+    crate::shared::session_usage::list_codex_sessions(None).map_err(Into::into)
+}
+
+#[tauri::command]
+pub fn get_codex_session_messages(
+    source_path: String,
+) -> Result<Vec<CodexSessionMessage>, CommandError> {
+    crate::shared::session_usage::load_codex_session_messages(&source_path, None)
+        .map_err(Into::into)
 }
 
 /// Silent background refresh of the active OAuth profile's quota via the

@@ -178,3 +178,21 @@ export interface UsageStatsResponse {
   trends: UsageTrendPoint[];
   sessions: UsageSessionRow[];
 }
+
+export interface CodexSessionMeta {
+  session_id: string;
+  title: string | null;
+  summary: string | null;
+  project_dir: string | null;
+  created_at: number | null;
+  last_active_at: number | null;
+  source_path: string;
+  resume_command: string;
+  profile: string | null;
+}
+
+export interface CodexSessionMessage {
+  role: string;
+  content: string;
+  ts: number | null;
+}
