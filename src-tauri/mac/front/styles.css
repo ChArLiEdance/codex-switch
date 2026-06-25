@@ -3006,6 +3006,35 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   min-width: 104px;
 }
 
+.usage-refresh-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.usage-refresh-select-wrap .usage-refresh-select {
+  min-width: 116px !important;
+  padding-left: 46px !important;
+  padding-right: 34px !important;
+  text-align: left;
+}
+
+.cc-icon--refresh-select {
+  position: absolute;
+  left: 16px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+html[data-theme="jade-night"] .cc-icon--refresh-select {
+  filter: brightness(0) invert(1);
+  opacity: 0.84;
+}
+
 .usage-custom-range-panel {
   display: grid;
   grid-template-columns: repeat(2, minmax(180px, 1fr)) auto;
@@ -4653,7 +4682,9 @@ html[data-theme="jade-night"] .advanced-options {
 
 .mac-topbar {
   display: flex !important;
-  min-height: 44px !important;
+  position: relative !important;
+  height: 42px !important;
+  min-height: 42px !important;
   align-items: center !important;
   justify-content: space-between !important;
   gap: 18px !important;
@@ -4661,14 +4692,21 @@ html[data-theme="jade-night"] .advanced-options {
 
 .mac-brand-cluster {
   justify-self: start !important;
+  height: 42px !important;
+  align-items: center !important;
   margin-right: auto !important;
   gap: 7px !important;
 }
 
 .mac-top-actions {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  height: 42px !important;
+  align-items: center !important;
   margin-left: auto !important;
   gap: 12px !important;
-  transform: translateY(-7px) !important;
+  transform: none !important;
 }
 
 .mac-brand-title,
@@ -4716,6 +4754,13 @@ html[data-theme="jade-night"] .advanced-options {
 .mac-feature-tab .cc-icon {
   width: 18px !important;
   height: 18px !important;
+}
+
+.mac-feature-tab .cc-icon--codex-desktop {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 8px !important;
+  opacity: 1 !important;
 }
 
 .mac-add-button {
