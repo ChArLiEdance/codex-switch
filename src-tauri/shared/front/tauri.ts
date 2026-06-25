@@ -219,6 +219,35 @@ function defaultUsageSettings(): UsageQuerySettings {
   };
 }
 
+function previewCost(model: string, input: number, output: number, cacheRead: number): number {
+  const normalized = model.toLowerCase();
+  let inputPerM = 1;
+  let outputPerM = 4;
+  let cachePerM = 0.25;
+  if (normalized.startsWith("gpt-5.5")) {
+    inputPerM = 5;
+    outputPerM = 30;
+    cachePerM = 0.5;
+  } else if (normalized.startsWith("gpt-5.4")) {
+    inputPerM = 2.5;
+    outputPerM = 15;
+    cachePerM = 0.25;
+  } else if (normalized.startsWith("gpt-5.3-codex") || normalized.startsWith("gpt-5.2")) {
+    inputPerM = 1.75;
+    outputPerM = 14;
+    cachePerM = 0.175;
+  } else if (normalized.startsWith("gpt-5.1") || normalized.startsWith("gpt-5")) {
+    inputPerM = 1.25;
+    outputPerM = 10;
+    cachePerM = 0.125;
+  } else if (normalized.startsWith("gpt-4.1") || normalized.startsWith("o3")) {
+    inputPerM = 2;
+    outputPerM = 8;
+    cachePerM = 0.5;
+  }
+  return ((Math.max(0, input - cacheRead) * inputPerM) + (output * outputPerM) + (cacheRead * cachePerM)) / 1_000_000;
+}
+
 function makePreviewUsageStats(payload: UsageStatsPayload | undefined): UsageStatsResponse {
   const now = Math.floor(Date.now() / 1000);
   const start = payload?.start_at ?? now - 24 * 60 * 60;
@@ -234,6 +263,7 @@ function makePreviewUsageStats(payload: UsageStatsPayload | undefined): UsageSta
     const input = index < 4 ? 0 : (index - 3) * 420000 * scale;
     const output = index < 4 ? 0 : (index - 3) * 12000 * scale;
     const cache = index < 4 ? 0 : (index - 3) * 5100000 * scale;
+    const model = index % 2 === 0 ? "gpt-5.4" : "gpt-5.1-codex";
     return {
       bucket: new Date(timestamp * 1000).toLocaleString(),
       timestamp,
@@ -242,7 +272,7 @@ function makePreviewUsageStats(payload: UsageStatsPayload | undefined): UsageSta
       cache_read_tokens: cache,
       cache_creation_tokens: 0,
       real_total_tokens: input + output + cache,
-      total_cost_usd: (input * 1.25 + output * 10 + cache * 0.125) / 1_000_000,
+      total_cost_usd: previewCost(model, input, output, cache),
     };
   });
   const totals = trends.reduce(

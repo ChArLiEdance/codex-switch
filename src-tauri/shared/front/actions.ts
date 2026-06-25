@@ -185,6 +185,31 @@ function usageSettingsFromInputs(prefix: "settings" | "dialog"): UsageQuerySetti
   };
 }
 
+function ensureHistorySelection(): void {
+  const previousSelected = state.selectedCodexSessionPath;
+  const selectedStillExists = state.codexSessions.some((session) => (
+    session.source_path === state.selectedCodexSessionPath
+  ));
+  if (!selectedStillExists) {
+    state.selectedCodexSessionPath = state.codexSessions[0]?.source_path ?? null;
+  }
+  if (previousSelected !== state.selectedCodexSessionPath) {
+    state.codexSessionMessages = [];
+    state.sessionMessageVisibleCount = 40;
+    state.expandedSessionMessages = [];
+  }
+}
+
+function shouldLoadSelectedSessionMessages(): boolean {
+  const selected = state.selectedCodexSessionPath;
+  return Boolean(
+    selected &&
+    !state.sessionMessagesLoading &&
+    !state.codexSessionMessageCache[selected] &&
+    state.codexSessionMessages.length === 0,
+  );
+}
+
 async function saveUsageSettingsForProfile(profile: string, settings: UsageQuerySettings): Promise<void> {
   const saved = await saveUsageQuerySettings(profile, settings);
   state.usageSettingsByProfile = {
@@ -1379,10 +1404,12 @@ export function bootstrap(): void {
     if (state.route === "history") {
       if (state.codexSessions.length === 0) {
         void refreshCodexSessions(false);
-      } else if (!state.selectedCodexSessionPath && state.codexSessions[0]) {
-        void selectCodexSession(state.codexSessions[0].source_path);
       } else {
+        ensureHistorySelection();
         renderSessionManager();
+        if (shouldLoadSelectedSessionMessages()) {
+          void refreshSelectedCodexSessionMessages(false);
+        }
       }
     }
   });

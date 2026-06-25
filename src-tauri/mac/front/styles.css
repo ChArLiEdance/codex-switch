@@ -3184,6 +3184,12 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   outline: none;
 }
 
+.usage-hover-hitbox {
+  fill: transparent;
+  pointer-events: all;
+  cursor: crosshair;
+}
+
 .usage-point {
   fill: #ffffff;
   stroke: #a855f7;
@@ -3604,6 +3610,22 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
   min-height: 100%;
+}
+
+.session-detail-empty[hidden],
+.session-detail-body[hidden] {
+  display: none !important;
+}
+
+.session-detail-empty.is-visible {
+  display: grid !important;
+}
+
+.session-detail-body.is-visible {
+  display: grid !important;
+  min-height: 100%;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
 
 .session-detail-top {
@@ -4302,6 +4324,10 @@ html[data-theme="jade-night"] .session-action-button--danger {
 
 .mac-detail-route .dashboard--macos {
   padding: 34px 28px 28px !important;
+}
+
+.mac-tool-page {
+  padding-top: 0 !important;
 }
 
 .mac-brand-cluster {

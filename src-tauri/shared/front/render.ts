@@ -752,6 +752,11 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
   const points = stats.trends.map((point, index) => {
     const pointX = x(index);
     const pointY = yToken(point.real_total_tokens);
+    const previousX = index > 0 ? x(index - 1) : pad.left;
+    const nextX = index < stats.trends.length - 1 ? x(index + 1) : width - pad.right;
+    const hitStart = index > 0 ? (previousX + pointX) / 2 : pad.left;
+    const hitEnd = index < stats.trends.length - 1 ? (pointX + nextX) / 2 : width - pad.right;
+    const hitWidth = Math.max(12, hitEnd - hitStart);
     const tooltipWidth = 176;
     const tooltipHeight = 128;
     const tooltipX = Math.min(width - pad.right - tooltipWidth, Math.max(pad.left, pointX + 12));
@@ -765,6 +770,7 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
     ];
     return `
       <g class="usage-point-group" tabindex="0">
+        <rect x="${hitStart.toFixed(1)}" y="${pad.top}" width="${hitWidth.toFixed(1)}" height="${height - pad.top - pad.bottom}" class="usage-hover-hitbox" />
         <line x1="${pointX.toFixed(1)}" y1="${pad.top}" x2="${pointX.toFixed(1)}" y2="${height - pad.bottom}" class="usage-hover-line" />
         <circle cx="${pointX.toFixed(1)}" cy="${pointY.toFixed(1)}" r="5" class="usage-point usage-point--cache" />
         <g class="usage-hover-tooltip" transform="translate(${tooltipX.toFixed(1)} ${tooltipY.toFixed(1)})">
@@ -972,8 +978,14 @@ export function renderSessionManager(): void {
 
   const selected = state.codexSessions.find((session) => session.source_path === state.selectedCodexSessionPath) ?? null;
   const hasSelected = Boolean(selected);
-  elements.historyDetailEmpty?.toggleAttribute("hidden", hasSelected);
-  elements.historyDetailBody?.toggleAttribute("hidden", !hasSelected);
+  if (elements.historyDetailEmpty) {
+    elements.historyDetailEmpty.hidden = hasSelected;
+    elements.historyDetailEmpty.classList.toggle("is-visible", !hasSelected);
+  }
+  if (elements.historyDetailBody) {
+    elements.historyDetailBody.hidden = !hasSelected;
+    elements.historyDetailBody.classList.toggle("is-visible", hasSelected);
+  }
   if (!selected) {
     if (elements.historyMessageList) {
       elements.historyMessageList.innerHTML = "";

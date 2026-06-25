@@ -518,21 +518,79 @@ fn token_delta(previous: &Option<CumulativeTokens>, current: &CumulativeTokens) 
 }
 
 fn cost_for_event(model: &str, delta: &DeltaTokens) -> f64 {
-    let model = model.to_lowercase();
-    let (input_per_m, output_per_m, cache_per_m) = if model.contains("gpt-5") {
-        (1.25, 10.0, 0.125)
-    } else if model.contains("gpt-4.1") {
-        (2.0, 8.0, 0.5)
-    } else if model.contains("gpt-4") || model.contains("o3") {
-        (5.0, 15.0, 1.25)
-    } else {
-        (1.0, 4.0, 0.25)
-    };
+    let model = normalize_pricing_model(model);
+    let (input_per_m, output_per_m, cache_per_m) = pricing_for_model(&model);
     let fresh_input = delta.input.saturating_sub(delta.cached_input) as f64;
     (fresh_input * input_per_m
         + delta.output as f64 * output_per_m
         + delta.cached_input as f64 * cache_per_m)
         / 1_000_000.0
+}
+
+fn normalize_pricing_model(raw: &str) -> String {
+    let mut model = raw
+        .rsplit_once('/')
+        .map_or(raw, |(_, model)| model)
+        .split(':')
+        .next()
+        .unwrap_or(raw)
+        .trim()
+        .replace('@', "-")
+        .to_ascii_lowercase();
+
+    if model.len() > 11 {
+        let suffix = &model[model.len() - 11..];
+        if suffix.as_bytes().first() == Some(&b'-')
+            && suffix[1..5].chars().all(|value| value.is_ascii_digit())
+            && suffix.as_bytes().get(5) == Some(&b'-')
+            && suffix[6..8].chars().all(|value| value.is_ascii_digit())
+            && suffix.as_bytes().get(8) == Some(&b'-')
+            && suffix[9..11].chars().all(|value| value.is_ascii_digit())
+        {
+            model.truncate(model.len() - 11);
+        }
+    }
+
+    if model.len() > 9 {
+        let mut parts = model.rsplitn(2, '-');
+        if let (Some(suffix), Some(base)) = (parts.next(), parts.next()) {
+            if suffix.len() == 8 && suffix.chars().all(|value| value.is_ascii_digit()) {
+                model = base.to_string();
+            }
+        }
+    }
+
+    model
+}
+
+fn pricing_for_model(model: &str) -> (f64, f64, f64) {
+    if model.starts_with("gpt-5.5") {
+        (5.0, 30.0, 0.50)
+    } else if model.starts_with("gpt-5.4-mini") {
+        (0.75, 4.50, 0.075)
+    } else if model.starts_with("gpt-5.4-nano") {
+        (0.20, 1.25, 0.02)
+    } else if model.starts_with("gpt-5.4") {
+        (2.50, 15.0, 0.25)
+    } else if model.starts_with("gpt-5.3-codex") || model.starts_with("gpt-5.2") {
+        (1.75, 14.0, 0.175)
+    } else if model.starts_with("gpt-5-mini") || model.starts_with("gpt-5-codex-mini") {
+        (0.25, 2.0, 0.025)
+    } else if model.starts_with("gpt-5-nano") {
+        (0.05, 0.40, 0.005)
+    } else if model.starts_with("gpt-5.1") || model.starts_with("gpt-5") {
+        (1.25, 10.0, 0.125)
+    } else if model.starts_with("gpt-4.1-mini") {
+        (0.40, 1.60, 0.10)
+    } else if model.starts_with("gpt-4.1-nano") {
+        (0.10, 0.40, 0.025)
+    } else if model.starts_with("gpt-4.1") || model.starts_with("o3") {
+        (2.0, 8.0, 0.50)
+    } else if model.starts_with("o4-mini") {
+        (1.10, 4.40, 0.275)
+    } else {
+        (1.0, 4.0, 0.25)
+    }
 }
 
 fn parse_usage_events_from_file(profile: &str, path: &Path) -> Vec<UsageEvent> {
