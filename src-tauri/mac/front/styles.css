@@ -3017,8 +3017,8 @@ html[data-theme="jade-night"] .locale-pill {
 }
 
 html[data-theme="jade-night"] .locale-pill.is-active {
-  background: #0b0f17 !important;
-  color: #ffffff !important;
+  background: #ffffff !important;
+  color: #10131a !important;
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.28);
 }
 
@@ -3087,4 +3087,37 @@ html[data-theme="jade-night"] .mac-profile-actions .mac-icon-button--delete {
 
 html[data-theme="jade-night"] .mac-profile-actions .profile-action-button:disabled {
   opacity: 0.48 !important;
+}
+
+html[data-theme="jade-night"] .page[data-page="profiles"],
+html[data-theme="jade-night"] .content-row--profiles,
+html[data-theme="jade-night"] .profiles-stage,
+html[data-theme="jade-night"] .profiles-grid {
+  background: #05070b !important;
+}
+
+html[data-theme="jade-night"] .mac-profile-actions .mac-profile-primary,
+html[data-theme="jade-night"] .mac-profile-actions .mac-profile-primary:disabled {
+  opacity: 1 !important;
+  background: #1683ff !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="jade-night"] .mac-profile-actions .mac-profile-primary .mac-action-label,
+html[data-theme="jade-night"] .mac-profile-actions .mac-profile-primary:disabled .mac-action-label {
+  color: #ffffff !important;
+  opacity: 1 !important;
+}
+
+html[data-theme="jade-night"] .mac-profile-actions .mac-profile-primary .cc-icon--primary-action {
+  opacity: 1 !important;
+}
+
+html[data-theme="jade-night"] .mac-account-card .profile-quota-title,
+html[data-theme="jade-night"] .mac-account-card .profile-quota-refresh {
+  color: #c4cad5 !important;
+}
+
+html[data-theme="jade-night"] .mac-account-card .profile-quota-value {
+  color: #39c76a !important;
 }
