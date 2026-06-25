@@ -35,7 +35,11 @@ export const state = {
   codexSessions: [] as CodexSessionMeta[],
   selectedCodexSessionPath: null as string | null,
   codexSessionMessages: [] as CodexSessionMessage[],
+  codexSessionMessageCache: {} as Record<string, CodexSessionMessage[]>,
+  sessionMessagesLoading: false,
   sessionSearch: "",
+  sessionVisibleCount: 60,
+  expandedSessionMessages: [] as string[],
   settingsUsageProfile: null as string | null,
   usageSettingsByProfile: {} as Record<string, UsageQuerySettings>,
 };

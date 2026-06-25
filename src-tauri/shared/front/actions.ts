@@ -218,17 +218,37 @@ async function refreshSelectedCodexSessionMessages(showError = false): Promise<v
   const selected = state.selectedCodexSessionPath;
   if (!selected) {
     state.codexSessionMessages = [];
+    state.sessionMessagesLoading = false;
     renderSessionManager();
     return;
   }
+  const cached = state.codexSessionMessageCache[selected];
+  if (cached) {
+    state.codexSessionMessages = cached;
+    state.sessionMessagesLoading = false;
+    renderSessionManager();
+    return;
+  }
+  state.sessionMessagesLoading = true;
+  state.codexSessionMessages = [];
+  renderSessionManager();
   try {
-    state.codexSessionMessages = await getCodexSessionMessages(selected);
+    const messages = await getCodexSessionMessages(selected);
+    if (state.selectedCodexSessionPath === selected) {
+      state.codexSessionMessageCache[selected] = messages;
+      state.codexSessionMessages = messages;
+    }
   } catch (error) {
-    state.codexSessionMessages = [];
+    if (state.selectedCodexSessionPath === selected) {
+      state.codexSessionMessages = [];
+    }
     if (showError) {
       showToast(error instanceof Error ? error.message : t(state.locale, "sessionLoadFailed"), true);
     }
   } finally {
+    if (state.selectedCodexSessionPath === selected) {
+      state.sessionMessagesLoading = false;
+    }
     renderSessionManager();
   }
 }
@@ -237,6 +257,8 @@ async function refreshCodexSessions(showError = false): Promise<void> {
   try {
     const sessions = await listCodexSessions();
     state.codexSessions = sessions;
+    state.codexSessionMessageCache = {};
+    state.sessionVisibleCount = 60;
     const selectedStillExists = sessions.some((session) => session.source_path === state.selectedCodexSessionPath);
     if (!selectedStillExists) {
       state.selectedCodexSessionPath = sessions[0]?.source_path ?? null;
@@ -254,9 +276,27 @@ async function refreshCodexSessions(showError = false): Promise<void> {
 }
 
 async function selectCodexSession(sourcePath: string): Promise<void> {
+  if (state.selectedCodexSessionPath === sourcePath && !state.sessionMessagesLoading) {
+    return;
+  }
   state.selectedCodexSessionPath = sourcePath;
   renderSessionManager();
   await refreshSelectedCodexSessionMessages(true);
+}
+
+function runWithButtonBusy(button: HTMLButtonElement | null | undefined, action: () => void | Promise<void>): void {
+  if (!button) {
+    void action();
+    return;
+  }
+  button.classList.add("is-pressing", "is-busy");
+  button.disabled = true;
+  window.setTimeout(() => button.classList.remove("is-pressing"), 160);
+  Promise.resolve(action())
+    .finally(() => {
+      button.classList.remove("is-busy");
+      button.disabled = false;
+    });
 }
 
 async function copySelectedSessionCommand(): Promise<void> {
@@ -1459,8 +1499,31 @@ export function bootstrap(): void {
     const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("[data-session-path]");
     const sourcePath = button?.dataset.sessionPath;
     if (sourcePath) {
-      void selectCodexSession(sourcePath);
+      runWithButtonBusy(button, () => selectCodexSession(sourcePath));
+      return;
     }
+    const loadMore = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("[data-session-load-more]");
+    if (loadMore) {
+      runWithButtonBusy(loadMore, () => {
+        state.sessionVisibleCount += 60;
+        renderSessionManager();
+      });
+    }
+  });
+  elements.historyMessageList?.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("[data-session-message-key]");
+    const key = button?.dataset.sessionMessageKey;
+    if (!key) {
+      return;
+    }
+    const next = new Set(state.expandedSessionMessages);
+    if (next.has(key)) {
+      next.delete(key);
+    } else {
+      next.add(key);
+    }
+    state.expandedSessionMessages = Array.from(next);
+    renderSessionManager();
   });
   elements.historySearchButton?.addEventListener("click", () => {
     if (!elements.historySearchInput) {
@@ -1473,19 +1536,20 @@ export function bootstrap(): void {
   });
   elements.historySearchInput?.addEventListener("input", () => {
     state.sessionSearch = elements.historySearchInput?.value ?? "";
+    state.sessionVisibleCount = 60;
     renderSessionManager();
   });
   elements.historyRefreshSessionsButton?.addEventListener("click", () => {
-    void refreshCodexSessions(true);
+    runWithButtonBusy(elements.historyRefreshSessionsButton, () => refreshCodexSessions(true));
   });
   elements.historyCopyResumeButton?.addEventListener("click", () => {
-    void copySelectedSessionCommand();
+    runWithButtonBusy(elements.historyCopyResumeButton, () => copySelectedSessionCommand());
   });
   elements.historyResumeButton?.addEventListener("click", () => {
-    void copySelectedSessionCommand();
+    runWithButtonBusy(elements.historyResumeButton, () => copySelectedSessionCommand());
   });
   elements.historyDeleteButton?.addEventListener("click", () => {
-    showToast(t(state.locale, "sessionDeleteLocalOnly"), true);
+    runWithButtonBusy(elements.historyDeleteButton, () => showToast(t(state.locale, "sessionDeleteLocalOnly"), true));
   });
   elements.localeEnButton.addEventListener("click", () => {
     setLocale("en");

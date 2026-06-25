@@ -3416,11 +3416,45 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   background: transparent;
   color: #4b5565;
   cursor: pointer;
+  transition:
+    transform 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease,
+    opacity 150ms ease;
 }
 
 .session-toolbar-button:hover {
   border-color: rgba(15, 23, 42, 0.1);
   background: rgba(15, 23, 42, 0.05);
+}
+
+.session-toolbar-button:active,
+.session-toolbar-button.is-pressing,
+.session-action-button:active,
+.session-action-button.is-pressing,
+.session-list-item:active,
+.session-list-item.is-pressing,
+.session-load-more:active,
+.session-load-more.is-pressing,
+.mac-profile-actions .profile-action-button:active,
+.mac-profile-actions .profile-action-button.is-pressing {
+  transform: scale(0.97);
+}
+
+.session-toolbar-button.is-busy .cc-icon,
+.session-action-button.is-busy .cc-icon,
+.session-list-item.is-busy .session-list-chevron,
+.session-load-more.is-busy::after,
+.mac-profile-actions .profile-action-button.is-busy .cc-icon {
+  animation: sessionSpin 0.8s linear infinite;
+}
+
+.session-toolbar-button:disabled,
+.session-action-button:disabled,
+.session-list-item:disabled,
+.session-load-more:disabled {
+  cursor: progress;
+  opacity: 0.72;
 }
 
 .session-search-input {
@@ -3451,6 +3485,11 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   color: inherit;
   text-align: left;
   cursor: pointer;
+  transition:
+    transform 150ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
 }
 
 .session-list-item:hover,
@@ -3499,6 +3538,44 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   color: #8a93a3;
   font-size: 1.2rem;
   line-height: 1;
+  transition: transform 160ms ease, color 160ms ease;
+}
+
+.session-list-item.is-active .session-list-chevron {
+  color: #1683ff;
+  transform: rotate(90deg);
+}
+
+.session-load-more {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid rgba(22, 131, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(22, 131, 255, 0.08);
+  color: #1683ff;
+  font-size: 0.78rem;
+  font-weight: 850;
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.session-load-more:hover {
+  border-color: rgba(22, 131, 255, 0.34);
+  background: rgba(22, 131, 255, 0.12);
+}
+
+.session-load-more::after {
+  display: inline-block;
+  margin-left: 8px;
+  content: "↻";
+  opacity: 0;
+}
+
+.session-load-more.is-busy::after {
+  opacity: 1;
 }
 
 .session-detail {
@@ -3588,6 +3665,12 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   font-size: 0.78rem;
   font-weight: 850;
   cursor: pointer;
+  transition:
+    transform 150ms ease,
+    background 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    opacity 150ms ease;
 }
 
 .session-action-button--primary {
@@ -3642,6 +3725,24 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   border: 1px solid rgba(220, 227, 235, 0.78);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.72);
+  transition: box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.session-message-card--user {
+  margin-left: 28px;
+  border-color: rgba(22, 131, 255, 0.2);
+  background: rgba(22, 131, 255, 0.06);
+}
+
+.session-message-card--assistant {
+  margin-right: 28px;
+  border-color: rgba(14, 165, 233, 0.2);
+  background: rgba(14, 165, 233, 0.06);
+}
+
+.session-message-card--developer,
+.session-message-card--tool {
+  background: rgba(15, 23, 42, 0.035);
 }
 
 .session-message-head {
@@ -3659,15 +3760,43 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
 }
 
 .session-message-card pre {
-  max-height: 280px;
   margin: 0;
-  overflow: auto;
+  overflow: visible;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
   color: #101827;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 0.82rem;
   line-height: 1.5;
+}
+
+.session-message-expand {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #697386;
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: color 150ms ease, transform 150ms ease;
+}
+
+.session-message-expand:hover {
+  color: #101827;
+}
+
+.session-message-expand:active {
+  transform: scale(0.98);
+}
+
+.session-message-expand span {
+  color: #8a93a3;
 }
 
 .session-empty {
@@ -3679,6 +3808,20 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   font-size: 0.82rem;
   font-weight: 750;
   text-align: center;
+}
+
+.session-empty--loading {
+  gap: 8px;
+}
+
+.cc-icon--spin {
+  animation: sessionSpin 0.8s linear infinite;
+}
+
+@keyframes sessionSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 680px) {
@@ -4029,22 +4172,44 @@ html[data-theme="jade-night"] .session-detail-meta,
 html[data-theme="jade-night"] .session-message-head,
 html[data-theme="jade-night"] .session-message-head strong,
 html[data-theme="jade-night"] .session-empty,
-html[data-theme="jade-night"] .session-command-row code {
+html[data-theme="jade-night"] .session-command-row code,
+html[data-theme="jade-night"] .session-message-expand,
+html[data-theme="jade-night"] .session-message-expand span {
   color: #c4cad5 !important;
 }
 
 html[data-theme="jade-night"] .session-count-pill,
 html[data-theme="jade-night"] .session-command-row,
+html[data-theme="jade-night"] .session-load-more,
 html[data-theme="jade-night"] .session-toolbar-button,
 html[data-theme="jade-night"] .session-action-button:not(.session-action-button--primary):not(.session-action-button--danger) {
   border-color: rgba(255, 255, 255, 0.12) !important;
   background: rgba(17, 19, 24, 0.58) !important;
 }
 
+html[data-theme="jade-night"] .session-load-more {
+  color: #91c4ff !important;
+}
+
 html[data-theme="jade-night"] .session-list-item:hover,
 html[data-theme="jade-night"] .session-list-item.is-active {
   border-color: rgba(69, 126, 255, 0.72) !important;
   background: rgba(69, 126, 255, 0.16) !important;
+}
+
+html[data-theme="jade-night"] .session-message-card--user {
+  border-color: rgba(69, 126, 255, 0.34) !important;
+  background: rgba(69, 126, 255, 0.12) !important;
+}
+
+html[data-theme="jade-night"] .session-message-card--assistant {
+  border-color: rgba(56, 189, 248, 0.28) !important;
+  background: rgba(56, 189, 248, 0.1) !important;
+}
+
+html[data-theme="jade-night"] .session-message-card--developer,
+html[data-theme="jade-night"] .session-message-card--tool {
+  background: rgba(255, 255, 255, 0.045) !important;
 }
 
 html[data-theme="jade-night"] .session-toolbar-button .cc-icon,

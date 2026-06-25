@@ -259,6 +259,8 @@ function bindProfileButtons(attribute: string, handler: (profile: string) => voi
     button.addEventListener("click", () => {
       const profile = button.getAttribute(attribute);
       if (profile) {
+        button.classList.add("is-pressing");
+        window.setTimeout(() => button.classList.remove("is-pressing"), 160);
         void handler(profile);
       }
     });
@@ -893,14 +895,31 @@ function roleLabel(role: string): string {
   return role || "unknown";
 }
 
-function renderSessionMessage(message: CodexSessionMessage): string {
+const SESSION_MESSAGE_COLLAPSE_THRESHOLD = 3000;
+const SESSION_MESSAGE_COLLAPSED_LENGTH = 1500;
+
+function renderSessionMessage(message: CodexSessionMessage, index: number): string {
+  const key = `${state.selectedCodexSessionPath ?? "session"}:${index}`;
+  const expanded = state.expandedSessionMessages.includes(key);
+  const isLong = message.content.length > SESSION_MESSAGE_COLLAPSE_THRESHOLD;
+  const collapsed = isLong && !expanded;
+  const content = collapsed
+    ? `${message.content.slice(0, SESSION_MESSAGE_COLLAPSED_LENGTH)}…`
+    : message.content;
+  const role = message.role.toLowerCase();
   return `
-    <article class="session-message-card">
+    <article class="session-message-card session-message-card--${escapeHtml(role || "unknown")}">
       <div class="session-message-head">
         <strong>${escapeHtml(roleLabel(message.role))}</strong>
         <span>${escapeHtml(formatSessionDateTime(message.ts))}</span>
       </div>
-      <pre>${escapeHtml(message.content)}</pre>
+      <pre>${escapeHtml(content)}</pre>
+      ${isLong ? `
+        <button class="session-message-expand" type="button" data-session-message-key="${escapeHtml(key)}" aria-expanded="${expanded ? "true" : "false"}">
+          ${escapeHtml(expanded ? t(state.locale, "sessionCollapseMessage") : t(state.locale, "sessionExpandMessage"))}
+          <span>${escapeHtml(expanded ? "⌃" : `(${Math.round(message.content.length / 1000)}k) ⌄`)}</span>
+        </button>
+      ` : ""}
     </article>
   `;
 }
@@ -914,6 +933,7 @@ export function renderSessionManager(): void {
   const sessions = query
     ? state.codexSessions.filter((session) => sessionSearchBlob(session).includes(query))
     : state.codexSessions;
+  const visibleSessions = sessions.slice(0, state.sessionVisibleCount);
 
   if (elements.historySessionCount) {
     elements.historySessionCount.textContent = String(sessions.length);
@@ -923,7 +943,8 @@ export function renderSessionManager(): void {
   }
 
   elements.historySessionList.innerHTML = sessions.length
-    ? sessions.map((session) => {
+    ? [
+      ...visibleSessions.map((session) => {
       const active = session.source_path === state.selectedCodexSessionPath;
       const title = sessionTitle(session);
       const time = formatRelativeSessionTime(session.last_active_at ?? session.created_at);
@@ -939,7 +960,14 @@ export function renderSessionManager(): void {
           <span class="session-list-chevron">›</span>
         </button>
       `;
-    }).join("")
+    }),
+      sessions.length > visibleSessions.length
+        ? `<button class="session-load-more" type="button" data-session-load-more="true">${escapeHtml(t(state.locale, "sessionLoadMore", {
+          shown: String(visibleSessions.length),
+          total: String(sessions.length),
+        }))}</button>`
+        : "",
+    ].join("")
     : `<div class="session-empty">${escapeHtml(t(state.locale, "sessionNoSessions"))}</div>`;
 
   const selected = state.codexSessions.find((session) => session.source_path === state.selectedCodexSessionPath) ?? null;
@@ -971,7 +999,9 @@ export function renderSessionManager(): void {
     elements.historyMessageCount.textContent = String(state.codexSessionMessages.length);
   }
   if (elements.historyMessageList) {
-    elements.historyMessageList.innerHTML = state.codexSessionMessages.length
+    elements.historyMessageList.innerHTML = state.sessionMessagesLoading
+      ? `<div class="session-empty session-empty--loading">${macIcon("refresh-cw", "cc-icon cc-icon--spin")}${escapeHtml(t(state.locale, "sessionLoading"))}</div>`
+      : state.codexSessionMessages.length
       ? state.codexSessionMessages.map(renderSessionMessage).join("")
       : `<div class="session-empty">${escapeHtml(t(state.locale, "sessionNoMessages"))}</div>`;
   }
