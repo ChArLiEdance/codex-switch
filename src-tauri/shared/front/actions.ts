@@ -263,10 +263,7 @@ async function refreshCodexSessions(showError = false): Promise<void> {
     state.expandedSessionMessages = [];
     const selectedStillExists = sessions.some((session) => session.source_path === state.selectedCodexSessionPath);
     if (!selectedStillExists) {
-      state.selectedCodexSessionPath = null;
-      state.codexSessionMessages = [];
-      renderSessionManager();
-      return;
+      state.selectedCodexSessionPath = sessions[0]?.source_path ?? null;
     }
     await refreshSelectedCodexSessionMessages(false);
   } catch (error) {
@@ -281,7 +278,11 @@ async function refreshCodexSessions(showError = false): Promise<void> {
 }
 
 async function selectCodexSession(sourcePath: string): Promise<void> {
-  if (state.selectedCodexSessionPath === sourcePath && !state.sessionMessagesLoading) {
+  if (
+    state.selectedCodexSessionPath === sourcePath &&
+    !state.sessionMessagesLoading &&
+    (state.codexSessionMessages.length > 0 || Boolean(state.codexSessionMessageCache[sourcePath]))
+  ) {
     return;
   }
   state.selectedCodexSessionPath = sourcePath;
@@ -1375,6 +1376,15 @@ export function bootstrap(): void {
   window.addEventListener("hashchange", () => {
     state.route = routeFromLocation();
     renderShellRoute();
+    if (state.route === "history") {
+      if (state.codexSessions.length === 0) {
+        void refreshCodexSessions(false);
+      } else if (!state.selectedCodexSessionPath && state.codexSessions[0]) {
+        void selectCodexSession(state.codexSessions[0].source_path);
+      } else {
+        renderSessionManager();
+      }
+    }
   });
 
   elements.previousPageButton.addEventListener("click", () => {

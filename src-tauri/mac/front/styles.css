@@ -4356,8 +4356,16 @@ html[data-theme="jade-night"] .session-action-button--danger {
 
 .mac-detail-route .page.active .mac-detail-header {
   gap: 12px !important;
+  min-height: 50px !important;
   margin-bottom: 24px !important;
   animation: ccTitleIn 220ms ease both;
+}
+
+.mac-detail-title {
+  font-size: 1.34rem !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
 }
 
 .mac-detail-route .page.active .settings-panel,
