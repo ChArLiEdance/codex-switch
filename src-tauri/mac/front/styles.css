@@ -4910,6 +4910,11 @@ html[data-theme="jade-night"] .mac-detail-route .settings-panel.settings-panel--
   box-shadow: none !important;
 }
 
+html[data-theme="jade-night"] .mac-feature-tab--account.active {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .mac-feature-tab .cc-icon--codex-desktop,
 html[data-theme="jade-night"] .mac-feature-tab .cc-icon--codex-desktop {
   filter: none !important;
