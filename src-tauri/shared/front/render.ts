@@ -7,6 +7,7 @@ import type {
   QuotaWindow,
   ShellRoute,
   UpdateCheckResponse,
+  UsageStatsResponse,
 } from "@front-shared/types";
 import { t, type MessageKey } from "@front-shared/i18n";
 import { state } from "@front-shared/state";
@@ -67,11 +68,26 @@ export const elements = {
   settingsCheckUpdateButton: requiredElement<HTMLButtonElement>("settings-check-update-button"),
   settingsUpdateUrlInput: requiredElement<HTMLInputElement>("settings-update-url-input"),
   settingsVersionValue: requiredElement<HTMLSpanElement>("settings-version-value"),
-  settingsUsageProfileCount: document.getElementById("settings-usage-profile-count"),
-  settingsUsageReadyCount: document.getElementById("settings-usage-ready-count"),
-  settingsUsageFiveHour: document.getElementById("settings-usage-five-hour"),
-  settingsUsageWeekly: document.getElementById("settings-usage-weekly"),
-  settingsUsageRows: document.getElementById("settings-usage-rows"),
+  settingsUsageProfileSelect: document.getElementById("settings-usage-profile-select") as HTMLSelectElement | null,
+  settingsUsageEnabledToggle: document.getElementById("settings-usage-enabled-toggle") as HTMLInputElement | null,
+  settingsUsageTimeoutInput: document.getElementById("settings-usage-timeout-input") as HTMLInputElement | null,
+  settingsUsageIntervalInput: document.getElementById("settings-usage-interval-input") as HTMLInputElement | null,
+  settingsUsageSaveButton: document.getElementById("settings-usage-save-button") as HTMLButtonElement | null,
+  usageProfileFilter: document.getElementById("usage-profile-filter") as HTMLSelectElement | null,
+  usageRangeFilter: document.getElementById("usage-range-filter") as HTMLSelectElement | null,
+  usageRefreshButton: document.getElementById("usage-refresh-button") as HTMLButtonElement | null,
+  usageRealTotal: document.getElementById("usage-real-total"),
+  usageRequestCount: document.getElementById("usage-request-count"),
+  usageTotalCost: document.getElementById("usage-total-cost"),
+  usageInputTokens: document.getElementById("usage-input-tokens"),
+  usageOutputTokens: document.getElementById("usage-output-tokens"),
+  usageCacheCreateTokens: document.getElementById("usage-cache-create-tokens"),
+  usageCacheHitTokens: document.getElementById("usage-cache-hit-tokens"),
+  usageCacheHitRate: document.getElementById("usage-cache-hit-rate"),
+  usageCacheHitFill: document.getElementById("usage-cache-hit-fill") as HTMLSpanElement | null,
+  usageTrendChart: document.getElementById("usage-trend-chart"),
+  usageChartRange: document.getElementById("usage-chart-range"),
+  usageSessionRows: document.getElementById("usage-session-rows"),
   settingsShowAccountDetailToggle: document.getElementById("settings-show-account-detail-toggle"),
   updateDialog: requiredElement<HTMLDialogElement>("update-dialog"),
   updateDialogCopy: requiredElement<HTMLParagraphElement>("update-dialog-copy"),
@@ -133,6 +149,17 @@ export const elements = {
   baseUrlDialogError: requiredElement<HTMLParagraphElement>("base-url-dialog-error"),
   cancelBaseUrlButton: requiredElement<HTMLButtonElement>("cancel-base-url-button"),
   submitBaseUrlButton: requiredElement<HTMLButtonElement>("submit-base-url-button"),
+  usageConfigDialog: document.getElementById("usage-config-dialog") as HTMLDialogElement | null,
+  usageConfigForm: document.getElementById("usage-config-form") as HTMLFormElement | null,
+  usageConfigDialogTitle: document.getElementById("usage-config-dialog-title") as HTMLHeadingElement | null,
+  usageConfigDialogCopy: document.getElementById("usage-config-dialog-copy") as HTMLParagraphElement | null,
+  usageConfigEnabledToggle: document.getElementById("usage-config-enabled-toggle") as HTMLInputElement | null,
+  usageConfigTimeoutInput: document.getElementById("usage-config-timeout-input") as HTMLInputElement | null,
+  usageConfigIntervalInput: document.getElementById("usage-config-interval-input") as HTMLInputElement | null,
+  usageConfigDialogError: document.getElementById("usage-config-dialog-error") as HTMLParagraphElement | null,
+  cancelUsageConfigButton: document.getElementById("cancel-usage-config-button") as HTMLButtonElement | null,
+  testUsageConfigButton: document.getElementById("test-usage-config-button") as HTMLButtonElement | null,
+  submitUsageConfigButton: document.getElementById("submit-usage-config-button") as HTMLButtonElement | null,
   settingsCodexCliLabel: requiredElement<HTMLElement>("settings-codex-cli-label"),
   settingsCodexCliValue: requiredElement<HTMLParagraphElement>("settings-codex-cli-value"),
   settingsCodexCliButton: requiredElement<HTMLButtonElement>("settings-codex-cli-button"),
@@ -167,15 +194,6 @@ export const elements = {
 
 function formatPercent(value: number | null): string {
   return value == null ? "--" : `${value}%`;
-}
-
-function averagePercent(values: Array<number | null | undefined>): string {
-  const numeric = values.filter((value): value is number => typeof value === "number");
-  if (!numeric.length) {
-    return "--";
-  }
-  const average = numeric.reduce((sum, value) => sum + value, 0) / numeric.length;
-  return `${Math.round(average)}%`;
 }
 
 function formatRefresh(entry: QuotaWindow | undefined): string {
@@ -506,7 +524,7 @@ export function renderShellOverview(dashboard: DashboardViewModel | null): void 
     elements.dashboardProfileCount.textContent = "--";
     elements.dashboardReadyCount.textContent = "--";
     elements.dashboardMissingCount.textContent = "--";
-    renderSettingsUsageStats([]);
+    renderUsageStats();
     return;
   }
 
@@ -522,44 +540,183 @@ export function renderShellOverview(dashboard: DashboardViewModel | null): void 
   elements.dashboardProfileCount.textContent = String(profiles.length);
   elements.dashboardReadyCount.textContent = String(readyCount);
   elements.dashboardMissingCount.textContent = String(Math.max(0, missingCount));
-  renderSettingsUsageStats(profiles);
+  renderUsageSettingsControls(profiles);
+  renderUsageStats();
 }
 
-function renderSettingsUsageStats(profiles: ProfileCard[]): void {
+function formatCompactNumber(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "--";
+  }
+  if (value >= 10_000_000) {
+    return `${(value / 10_000_000).toFixed(2)}kw`;
+  }
+  if (value >= 10_000) {
+    return `${(value / 10_000).toFixed(1)}w`;
+  }
+  return Math.round(value).toLocaleString();
+}
+
+function formatMoney(value: number): string {
+  return `$${value.toFixed(4)}`;
+}
+
+function formatDateTime(seconds: number): string {
+  if (!seconds) {
+    return "--";
+  }
+  return new Date(seconds * 1000).toLocaleString(state.locale === "zh-CN" ? "zh-CN" : "en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function renderUsageSettingsControls(profiles: ProfileCard[]): void {
+  const select = elements.settingsUsageProfileSelect;
+  if (!select) {
+    return;
+  }
+  const selected = state.settingsUsageProfile ?? state.currentProfile ?? profiles[0]?.folder_name ?? "";
+  if (state.settingsUsageProfile !== selected) {
+    state.settingsUsageProfile = selected || null;
+  }
+  select.innerHTML = profiles
+    .map((profile) => (
+      `<option value="${escapeHtml(profile.folder_name)}"${profile.folder_name === selected ? " selected" : ""}>${escapeHtml(profileDisplayTitle(profile))}</option>`
+    ))
+    .join("");
+  const settings = selected ? state.usageSettingsByProfile[selected] : null;
+  if (elements.settingsUsageEnabledToggle) {
+    elements.settingsUsageEnabledToggle.checked = Boolean(settings?.enabled);
+  }
+  if (elements.settingsUsageTimeoutInput) {
+    elements.settingsUsageTimeoutInput.value = String(settings?.timeout_seconds ?? 10);
+  }
+  if (elements.settingsUsageIntervalInput) {
+    elements.settingsUsageIntervalInput.value = String(settings?.auto_query_interval_minutes ?? 5);
+  }
+}
+
+function renderUsageFilters(stats: UsageStatsResponse | null): void {
+  if (elements.usageRangeFilter) {
+    elements.usageRangeFilter.value = state.usageStatsRange;
+  }
+  const select = elements.usageProfileFilter;
+  if (!select || !stats) {
+    return;
+  }
+  select.innerHTML = [
+    `<option value="">${escapeHtml(t(state.locale, "usageFilterAll"))}</option>`,
+    ...stats.profiles.map((profile) => (
+      `<option value="${escapeHtml(profile.folder_name)}"${profile.folder_name === state.usageStatsProfile ? " selected" : ""}>${escapeHtml(profile.display_title)}</option>`
+    )),
+  ].join("");
+}
+
+function renderUsageTrendChart(stats: UsageStatsResponse): void {
+  const container = elements.usageTrendChart;
+  if (!container) {
+    return;
+  }
+  if (!stats.trends.length) {
+    container.innerHTML = `<div class="settings-usage-empty">${escapeHtml(t(state.locale, "usageEmpty"))}</div>`;
+    return;
+  }
+  const width = 760;
+  const height = 260;
+  const pad = { left: 44, right: 42, top: 18, bottom: 40 };
+  const maxToken = Math.max(1, ...stats.trends.map((point) => point.real_total_tokens));
+  const maxCost = Math.max(0.0001, ...stats.trends.map((point) => point.total_cost_usd));
+  const x = (index: number) => {
+    const span = Math.max(1, stats.trends.length - 1);
+    return pad.left + ((width - pad.left - pad.right) * index) / span;
+  };
+  const yToken = (value: number) => pad.top + (height - pad.top - pad.bottom) * (1 - value / maxToken);
+  const yCost = (value: number) => pad.top + (height - pad.top - pad.bottom) * (1 - value / maxCost);
+  const tokenPath = stats.trends.map((point, index) => `${index === 0 ? "M" : "L"}${x(index).toFixed(1)} ${yToken(point.real_total_tokens).toFixed(1)}`).join(" ");
+  const inputPath = stats.trends.map((point, index) => `${index === 0 ? "M" : "L"}${x(index).toFixed(1)} ${yToken(point.input_tokens).toFixed(1)}`).join(" ");
+  const outputPath = stats.trends.map((point, index) => `${index === 0 ? "M" : "L"}${x(index).toFixed(1)} ${yToken(point.output_tokens).toFixed(1)}`).join(" ");
+  const costPath = stats.trends.map((point, index) => `${index === 0 ? "M" : "L"}${x(index).toFixed(1)} ${yCost(point.total_cost_usd).toFixed(1)}`).join(" ");
+  const areaPath = `${tokenPath} L${x(stats.trends.length - 1).toFixed(1)} ${height - pad.bottom} L${pad.left} ${height - pad.bottom} Z`;
+  const ticks = stats.trends.filter((_, index) => index === 0 || index === stats.trends.length - 1 || index % Math.ceil(stats.trends.length / 4) === 0);
+  container.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(t(state.locale, "usageTrendTitle"))}">
+      <defs>
+        <linearGradient id="usageTokenGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#a855f7" stop-opacity="0.22" />
+          <stop offset="100%" stop-color="#a855f7" stop-opacity="0" />
+        </linearGradient>
+      </defs>
+      ${[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+        const y = pad.top + (height - pad.top - pad.bottom) * ratio;
+        return `<line x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}" class="usage-grid-line" />`;
+      }).join("")}
+      <path d="${areaPath}" fill="url(#usageTokenGradient)" />
+      <path d="${tokenPath}" class="usage-line usage-line--cache" />
+      <path d="${costPath}" class="usage-line usage-line--cost" />
+      <path d="${inputPath}" class="usage-line usage-line--input" />
+      <path d="${outputPath}" class="usage-line usage-line--output" />
+      ${ticks.map((point, index) => `<text x="${x(stats.trends.indexOf(point))}" y="${height - 12}" class="usage-axis-label" text-anchor="${index === 0 ? "start" : "middle"}">${escapeHtml(formatDateTime(point.timestamp))}</text>`).join("")}
+      <text x="${pad.left}" y="${pad.top + 8}" class="usage-axis-label">tokens</text>
+      <text x="${width - pad.right}" y="${pad.top + 8}" class="usage-axis-label" text-anchor="end">$</text>
+    </svg>
+    <div class="usage-legend">
+      <span class="legend-cost">${escapeHtml(t(state.locale, "usageCost"))}</span>
+      <span class="legend-cache">${escapeHtml(t(state.locale, "usageCacheHit"))}</span>
+      <span class="legend-input">${escapeHtml(t(state.locale, "usageInput"))}</span>
+      <span class="legend-output">${escapeHtml(t(state.locale, "usageOutput"))}</span>
+    </div>
+  `;
+}
+
+export function renderUsageStats(): void {
+  const stats = state.usageStats;
+  renderUsageFilters(stats);
   if (
-    !elements.settingsUsageProfileCount ||
-    !elements.settingsUsageReadyCount ||
-    !elements.settingsUsageFiveHour ||
-    !elements.settingsUsageWeekly ||
-    !elements.settingsUsageRows
+    !stats ||
+    !elements.usageRealTotal ||
+    !elements.usageRequestCount ||
+    !elements.usageTotalCost ||
+    !elements.usageInputTokens ||
+    !elements.usageOutputTokens ||
+    !elements.usageCacheCreateTokens ||
+    !elements.usageCacheHitTokens ||
+    !elements.usageCacheHitRate ||
+    !elements.usageCacheHitFill ||
+    !elements.usageSessionRows
   ) {
     return;
   }
 
-  const readyCount = profiles.filter((profile) => (
-    profile.auth_present && profile.has_account_identity && profile.status !== "missing_auth"
-  )).length;
-
-  elements.settingsUsageProfileCount.textContent = String(profiles.length);
-  elements.settingsUsageReadyCount.textContent = String(readyCount);
-  elements.settingsUsageFiveHour.textContent = averagePercent(
-    profiles.map((profile) => profile.quota?.five_hour?.remaining_percent),
-  );
-  elements.settingsUsageWeekly.textContent = averagePercent(
-    profiles.map((profile) => profile.quota?.weekly?.remaining_percent),
-  );
-
-  elements.settingsUsageRows.innerHTML = profiles.length
-    ? profiles
-        .map((profile) => `
-          <div class="settings-usage-row">
-            <span>${escapeHtml(profileDisplayTitle(profile))}</span>
-            <strong>${escapeHtml(formatPercent(profile.quota?.five_hour?.remaining_percent ?? null))}</strong>
-            <strong>${escapeHtml(formatPercent(profile.quota?.weekly?.remaining_percent ?? null))}</strong>
-          </div>
-        `)
-        .join("")
-    : `<div class="settings-usage-empty">${escapeHtml(t(state.locale, "settingsUsageEmpty"))}</div>`;
+  elements.usageRealTotal.textContent = formatCompactNumber(stats.totals.real_total_tokens);
+  elements.usageRequestCount.textContent = stats.totals.request_count.toLocaleString();
+  elements.usageTotalCost.textContent = formatMoney(stats.totals.total_cost_usd);
+  elements.usageInputTokens.textContent = formatCompactNumber(stats.totals.input_tokens);
+  elements.usageOutputTokens.textContent = formatCompactNumber(stats.totals.output_tokens);
+  elements.usageCacheCreateTokens.textContent = stats.totals.cache_creation_tokens === 0
+    ? "N/A"
+    : formatCompactNumber(stats.totals.cache_creation_tokens);
+  elements.usageCacheHitTokens.textContent = formatCompactNumber(stats.totals.cache_read_tokens);
+  const cacheRate = Math.max(0, Math.min(100, stats.totals.cache_hit_rate * 100));
+  elements.usageCacheHitRate.textContent = `${cacheRate.toFixed(1)}%`;
+  elements.usageCacheHitFill.style.width = `${cacheRate}%`;
+  if (elements.usageChartRange) {
+    elements.usageChartRange.textContent = `${formatDateTime(stats.start_at)} - ${formatDateTime(stats.end_at)}`;
+  }
+  renderUsageTrendChart(stats);
+  elements.usageSessionRows.innerHTML = stats.sessions.length
+    ? stats.sessions.map((row) => `
+        <div class="usage-session-row">
+          <span title="${escapeHtml(row.session_id)}">${escapeHtml(row.session_id.slice(0, 12))}</span>
+          <span>${escapeHtml(row.profile)}</span>
+          <span>${escapeHtml(row.model)}</span>
+          <span>${escapeHtml(formatDateTime(row.started_at))}</span>
+          <strong>${escapeHtml(formatCompactNumber(row.real_total_tokens))}</strong>
+        </div>
+      `).join("")
+    : `<div class="settings-usage-empty">${escapeHtml(t(state.locale, "usageEmpty"))}</div>`;
 }
 
 export function renderCurrentCard(dashboard: DashboardViewModel): void {

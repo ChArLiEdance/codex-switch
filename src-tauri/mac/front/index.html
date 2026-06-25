@@ -240,6 +240,36 @@
                   <span aria-hidden="true"></span>
                 </label>
               </div>
+              <div class="settings-section-card usage-query-settings-card">
+                <div class="settings-section-heading">
+                  <strong data-i18n-key="settingsProfilePersonalization">Account personalization</strong>
+                  <p class="settings-help" data-i18n-key="settingsUsageQueryCopy">Choose an account and configure automatic usage query behavior.</p>
+                </div>
+                <label class="settings-row settings-row--field">
+                  <strong data-i18n-key="settingsUsageProfileSelect">Account</strong>
+                  <select id="settings-usage-profile-select" class="settings-input"></select>
+                </label>
+                <div class="settings-row">
+                  <strong data-i18n-key="usageQueryEnabled">Enable usage query</strong>
+                  <label class="settings-switch">
+                    <input id="settings-usage-enabled-toggle" type="checkbox" />
+                    <span aria-hidden="true"></span>
+                  </label>
+                </div>
+                <div class="settings-grid-two">
+                  <label class="settings-row settings-row--field">
+                    <strong data-i18n-key="usageQueryTimeout">Timeout (seconds)</strong>
+                    <input id="settings-usage-timeout-input" class="settings-input" type="number" min="1" max="120" value="10" />
+                  </label>
+                  <label class="settings-row settings-row--field">
+                    <strong data-i18n-key="usageQueryInterval">Auto query interval</strong>
+                    <input id="settings-usage-interval-input" class="settings-input" type="number" min="0" max="1440" value="5" />
+                  </label>
+                </div>
+                <div class="settings-actions-row">
+                  <button id="settings-usage-save-button" class="settings-action-button" type="button" data-i18n-key="usageQuerySave">Save usage config</button>
+                </div>
+              </div>
               <label class="settings-row settings-row--field">
                 <strong data-i18n-key="settingsUpdateUrl">Update URL</strong>
                 <input id="settings-update-url-input" class="settings-input" type="url" value="https://api.github.com/repos/ChArLiEdance/codex-switch/releases/latest" />
@@ -258,36 +288,72 @@
               <div class="settings-usage-header">
                 <div>
                   <strong id="settings-usage-title" data-i18n-key="settingsUsageTitle">Usage Statistics</strong>
-                  <p data-i18n-key="settingsUsageSubtitle">Local profile quota overview, modeled after CC Switch usage settings.</p>
+                  <p data-i18n-key="settingsUsageSubtitle">Token usage parsed from local Codex session records.</p>
                 </div>
-                <span class="settings-usage-live-pill">Codex</span>
-              </div>
-              <div class="settings-usage-metrics">
-                <article>
-                  <span data-i18n-key="settingsUsageProfiles">Profiles</span>
-                  <strong id="settings-usage-profile-count">--</strong>
-                </article>
-                <article>
-                  <span data-i18n-key="settingsUsageReady">Ready</span>
-                  <strong id="settings-usage-ready-count">--</strong>
-                </article>
-                <article>
-                  <span data-i18n-key="settingsUsageFiveHour">Avg 5h</span>
-                  <strong id="settings-usage-five-hour">--</strong>
-                </article>
-                <article>
-                  <span data-i18n-key="settingsUsageWeekly">Avg weekly</span>
-                  <strong id="settings-usage-weekly">--</strong>
-                </article>
-              </div>
-              <div class="settings-usage-table" aria-label="Usage rows">
-                <div class="settings-usage-row settings-usage-row--head">
-                  <span data-i18n-key="settingsUsageProfile">Profile</span>
-                  <strong data-i18n-key="fiveHourAllowance">5h allowance</strong>
-                  <strong data-i18n-key="weeklyAllowance">Weekly allowance</strong>
+                <div class="usage-filter-bar">
+                  <select id="usage-profile-filter" class="settings-input usage-filter-select"></select>
+                  <select id="usage-range-filter" class="settings-input usage-filter-select">
+                    <option value="today" data-i18n-key="usageRangeToday">Today</option>
+                    <option value="7d" data-i18n-key="usageRange7d">7 days</option>
+                    <option value="30d" data-i18n-key="usageRange30d">30 days</option>
+                  </select>
+                  <button id="usage-refresh-button" class="settings-action-button" type="button" data-i18n-key="usageRefresh">Refresh usage</button>
                 </div>
-                <div id="settings-usage-rows"></div>
               </div>
+              <div class="usage-hero-panel">
+                <div class="usage-total-block">
+                  <span class="usage-hero-icon" aria-hidden="true">↯</span>
+                  <div>
+                    <span class="usage-label" data-i18n-key="usageRealTotal">Real consumed Tokens</span>
+                    <strong id="usage-real-total">--</strong>
+                  </div>
+                </div>
+                <div class="usage-mini-metrics">
+                  <article>
+                    <span data-i18n-key="usageRequests">Total requests</span>
+                    <strong id="usage-request-count">--</strong>
+                  </article>
+                  <article>
+                    <span data-i18n-key="usageCost">Estimated cost</span>
+                    <strong id="usage-total-cost">--</strong>
+                  </article>
+                </div>
+              </div>
+              <div class="usage-metric-grid">
+                <article><span data-i18n-key="usageInput">Fresh input</span><strong id="usage-input-tokens">--</strong></article>
+                <article><span data-i18n-key="usageOutput">Output</span><strong id="usage-output-tokens">--</strong></article>
+                <article><span data-i18n-key="usageCacheCreate">Cache creation</span><strong id="usage-cache-create-tokens">--</strong></article>
+                <article><span data-i18n-key="usageCacheHit">Cache hit</span><strong id="usage-cache-hit-tokens">--</strong></article>
+              </div>
+              <div class="usage-cache-rate">
+                <div class="usage-cache-rate-head">
+                  <span data-i18n-key="usageCacheHitRate">Cache hit rate</span>
+                  <strong id="usage-cache-hit-rate">--</strong>
+                </div>
+                <div class="usage-progress-track"><span id="usage-cache-hit-fill"></span></div>
+              </div>
+              <section class="usage-chart-panel">
+                <div class="usage-chart-head">
+                  <strong data-i18n-key="usageTrendTitle">Usage Trends</strong>
+                  <span id="usage-chart-range">--</span>
+                </div>
+                <div id="usage-trend-chart" class="usage-trend-chart"></div>
+              </section>
+              <section class="usage-session-panel">
+                <div class="usage-chart-head">
+                  <strong data-i18n-key="usageSessionTitle">Session token usage</strong>
+                </div>
+                <div class="usage-session-table">
+                  <div class="usage-session-row usage-session-row--head">
+                    <span data-i18n-key="usageSession">Session</span>
+                    <span data-i18n-key="settingsUsageProfileSelect">Account</span>
+                    <span data-i18n-key="usageModel">Model</span>
+                    <span data-i18n-key="usageStartedAt">Date</span>
+                    <strong data-i18n-key="usageTokens">Tokens</strong>
+                  </div>
+                  <div id="usage-session-rows"></div>
+                </div>
+              </section>
             </section>
 
             <div class="settings-tab-panel" data-settings-panel="about" hidden>
@@ -517,6 +583,48 @@
         <div class="dialog-actions">
           <button id="cancel-base-url-button" class="ghost-button" type="button">Cancel</button>
           <button id="submit-base-url-button" class="primary-button" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="usage-config-dialog" class="dialog usage-config-dialog">
+      <form id="usage-config-form" class="dialog-form" method="dialog">
+        <div class="dialog-copy">
+          <h3 id="usage-config-dialog-title">Configure usage query</h3>
+          <p id="usage-config-dialog-copy">Read this Codex account's OAuth credentials and query official subscription quota.</p>
+        </div>
+
+        <div class="usage-config-enable-row">
+          <strong data-i18n-key="usageQueryEnabled">Enable usage query</strong>
+          <label class="settings-switch">
+            <input id="usage-config-enabled-toggle" type="checkbox" />
+            <span aria-hidden="true"></span>
+          </label>
+        </div>
+
+        <div class="usage-config-preset">
+          <strong data-i18n-key="usageQueryPresetTitle">Preset template</strong>
+          <span class="usage-preset-chip" data-i18n-key="usageQueryOfficialPlan">Official subscription</span>
+          <p id="usage-config-preset-copy" class="field-copy">Read this CLI OAuth credential and call the official API to query subscription quota.</p>
+        </div>
+
+        <div class="settings-grid-two">
+          <label class="field">
+            <span data-i18n-key="usageQueryTimeout">Timeout (seconds)</span>
+            <input id="usage-config-timeout-input" name="timeout_seconds" type="number" min="1" max="120" value="10" />
+          </label>
+          <label class="field">
+            <span data-i18n-key="usageQueryInterval">Auto query interval</span>
+            <input id="usage-config-interval-input" name="auto_query_interval_minutes" type="number" min="0" max="1440" value="5" />
+          </label>
+        </div>
+
+        <p id="usage-config-dialog-error" class="dialog-error" hidden></p>
+
+        <div class="dialog-actions">
+          <button id="cancel-usage-config-button" class="ghost-button" type="button">Cancel</button>
+          <button id="test-usage-config-button" class="ghost-button" type="button" data-i18n-key="usageQueryTest">Test script</button>
+          <button id="submit-usage-config-button" class="primary-button" type="submit" data-i18n-key="usageQuerySave">Save usage config</button>
         </div>
       </form>
     </dialog>

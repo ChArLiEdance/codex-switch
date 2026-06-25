@@ -249,3 +249,91 @@ pub struct CodexCliRedetectResult {
 pub struct SetCodexCliPathPayload {
     pub path: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct UsageQuerySettings {
+    pub enabled: bool,
+    pub timeout_seconds: u32,
+    /// Minutes. `0` means no automatic usage query.
+    pub auto_query_interval_minutes: u32,
+}
+
+impl UsageQuerySettings {
+    pub fn normalized(self) -> Self {
+        Self {
+            enabled: self.enabled,
+            timeout_seconds: self.timeout_seconds.clamp(1, 120),
+            auto_query_interval_minutes: self.auto_query_interval_minutes.min(1440),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageQuerySettingsPayload {
+    pub profile: String,
+    pub settings: UsageQuerySettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageStatsPayload {
+    pub profile: Option<String>,
+    pub start_at: Option<i64>,
+    pub end_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct UsageTotals {
+    pub request_count: u64,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cache_read_tokens: u64,
+    pub cache_creation_tokens: u64,
+    pub real_total_tokens: u64,
+    pub total_cost_usd: f64,
+    pub cache_hit_rate: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageTrendPoint {
+    pub bucket: String,
+    pub timestamp: i64,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cache_read_tokens: u64,
+    pub cache_creation_tokens: u64,
+    pub real_total_tokens: u64,
+    pub total_cost_usd: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageSessionRow {
+    pub profile: String,
+    pub session_id: String,
+    pub model: String,
+    pub started_at: i64,
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cache_read_tokens: u64,
+    pub cache_creation_tokens: u64,
+    pub real_total_tokens: u64,
+    pub total_cost_usd: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageProfileOption {
+    pub folder_name: String,
+    pub display_title: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageStatsResponse {
+    pub profiles: Vec<UsageProfileOption>,
+    pub selected_profile: Option<String>,
+    pub start_at: i64,
+    pub end_at: i64,
+    pub totals: UsageTotals,
+    pub trends: Vec<UsageTrendPoint>,
+    pub sessions: Vec<UsageSessionRow>,
+}

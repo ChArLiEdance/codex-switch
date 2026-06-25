@@ -12,6 +12,9 @@ import type {
   QuotaSummary,
   SwitchResponse,
   UpdateCheckResponse,
+  UsageQuerySettings,
+  UsageStatsPayload,
+  UsageStatsResponse,
 } from "@front-shared/types";
 
 type NativeCommandError = Error & {
@@ -161,6 +164,88 @@ function mockAction(message: string, path: string | null = null): Promise<Action
   });
 }
 
+const previewUsageSettings = new Map<string, UsageQuerySettings>();
+
+function defaultUsageSettings(): UsageQuerySettings {
+  return {
+    enabled: false,
+    timeout_seconds: 10,
+    auto_query_interval_minutes: 5,
+  };
+}
+
+function makePreviewUsageStats(payload: UsageStatsPayload | undefined): UsageStatsResponse {
+  const now = Math.floor(Date.now() / 1000);
+  const start = payload?.start_at ?? now - 24 * 60 * 60;
+  const end = payload?.end_at ?? now;
+  const profiles = previewSnapshot.profiles.map((profile) => ({
+    folder_name: profile.folder_name,
+    display_title: profile.account_label ?? profile.display_title ?? profile.folder_name,
+  }));
+  const selected = payload?.profile ?? null;
+  const scale = selected ? 1 : Math.max(1, profiles.length);
+  const trends = Array.from({ length: 8 }, (_, index) => {
+    const timestamp = start + Math.floor(((end - start) * index) / 7);
+    const input = index < 4 ? 0 : (index - 3) * 420000 * scale;
+    const output = index < 4 ? 0 : (index - 3) * 12000 * scale;
+    const cache = index < 4 ? 0 : (index - 3) * 5100000 * scale;
+    return {
+      bucket: new Date(timestamp * 1000).toLocaleString(),
+      timestamp,
+      input_tokens: input,
+      output_tokens: output,
+      cache_read_tokens: cache,
+      cache_creation_tokens: 0,
+      real_total_tokens: input + output + cache,
+      total_cost_usd: (input * 1.25 + output * 10 + cache * 0.125) / 1_000_000,
+    };
+  });
+  const totals = trends.reduce(
+    (acc, point) => ({
+      request_count: acc.request_count + (point.real_total_tokens > 0 ? 28 : 0),
+      input_tokens: acc.input_tokens + point.input_tokens,
+      output_tokens: acc.output_tokens + point.output_tokens,
+      cache_read_tokens: acc.cache_read_tokens + point.cache_read_tokens,
+      cache_creation_tokens: 0,
+      real_total_tokens: acc.real_total_tokens + point.real_total_tokens,
+      total_cost_usd: acc.total_cost_usd + point.total_cost_usd,
+      cache_hit_rate: 0,
+    }),
+    {
+      request_count: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_read_tokens: 0,
+      cache_creation_tokens: 0,
+      real_total_tokens: 0,
+      total_cost_usd: 0,
+      cache_hit_rate: 0,
+    },
+  );
+  const cacheable = totals.input_tokens + totals.cache_read_tokens;
+  totals.cache_hit_rate = cacheable > 0 ? totals.cache_read_tokens / cacheable : 0;
+  return {
+    profiles,
+    selected_profile: selected,
+    start_at: start,
+    end_at: end,
+    totals,
+    trends,
+    sessions: profiles.slice(0, selected ? 1 : 4).map((profile, index) => ({
+      profile: profile.folder_name,
+      session_id: `preview-session-${index + 1}`,
+      model: index % 2 === 0 ? "gpt-5" : "gpt-4.1",
+      started_at: end - index * 3600,
+      input_tokens: 64000 * (index + 1),
+      output_tokens: 3200 * (index + 1),
+      cache_read_tokens: 880000 * (index + 1),
+      cache_creation_tokens: 0,
+      real_total_tokens: 947200 * (index + 1),
+      total_cost_usd: 0.42 * (index + 1),
+    })),
+  };
+}
+
 function refreshPreviewSnapshot(): void {
   previewSnapshot = {
     page_size: 8,
@@ -201,6 +286,20 @@ async function invokeCommand<T>(command: string, args?: Record<string, unknown>)
         } as T;
       case "refresh_all_oauth_profile_plans_silent":
         return 0 as T;
+      case "get_usage_stats":
+        return makePreviewUsageStats(args?.payload as UsageStatsPayload | undefined) as T;
+      case "get_usage_query_settings": {
+        const profile = (args?.profile as string | undefined) ?? "";
+        return clone(previewUsageSettings.get(profile) ?? defaultUsageSettings()) as T;
+      }
+      case "save_usage_query_settings": {
+        const payload = args?.payload as { profile?: string; settings?: UsageQuerySettings } | undefined;
+        if (payload?.profile && payload.settings) {
+          previewUsageSettings.set(payload.profile, clone(payload.settings));
+          return clone(payload.settings) as T;
+        }
+        return defaultUsageSettings() as T;
+      }
       case "switch_profile": {
         const profile = (args?.payload as { profile?: string } | undefined)?.profile ?? previewCurrentCard.folder_name;
         const next = previewSnapshot.profiles.find((entry) => entry.folder_name === profile);
@@ -383,6 +482,23 @@ export function refreshActiveProfileQuotaSilent(): Promise<CurrentQuotaResponse>
 
 export function refreshAllOauthProfilePlansSilent(): Promise<number> {
   return invokeCommand<number>("refresh_all_oauth_profile_plans_silent");
+}
+
+export function getUsageStats(payload: UsageStatsPayload): Promise<UsageStatsResponse> {
+  return invokeCommand<UsageStatsResponse>("get_usage_stats", { payload });
+}
+
+export function getUsageQuerySettings(profile: string): Promise<UsageQuerySettings> {
+  return invokeCommand<UsageQuerySettings>("get_usage_query_settings", { profile });
+}
+
+export function saveUsageQuerySettings(
+  profile: string,
+  settings: UsageQuerySettings,
+): Promise<UsageQuerySettings> {
+  return invokeCommand<UsageQuerySettings>("save_usage_query_settings", {
+    payload: { profile, settings },
+  });
 }
 
 export function switchProfile(profile: string): Promise<SwitchResponse> {

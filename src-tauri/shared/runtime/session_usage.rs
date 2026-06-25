@@ -1,15 +1,22 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use chrono::{Local, TimeZone};
+use chrono::{DateTime, Local, TimeZone};
 use serde::Deserialize;
+use serde_json::Value;
 
-use crate::models::{QuotaSummary, QuotaWindow};
+use crate::models::{
+    QuotaSummary, QuotaWindow, UsageProfileOption, UsageQuerySettings, UsageSessionRow,
+    UsageStatsPayload, UsageStatsResponse, UsageTotals, UsageTrendPoint,
+};
 
 use super::paths::get_codex_home;
 use super::quota_cache::{file_signature, CachedEntry, CachedSnapshot, QuotaCache};
 use super::quota_routing::{slot_from_window_minutes, QuotaSlot};
 use super::session_files::{collect_jsonl_files, file_modified_ms};
+
+const USAGE_SETTINGS_FILENAME: &str = "usage_settings.json";
 
 #[derive(Clone, Debug)]
 pub struct LocalQuotaSnapshot {
@@ -45,11 +52,101 @@ struct SessionRateLimitWindow {
     window_minutes: Option<i64>,
 }
 
+#[derive(Debug, Clone, Default)]
+struct CumulativeTokens {
+    input: u64,
+    cached_input: u64,
+    output: u64,
+}
+
+#[derive(Debug, Clone, Default)]
+struct DeltaTokens {
+    input: u64,
+    cached_input: u64,
+    output: u64,
+}
+
+#[derive(Debug, Clone)]
+struct UsageEvent {
+    profile: String,
+    session_id: String,
+    model: String,
+    timestamp: i64,
+    delta: DeltaTokens,
+}
+
+#[derive(Debug, Default)]
+struct SessionUsageAccumulator {
+    profile: String,
+    session_id: String,
+    model: String,
+    started_at: i64,
+    input_tokens: u64,
+    output_tokens: u64,
+    cache_read_tokens: u64,
+}
+
 fn get_sessions_root(codex_home: Option<&Path>) -> PathBuf {
     codex_home
         .map(Path::to_path_buf)
         .unwrap_or_else(get_codex_home)
         .join("sessions")
+}
+
+fn get_profile_usage_settings_path(profile: &str, codex_home: Option<&Path>) -> Option<PathBuf> {
+    let profile = super::paths::validate_profile_name(profile).ok()?;
+    let codex_home = codex_home
+        .map(Path::to_path_buf)
+        .unwrap_or_else(get_codex_home);
+    Some(
+        super::paths::get_backup_root(Some(&codex_home))
+            .join(profile)
+            .join(USAGE_SETTINGS_FILENAME),
+    )
+}
+
+pub fn load_usage_query_settings(profile: &str, codex_home: Option<&Path>) -> UsageQuerySettings {
+    let Some(path) = get_profile_usage_settings_path(profile, codex_home) else {
+        return UsageQuerySettings::default().normalized();
+    };
+    let Ok(raw) = fs::read_to_string(path) else {
+        return UsageQuerySettings::default().normalized();
+    };
+    serde_json::from_str::<UsageQuerySettings>(&raw)
+        .unwrap_or_default()
+        .normalized()
+}
+
+pub fn save_usage_query_settings(
+    profile: &str,
+    settings: UsageQuerySettings,
+    codex_home: Option<&Path>,
+) -> crate::errors::AppResult<UsageQuerySettings> {
+    let profile = super::paths::validate_profile_name(profile)?;
+    let codex_home = codex_home
+        .map(Path::to_path_buf)
+        .unwrap_or_else(get_codex_home);
+    let profile_dir = super::paths::get_backup_root(Some(&codex_home)).join(&profile);
+    if !profile_dir.is_dir() {
+        return Err(crate::errors::AppError::new(
+            "PROFILE_NOT_FOUND",
+            format!("Profile not found: {profile}"),
+        ));
+    }
+    let normalized = settings.normalized();
+    let serialized = serde_json::to_vec_pretty(&normalized).map_err(|error| {
+        crate::errors::AppError::new(
+            "USAGE_SETTINGS_SERIALIZE_FAILED",
+            format!("Failed to serialize usage settings: {error}"),
+        )
+    })?;
+    fs::write(profile_dir.join(USAGE_SETTINGS_FILENAME), serialized).map_err(|error| {
+        crate::errors::AppError::new(
+            "USAGE_SETTINGS_WRITE_FAILED",
+            format!("Failed to write usage settings: {error}"),
+        )
+    })?;
+    Ok(normalized)
 }
 
 fn session_files_descending(codex_home: Option<&Path>) -> Vec<PathBuf> {
@@ -203,6 +300,391 @@ fn load_latest_quota_from_file(path: &Path) -> Option<QuotaSummary> {
     select_latest_quota_from_lines(raw.lines())
 }
 
+fn parse_session_timestamp(value: &Value, fallback: i64) -> i64 {
+    value
+        .get("timestamp")
+        .and_then(Value::as_str)
+        .and_then(|raw| DateTime::parse_from_rfc3339(raw).ok())
+        .map(|datetime| datetime.timestamp())
+        .unwrap_or(fallback)
+}
+
+fn normalize_model_name(raw: &str) -> String {
+    let mut name = raw.trim().to_lowercase();
+    if let Some((_, tail)) = name.rsplit_once('/') {
+        name = tail.to_string();
+    }
+    for suffix_len in [11usize, 9usize] {
+        if name.len() > suffix_len {
+            let suffix = &name[name.len() - suffix_len..];
+            let is_iso = suffix_len == 11
+                && suffix.as_bytes().first() == Some(&b'-')
+                && suffix[1..5].chars().all(|c| c.is_ascii_digit())
+                && suffix.as_bytes().get(5) == Some(&b'-')
+                && suffix[6..8].chars().all(|c| c.is_ascii_digit())
+                && suffix.as_bytes().get(8) == Some(&b'-')
+                && suffix[9..11].chars().all(|c| c.is_ascii_digit());
+            let is_compact = suffix_len == 9
+                && suffix.as_bytes().first() == Some(&b'-')
+                && suffix[1..].chars().all(|c| c.is_ascii_digit());
+            if is_iso || is_compact {
+                name.truncate(name.len() - suffix_len);
+            }
+        }
+    }
+    if name.is_empty() {
+        "unknown".to_string()
+    } else {
+        name
+    }
+}
+
+fn parse_cumulative_tokens(value: &Value) -> Option<CumulativeTokens> {
+    if !value.is_object() {
+        return None;
+    }
+    Some(CumulativeTokens {
+        input: value
+            .get("input_tokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+        cached_input: value
+            .get("cached_input_tokens")
+            .or_else(|| value.get("cache_read_input_tokens"))
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+        output: value
+            .get("output_tokens")
+            .and_then(Value::as_u64)
+            .unwrap_or(0),
+    })
+}
+
+fn token_delta(previous: &Option<CumulativeTokens>, current: &CumulativeTokens) -> DeltaTokens {
+    match previous {
+        Some(previous) => DeltaTokens {
+            input: current.input.saturating_sub(previous.input),
+            cached_input: current.cached_input.saturating_sub(previous.cached_input),
+            output: current.output.saturating_sub(previous.output),
+        },
+        None => DeltaTokens {
+            input: current.input,
+            cached_input: current.cached_input,
+            output: current.output,
+        },
+    }
+}
+
+fn cost_for_event(model: &str, delta: &DeltaTokens) -> f64 {
+    let model = model.to_lowercase();
+    let (input_per_m, output_per_m, cache_per_m) = if model.contains("gpt-5") {
+        (1.25, 10.0, 0.125)
+    } else if model.contains("gpt-4.1") {
+        (2.0, 8.0, 0.5)
+    } else if model.contains("gpt-4") || model.contains("o3") {
+        (5.0, 15.0, 1.25)
+    } else {
+        (1.0, 4.0, 0.25)
+    };
+    let fresh_input = delta.input.saturating_sub(delta.cached_input) as f64;
+    (fresh_input * input_per_m
+        + delta.output as f64 * output_per_m
+        + delta.cached_input as f64 * cache_per_m)
+        / 1_000_000.0
+}
+
+fn parse_usage_events_from_file(profile: &str, path: &Path) -> Vec<UsageEvent> {
+    let raw = match fs::read_to_string(path) {
+        Ok(raw) => raw,
+        Err(_) => return Vec::new(),
+    };
+    let fallback_ts = file_modified_ms(path)
+        .and_then(|mtime| i64::try_from(mtime / 1000).ok())
+        .unwrap_or(0);
+
+    let mut events = Vec::new();
+    let mut session_id = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let mut model = "unknown".to_string();
+    let mut previous_total: Option<CumulativeTokens> = None;
+
+    for line in raw.lines() {
+        if !line.contains("token_count")
+            && !line.contains("turn_context")
+            && !line.contains("session_meta")
+        {
+            continue;
+        }
+        let Ok(value) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        match value.get("type").and_then(Value::as_str) {
+            Some("session_meta") => {
+                if let Some(next_id) = value
+                    .get("payload")
+                    .and_then(|payload| {
+                        payload
+                            .get("session_id")
+                            .or_else(|| payload.get("sessionId"))
+                            .or_else(|| payload.get("id"))
+                    })
+                    .and_then(Value::as_str)
+                {
+                    session_id = next_id.to_string();
+                }
+            }
+            Some("turn_context") => {
+                if let Some(next_model) = value
+                    .get("payload")
+                    .and_then(|payload| {
+                        payload
+                            .get("model")
+                            .or_else(|| payload.get("info").and_then(|info| info.get("model")))
+                    })
+                    .and_then(Value::as_str)
+                {
+                    model = normalize_model_name(next_model);
+                }
+            }
+            Some("event_msg") => {
+                let Some(payload) = value.get("payload") else {
+                    continue;
+                };
+                if payload.get("type").and_then(Value::as_str) != Some("token_count") {
+                    continue;
+                }
+                let Some(info) = payload.get("info").filter(|info| info.is_object()) else {
+                    continue;
+                };
+                if let Some(next_model) = info
+                    .get("model")
+                    .or_else(|| info.get("model_name"))
+                    .or_else(|| payload.get("model"))
+                    .and_then(Value::as_str)
+                {
+                    model = normalize_model_name(next_model);
+                }
+                let (tokens, is_total) = if let Some(total) = info.get("total_token_usage") {
+                    (parse_cumulative_tokens(total), true)
+                } else if let Some(last) = info.get("last_token_usage") {
+                    (parse_cumulative_tokens(last), false)
+                } else {
+                    (None, false)
+                };
+                let Some(tokens) = tokens else {
+                    continue;
+                };
+                let mut delta = if is_total {
+                    let delta = token_delta(&previous_total, &tokens);
+                    previous_total = Some(tokens);
+                    delta
+                } else {
+                    DeltaTokens {
+                        input: tokens.input,
+                        cached_input: tokens.cached_input,
+                        output: tokens.output,
+                    }
+                };
+                delta.cached_input = delta.cached_input.min(delta.input);
+                if delta.input == 0 && delta.output == 0 && delta.cached_input == 0 {
+                    continue;
+                }
+                events.push(UsageEvent {
+                    profile: profile.to_string(),
+                    session_id: session_id.clone(),
+                    model: model.clone(),
+                    timestamp: parse_session_timestamp(&value, fallback_ts),
+                    delta,
+                });
+            }
+            _ => {}
+        }
+    }
+
+    events
+}
+
+fn collect_usage_files_for_profile(
+    profile: &str,
+    codex_home: &Path,
+    current: Option<&str>,
+) -> Vec<PathBuf> {
+    let backup_root = super::paths::get_backup_root(Some(codex_home));
+    let mut files = Vec::new();
+    if current == Some(profile) {
+        collect_jsonl_files(&codex_home.join("sessions"), &mut files);
+    }
+    collect_jsonl_files(&backup_root.join(profile).join("sessions"), &mut files);
+    files.sort();
+    files.dedup();
+    files
+}
+
+fn default_usage_range() -> (i64, i64) {
+    let now = chrono::Utc::now().timestamp();
+    (now.saturating_sub(24 * 60 * 60), now)
+}
+
+fn bucket_timestamp(timestamp: i64, start_at: i64, end_at: i64) -> i64 {
+    let span = end_at.saturating_sub(start_at);
+    let width = if span <= 24 * 60 * 60 {
+        60 * 60
+    } else {
+        24 * 60 * 60
+    };
+    timestamp - timestamp.rem_euclid(width)
+}
+
+fn push_totals(totals: &mut UsageTotals, delta: &DeltaTokens, model: &str) {
+    let fresh_input = delta.input.saturating_sub(delta.cached_input);
+    totals.request_count += 1;
+    totals.input_tokens += fresh_input;
+    totals.output_tokens += delta.output;
+    totals.cache_read_tokens += delta.cached_input;
+    totals.real_total_tokens += fresh_input + delta.output + delta.cached_input;
+    totals.total_cost_usd += cost_for_event(model, delta);
+}
+
+fn finish_totals(totals: &mut UsageTotals) {
+    let cacheable = totals.input_tokens + totals.cache_read_tokens + totals.cache_creation_tokens;
+    totals.cache_hit_rate = if cacheable == 0 {
+        0.0
+    } else {
+        totals.cache_read_tokens as f64 / cacheable as f64
+    };
+}
+
+pub fn load_usage_stats(
+    payload: UsageStatsPayload,
+    codex_home: Option<&Path>,
+) -> crate::errors::AppResult<UsageStatsResponse> {
+    let codex_home = codex_home
+        .map(Path::to_path_buf)
+        .unwrap_or_else(get_codex_home);
+    let index = super::profiles_index::load_profiles_index(Some(&codex_home))?;
+    let profiles: Vec<UsageProfileOption> = index
+        .profiles
+        .iter()
+        .map(|profile| UsageProfileOption {
+            folder_name: profile.folder_name.clone(),
+            display_title: profile
+                .account_label
+                .clone()
+                .unwrap_or_else(|| profile.folder_name.clone()),
+        })
+        .collect();
+    let selected_profile = payload.profile.and_then(|profile| {
+        profiles
+            .iter()
+            .any(|option| option.folder_name == profile)
+            .then_some(profile)
+    });
+    let (default_start, default_end) = default_usage_range();
+    let start_at = payload.start_at.unwrap_or(default_start);
+    let end_at = payload.end_at.unwrap_or(default_end).max(start_at);
+
+    let selected_names: Vec<String> = selected_profile
+        .clone()
+        .map(|profile| vec![profile])
+        .unwrap_or_else(|| {
+            profiles
+                .iter()
+                .map(|profile| profile.folder_name.clone())
+                .collect()
+        });
+
+    let mut totals = UsageTotals::default();
+    let mut trend_map: BTreeMap<i64, UsageTrendPoint> = BTreeMap::new();
+    let mut session_map: BTreeMap<(String, String), SessionUsageAccumulator> = BTreeMap::new();
+
+    for profile in selected_names {
+        for file in
+            collect_usage_files_for_profile(&profile, &codex_home, index.current_profile.as_deref())
+        {
+            for event in parse_usage_events_from_file(&profile, &file) {
+                if event.timestamp < start_at || event.timestamp > end_at {
+                    continue;
+                }
+                push_totals(&mut totals, &event.delta, &event.model);
+
+                let fresh_input = event.delta.input.saturating_sub(event.delta.cached_input);
+                let bucket = bucket_timestamp(event.timestamp, start_at, end_at);
+                let trend = trend_map.entry(bucket).or_insert_with(|| UsageTrendPoint {
+                    bucket: Local
+                        .timestamp_opt(bucket, 0)
+                        .single()
+                        .map(|datetime| datetime.format("%Y-%m-%d %H:%M").to_string())
+                        .unwrap_or_else(|| bucket.to_string()),
+                    timestamp: bucket,
+                    input_tokens: 0,
+                    output_tokens: 0,
+                    cache_read_tokens: 0,
+                    cache_creation_tokens: 0,
+                    real_total_tokens: 0,
+                    total_cost_usd: 0.0,
+                });
+                trend.input_tokens += fresh_input;
+                trend.output_tokens += event.delta.output;
+                trend.cache_read_tokens += event.delta.cached_input;
+                trend.real_total_tokens +=
+                    fresh_input + event.delta.output + event.delta.cached_input;
+                trend.total_cost_usd += cost_for_event(&event.model, &event.delta);
+
+                let session = session_map
+                    .entry((event.profile.clone(), event.session_id.clone()))
+                    .or_insert_with(|| SessionUsageAccumulator {
+                        profile: event.profile.clone(),
+                        session_id: event.session_id.clone(),
+                        model: event.model.clone(),
+                        started_at: event.timestamp,
+                        ..SessionUsageAccumulator::default()
+                    });
+                session.started_at = session.started_at.min(event.timestamp);
+                session.model = event.model.clone();
+                session.input_tokens += fresh_input;
+                session.output_tokens += event.delta.output;
+                session.cache_read_tokens += event.delta.cached_input;
+            }
+        }
+    }
+
+    finish_totals(&mut totals);
+    let mut sessions: Vec<UsageSessionRow> = session_map
+        .into_values()
+        .map(|session| {
+            let real_total_tokens =
+                session.input_tokens + session.output_tokens + session.cache_read_tokens;
+            UsageSessionRow {
+                profile: session.profile,
+                session_id: session.session_id,
+                model: session.model,
+                started_at: session.started_at,
+                input_tokens: session.input_tokens,
+                output_tokens: session.output_tokens,
+                cache_read_tokens: session.cache_read_tokens,
+                cache_creation_tokens: 0,
+                real_total_tokens,
+                total_cost_usd: 0.0,
+            }
+        })
+        .collect();
+    sessions.sort_by(|left, right| right.started_at.cmp(&left.started_at));
+    sessions.truncate(100);
+
+    Ok(UsageStatsResponse {
+        profiles,
+        selected_profile,
+        start_at,
+        end_at,
+        totals,
+        trends: trend_map.into_values().collect(),
+        sessions,
+    })
+}
+
 #[allow(dead_code)]
 pub fn load_latest_local_quota(codex_home: Option<&Path>) -> Option<QuotaSummary> {
     load_latest_local_quota_snapshot(codex_home).map(|snapshot| snapshot.quota)
@@ -316,9 +798,7 @@ fn try_fast_path(
     if signature != (last.mtime_ms, last.size) {
         return None;
     }
-    if min_source_mtime_ms.is_some_and(|min_mtime| {
-        last.source_mtime_ms.unwrap_or(0) < min_mtime
-    }) {
+    if min_source_mtime_ms.is_some_and(|min_mtime| last.source_mtime_ms.unwrap_or(0) < min_mtime) {
         return None;
     }
     Some(LocalQuotaSnapshot {
@@ -463,7 +943,11 @@ mod tests {
             // Add a lex-larger file with a different quota — the fast
             // path's `newest != last.path` guard must reject the
             // cached snapshot and pick up the new file.
-            write_jsonl(&codex_home, "2026/05/10/rollout-Z.jsonl", QUOTA_LINE_DIFFERENT);
+            write_jsonl(
+                &codex_home,
+                "2026/05/10/rollout-Z.jsonl",
+                QUOTA_LINE_DIFFERENT,
+            );
 
             let second = load_latest_local_quota_snapshot(Some(&codex_home))
                 .expect("second call returns quota from the new file");
@@ -510,7 +994,11 @@ mod tests {
             let codex_home = temp_codex_home("per-file-skip");
             // Older file: no token_count event — `load_latest_quota_from_file`
             // returns `None`. Newer file: has a quota.
-            write_jsonl(&codex_home, "2026/05/10/rollout-A.jsonl", "{\"type\":\"event_msg\"}\n");
+            write_jsonl(
+                &codex_home,
+                "2026/05/10/rollout-A.jsonl",
+                "{\"type\":\"event_msg\"}\n",
+            );
             write_jsonl(&codex_home, "2026/05/10/rollout-Z.jsonl", QUOTA_LINE);
 
             let first = load_latest_local_quota_snapshot(Some(&codex_home))

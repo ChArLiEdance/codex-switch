@@ -116,3 +116,65 @@ export interface CodexCliRedetectResult {
 }
 
 export type ShellRoute = "dashboard" | "profiles" | "settings" | "guide" | "skills" | "prompts" | "history";
+
+export interface UsageQuerySettings {
+  enabled: boolean;
+  timeout_seconds: number;
+  auto_query_interval_minutes: number;
+}
+
+export interface UsageStatsPayload {
+  profile: string | null;
+  start_at: number | null;
+  end_at: number | null;
+}
+
+export interface UsageTotals {
+  request_count: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+  real_total_tokens: number;
+  total_cost_usd: number;
+  cache_hit_rate: number;
+}
+
+export interface UsageTrendPoint {
+  bucket: string;
+  timestamp: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+  real_total_tokens: number;
+  total_cost_usd: number;
+}
+
+export interface UsageSessionRow {
+  profile: string;
+  session_id: string;
+  model: string;
+  started_at: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+  real_total_tokens: number;
+  total_cost_usd: number;
+}
+
+export interface UsageProfileOption {
+  folder_name: string;
+  display_title: string;
+}
+
+export interface UsageStatsResponse {
+  profiles: UsageProfileOption[];
+  selected_profile: string | null;
+  start_at: number;
+  end_at: number;
+  totals: UsageTotals;
+  trends: UsageTrendPoint[];
+  sessions: UsageSessionRow[];
+}

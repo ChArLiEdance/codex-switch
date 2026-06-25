@@ -39,6 +39,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::dashboard::get_profiles_snapshot,
             commands::dashboard::get_current_live_quota,
+            commands::dashboard::get_usage_stats,
+            commands::dashboard::get_usage_query_settings,
+            commands::dashboard::save_usage_query_settings,
             commands::dashboard::refresh_active_profile_quota_silent,
             commands::dashboard::refresh_all_oauth_profile_plans_silent,
             commands::actions::open_codex,

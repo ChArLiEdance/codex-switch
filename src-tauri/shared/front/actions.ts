@@ -26,6 +26,8 @@ import {
   getCodexCliStatus,
   getCurrentLiveQuota,
   getProfilesSnapshot,
+  getUsageQuerySettings,
+  getUsageStats,
   loginCurrentProfile,
   openCodex,
   openContact,
@@ -39,11 +41,18 @@ import {
   refreshProfile,
   redetectCodexCliPath,
   renameProfile,
+  saveUsageQuerySettings,
   setCodexCliPath,
   switchProfile,
   updateProfileBaseUrl,
 } from "@front-shared/tauri";
-import type { CodexCliCandidate, CodexCliRedetectResult, CodexCliStatus } from "@front-shared/types";
+import type {
+  CodexCliCandidate,
+  CodexCliRedetectResult,
+  CodexCliStatus,
+  ProfileCard,
+  UsageQuerySettings,
+} from "@front-shared/types";
 import {
   applyLocale,
   elements,
@@ -84,7 +93,9 @@ function rerenderDashboard(): void {
     (profile) => {
       void handleLoginProfile(profile);
     },
-    handleToggleQuotaProfile,
+    (profile) => {
+      void handleToggleQuotaProfile(profile);
+    },
     handleReorderProfiles,
   );
   renderCurrentCard(dashboard);
@@ -98,9 +109,198 @@ let pendingUpdateReleaseUrl: string | null = null;
 let deleteSourceProfile: string | null = null;
 let pendingLoginRetry: (() => Promise<void>) | null = null;
 let cancelledLoginProfile: string | null = null;
+let usageConfigSourceProfile: string | null = null;
 
 function isRefreshPending(profile: string): boolean {
   return state.refreshActiveProfiles.includes(profile);
+}
+
+function defaultUsageSettings(): UsageQuerySettings {
+  return {
+    enabled: false,
+    timeout_seconds: 10,
+    auto_query_interval_minutes: 5,
+  };
+}
+
+function usageRangeBounds(range: typeof state.usageStatsRange): { start_at: number; end_at: number } {
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (range === "7d") {
+    start.setDate(start.getDate() - 6);
+  } else if (range === "30d") {
+    start.setDate(start.getDate() - 29);
+  }
+  return {
+    start_at: Math.floor(start.getTime() / 1000),
+    end_at: Math.floor(now.getTime() / 1000),
+  };
+}
+
+async function ensureUsageSettings(profile: string): Promise<UsageQuerySettings> {
+  const cached = state.usageSettingsByProfile[profile];
+  if (cached) {
+    return cached;
+  }
+  const settings = await getUsageQuerySettings(profile);
+  state.usageSettingsByProfile = {
+    ...state.usageSettingsByProfile,
+    [profile]: settings,
+  };
+  return settings;
+}
+
+async function loadUsageSettingsForProfiles(profiles: ProfileCard[]): Promise<void> {
+  const missing = profiles.filter((profile) => !state.usageSettingsByProfile[profile.folder_name]);
+  if (missing.length === 0) {
+    return;
+  }
+  const loaded = await Promise.all(
+    missing.map(async (profile) => [profile.folder_name, await getUsageQuerySettings(profile.folder_name)] as const),
+  );
+  state.usageSettingsByProfile = {
+    ...state.usageSettingsByProfile,
+    ...Object.fromEntries(loaded),
+  };
+}
+
+function usageSettingsFromInputs(prefix: "settings" | "dialog"): UsageQuerySettings {
+  const enabled = prefix === "settings"
+    ? elements.settingsUsageEnabledToggle?.checked
+    : elements.usageConfigEnabledToggle?.checked;
+  const timeout = prefix === "settings"
+    ? elements.settingsUsageTimeoutInput?.valueAsNumber
+    : elements.usageConfigTimeoutInput?.valueAsNumber;
+  const interval = prefix === "settings"
+    ? elements.settingsUsageIntervalInput?.valueAsNumber
+    : elements.usageConfigIntervalInput?.valueAsNumber;
+  return {
+    enabled: Boolean(enabled),
+    timeout_seconds: Number.isFinite(timeout) ? Math.max(1, Math.round(timeout ?? 10)) : 10,
+    auto_query_interval_minutes: Number.isFinite(interval) ? Math.max(0, Math.round(interval ?? 5)) : 5,
+  };
+}
+
+async function saveUsageSettingsForProfile(profile: string, settings: UsageQuerySettings): Promise<void> {
+  const saved = await saveUsageQuerySettings(profile, settings);
+  state.usageSettingsByProfile = {
+    ...state.usageSettingsByProfile,
+    [profile]: saved,
+  };
+}
+
+async function refreshUsageStats(showError = false): Promise<void> {
+  try {
+    const bounds = usageRangeBounds(state.usageStatsRange);
+    state.usageStats = await getUsageStats({
+      profile: state.usageStatsProfile,
+      start_at: bounds.start_at,
+      end_at: bounds.end_at,
+    });
+  } catch (error) {
+    if (showError) {
+      showToast(error instanceof Error ? error.message : t(state.locale, "usageEmpty"), true);
+    }
+  } finally {
+    rerenderDashboard();
+  }
+}
+
+function selectedSettingsUsageProfile(): string | null {
+  const selected = elements.settingsUsageProfileSelect?.value || state.settingsUsageProfile;
+  return selected || state.currentProfile || state.snapshot?.profiles[0]?.folder_name || null;
+}
+
+async function saveSettingsUsageProfile(): Promise<void> {
+  const profile = selectedSettingsUsageProfile();
+  if (!profile) {
+    showToast(t(state.locale, "settingsUsageEmpty"), true);
+    return;
+  }
+  try {
+    await saveUsageSettingsForProfile(profile, usageSettingsFromInputs("settings"));
+    showToast(t(state.locale, "usageQuerySaved"));
+    rerenderDashboard();
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : t(state.locale, "failedToSaveBaseUrl"), true);
+  }
+}
+
+function openUsageConfigDialog(profile: string): void {
+  if (
+    !elements.usageConfigDialog ||
+    !elements.usageConfigForm ||
+    !elements.usageConfigDialogError ||
+    !elements.usageConfigEnabledToggle ||
+    !elements.usageConfigTimeoutInput ||
+    !elements.usageConfigIntervalInput
+  ) {
+    return;
+  }
+  usageConfigSourceProfile = profile;
+  const settings = state.usageSettingsByProfile[profile] ?? defaultUsageSettings();
+  clearDialogError(elements.usageConfigDialogError);
+  elements.usageConfigForm.reset();
+  elements.usageConfigEnabledToggle.checked = settings.enabled;
+  elements.usageConfigTimeoutInput.value = String(settings.timeout_seconds);
+  elements.usageConfigIntervalInput.value = String(settings.auto_query_interval_minutes);
+  if (elements.usageConfigDialogTitle) {
+    elements.usageConfigDialogTitle.textContent = t(state.locale, "usageQuerySetupTitle");
+  }
+  if (elements.usageConfigDialogCopy) {
+    elements.usageConfigDialogCopy.textContent = t(state.locale, "usageQuerySetupCopy");
+  }
+  elements.usageConfigDialog.showModal();
+}
+
+function closeUsageConfigDialog(): void {
+  usageConfigSourceProfile = null;
+  elements.usageConfigDialog?.close();
+}
+
+function scheduleUsageStatsRefresh(): void {
+  window.setInterval(() => {
+    const intervals = Object.values(state.usageSettingsByProfile)
+      .filter((settings) => settings.enabled && settings.auto_query_interval_minutes > 0)
+      .map((settings) => settings.auto_query_interval_minutes);
+    if (intervals.length === 0) {
+      return;
+    }
+
+    const shortestMs = Math.max(60_000, Math.min(...intervals) * 60_000);
+    const now = Date.now();
+    const lastRun = Number(document.body.dataset.usageStatsLastRun ?? "0");
+    if (now - lastRun < shortestMs) {
+      return;
+    }
+    document.body.dataset.usageStatsLastRun = String(now);
+    void refreshUsageStats(false);
+  }, 60_000);
+}
+
+async function handleSubmitUsageConfig(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  const profile = usageConfigSourceProfile;
+  const error = elements.usageConfigDialogError;
+  if (!profile || !error) {
+    return;
+  }
+  clearDialogError(error);
+  try {
+    await saveUsageSettingsForProfile(profile, usageSettingsFromInputs("dialog"));
+    closeUsageConfigDialog();
+    if (!state.expandedQuotaProfiles.includes(profile)) {
+      state.expandedQuotaProfiles = [...state.expandedQuotaProfiles, profile];
+    }
+    showToast(t(state.locale, "usageQuerySaved"));
+    rerenderDashboard();
+  } catch (submitError) {
+    showDialogError(
+      error,
+      submitError instanceof Error ? submitError.message : t(state.locale, "failedToSaveBaseUrl"),
+    );
+  }
 }
 
 function clearDialogError(element: HTMLParagraphElement): void {
@@ -190,7 +390,19 @@ function handleSystemThemeChange(): void {
   }
 }
 
-function handleToggleQuotaProfile(profile: string): void {
+async function handleToggleQuotaProfile(profile: string): Promise<void> {
+  let settings = state.usageSettingsByProfile[profile];
+  try {
+    settings = await ensureUsageSettings(profile);
+  } catch {
+    settings = defaultUsageSettings();
+  }
+
+  if (!settings.enabled && !state.expandedQuotaProfiles.includes(profile)) {
+    openUsageConfigDialog(profile);
+    return;
+  }
+
   if (state.expandedQuotaProfiles.includes(profile)) {
     state.expandedQuotaProfiles = state.expandedQuotaProfiles.filter((value) => value !== profile);
   } else {
@@ -273,6 +485,8 @@ async function refreshAllData(showError = true): Promise<void> {
 
     applySnapshot(snapshot);
     applyCurrentQuota(currentQuota);
+    await loadUsageSettingsForProfiles(snapshot.profiles);
+    await refreshUsageStats(false);
     rerenderDashboard();
     maybePromptUnmanagedAccount(snapshot.unmanaged_live_account);
   } catch (error) {
@@ -1116,6 +1330,15 @@ export function bootstrap(): void {
   elements.baseUrlForm.addEventListener("submit", (event) => {
     void handleSubmitBaseUrl(event as SubmitEvent);
   });
+  elements.usageConfigForm?.addEventListener("submit", (event) => {
+    void handleSubmitUsageConfig(event as SubmitEvent);
+  });
+  elements.cancelUsageConfigButton?.addEventListener("click", () => {
+    closeUsageConfigDialog();
+  });
+  elements.testUsageConfigButton?.addEventListener("click", () => {
+    showToast(t(state.locale, "usageQuerySaved"));
+  });
   elements.cancelCodexCliButton.addEventListener("click", () => {
     closeCodexCliDialog();
   });
@@ -1139,6 +1362,32 @@ export function bootstrap(): void {
       }
     });
   }
+  elements.settingsUsageProfileSelect?.addEventListener("change", () => {
+    const profile = elements.settingsUsageProfileSelect?.value || null;
+    state.settingsUsageProfile = profile;
+    if (profile) {
+      void ensureUsageSettings(profile).finally(rerenderDashboard);
+    } else {
+      rerenderDashboard();
+    }
+  });
+  elements.settingsUsageSaveButton?.addEventListener("click", () => {
+    void saveSettingsUsageProfile();
+  });
+  elements.usageProfileFilter?.addEventListener("change", () => {
+    state.usageStatsProfile = elements.usageProfileFilter?.value || null;
+    void refreshUsageStats(true);
+  });
+  elements.usageRangeFilter?.addEventListener("change", () => {
+    const value = elements.usageRangeFilter?.value;
+    if (value === "today" || value === "7d" || value === "30d") {
+      state.usageStatsRange = value;
+      void refreshUsageStats(true);
+    }
+  });
+  elements.usageRefreshButton?.addEventListener("click", () => {
+    void refreshUsageStats(true);
+  });
   elements.localeEnButton.addEventListener("click", () => {
     setLocale("en");
   });
@@ -1185,6 +1434,7 @@ export function bootstrap(): void {
   // then once per local-day rollover. Failures inside the backend are
   // swallowed per-profile, so this never surfaces a toast.
   scheduleDailyPlanRefresh();
+  scheduleUsageStatsRefresh();
 
   void refreshCodexCliSettingsDisplay();
 
