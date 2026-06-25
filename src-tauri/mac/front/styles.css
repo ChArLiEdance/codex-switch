@@ -3111,7 +3111,7 @@ html[data-theme="jade-night"] .page[data-page="profiles"],
 html[data-theme="jade-night"] .content-row--profiles,
 html[data-theme="jade-night"] .profiles-stage,
 html[data-theme="jade-night"] .profiles-grid {
-  background: #05070b !important;
+  background: transparent !important;
 }
 
 html[data-theme="jade-night"] .mac-profile-actions .mac-profile-primary,
