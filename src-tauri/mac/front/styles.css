@@ -4668,6 +4668,7 @@ html[data-theme="jade-night"] .advanced-options {
 .mac-top-actions {
   margin-left: auto !important;
   gap: 12px !important;
+  transform: translateY(-7px) !important;
 }
 
 .mac-brand-title,
