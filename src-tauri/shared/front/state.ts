@@ -7,6 +7,7 @@ export const state = {
   loading: false,
   refreshActiveProfiles: [] as string[],
   loginActiveProfile: null as string | null,
+  reloginProfiles: [] as string[],
   currentProfile: null as string | null,
   expandedQuotaProfiles: [] as string[],
   route: "dashboard" as ShellRoute,

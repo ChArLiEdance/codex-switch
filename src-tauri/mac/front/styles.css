@@ -2206,6 +2206,24 @@ body {
   width: 16px;
   height: 30px;
   background: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.mac-card-grip:active {
+  cursor: grabbing;
+}
+
+.profile-card.mac-account-card.is-dragging {
+  opacity: 0.58;
+}
+
+.profile-card.mac-account-card.is-drag-over {
+  border-color: rgba(22, 131, 255, 1);
+  box-shadow:
+    0 0 0 3px rgba(22, 131, 255, 0.15),
+    0 16px 34px rgba(29, 93, 165, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.78);
 }
 
 .mac-provider-mark {

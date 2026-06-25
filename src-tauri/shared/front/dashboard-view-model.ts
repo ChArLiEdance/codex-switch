@@ -3,8 +3,46 @@ import type {
   CurrentQuotaResponse,
   DashboardViewModel,
   PagingInfo,
+  ProfileCard,
   ProfilesSnapshotResponse,
 } from "@front-shared/types";
+
+const PROFILE_ORDER_STORAGE_KEY = "codex-switch-profile-order";
+
+function loadProfileOrder(): string[] {
+  const raw = globalThis.localStorage?.getItem(PROFILE_ORDER_STORAGE_KEY);
+  if (!raw) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function persistProfileOrder(profiles: ProfileCard[]): void {
+  globalThis.localStorage?.setItem(
+    PROFILE_ORDER_STORAGE_KEY,
+    JSON.stringify(profiles.map((profile) => profile.folder_name)),
+  );
+}
+
+function applyProfileOrder(profiles: ProfileCard[]): ProfileCard[] {
+  const order = loadProfileOrder();
+  if (!order.length) {
+    return profiles;
+  }
+
+  const rank = new Map(order.map((profile, index) => [profile, index]));
+  return [...profiles].sort((left, right) => {
+    const leftRank = rank.get(left.folder_name) ?? Number.MAX_SAFE_INTEGER;
+    const rightRank = rank.get(right.folder_name) ?? Number.MAX_SAFE_INTEGER;
+    return leftRank - rightRank;
+  });
+}
 
 export function buildPaging(totalProfiles: number, pageSize: number, page: number): PagingInfo {
   const totalPages = Math.max(1, Math.ceil(totalProfiles / pageSize));
@@ -39,7 +77,10 @@ export function buildDashboardViewModel(): DashboardViewModel | null {
 }
 
 export function applySnapshot(snapshot: ProfilesSnapshotResponse): void {
-  state.snapshot = snapshot;
+  state.snapshot = {
+    ...snapshot,
+    profiles: applyProfileOrder(snapshot.profiles),
+  };
   state.pageSize = snapshot.page_size;
   state.currentProfile = snapshot.current_card?.folder_name ?? null;
   state.currentQuota = snapshot.current_quota_card;

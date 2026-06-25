@@ -13,6 +13,7 @@ import {
   applyCurrentQuota,
   applySnapshot,
   buildDashboardViewModel,
+  persistProfileOrder,
 } from "@front-shared/dashboard-view-model";
 import {
   addProfile,
@@ -83,6 +84,7 @@ function rerenderDashboard(): void {
       void handleLoginProfile(profile);
     },
     handleToggleQuotaProfile,
+    handleReorderProfiles,
   );
   renderCurrentCard(dashboard);
   renderPaging(dashboard.paging);
@@ -324,6 +326,7 @@ async function performProfileRefresh(profile: string): Promise<void> {
   rerenderDashboard();
   try {
     await refreshProfile(profile);
+    state.reloginProfiles = state.reloginProfiles.filter((value) => value !== profile);
     showToast(t(state.locale, "refreshedProfile", { profile }));
     try {
       const snapshot = await getProfilesSnapshot();
@@ -335,6 +338,9 @@ async function performProfileRefresh(profile: string): Promise<void> {
       console.warn("Snapshot refresh after profile refresh failed:", error);
     }
   } catch (error) {
+    if (isExpiredProfileAuthError(error)) {
+      state.reloginProfiles = Array.from(new Set([...state.reloginProfiles, profile]));
+    }
     showToast(refreshProfileErrorMessage(error), true);
   } finally {
     state.refreshActiveProfiles = state.refreshActiveProfiles.filter(p => p !== profile);
@@ -402,6 +408,7 @@ async function handleLoginProfile(profile: string): Promise<void> {
   showToast(t(state.locale, "loginStarting", { profile }));
   try {
     await loginProfile(profile);
+    state.reloginProfiles = state.reloginProfiles.filter((value) => value !== profile);
     showToast(t(state.locale, "loggedInProfile", { profile }));
     await refreshAllData(false);
   } catch (error) {
@@ -419,6 +426,33 @@ async function handleLoginProfile(profile: string): Promise<void> {
     cancelledLoginProfile = null;
     rerenderDashboard();
   }
+}
+
+function handleReorderProfiles(sourceProfile: string, targetProfile: string): void {
+  const snapshot = state.snapshot;
+  const profiles = snapshot?.profiles;
+  if (!snapshot || !profiles || sourceProfile === targetProfile) {
+    return;
+  }
+
+  const sourceIndex = profiles.findIndex((profile) => profile.folder_name === sourceProfile);
+  const targetIndex = profiles.findIndex((profile) => profile.folder_name === targetProfile);
+  if (sourceIndex < 0 || targetIndex < 0) {
+    return;
+  }
+
+  const reordered = [...profiles];
+  const [moved] = reordered.splice(sourceIndex, 1);
+  if (!moved) {
+    return;
+  }
+  reordered.splice(targetIndex, 0, moved);
+  state.snapshot = {
+    ...snapshot,
+    profiles: reordered,
+  };
+  persistProfileOrder(reordered);
+  rerenderDashboard();
 }
 
 async function handleCancelLogin(profile: string): Promise<void> {

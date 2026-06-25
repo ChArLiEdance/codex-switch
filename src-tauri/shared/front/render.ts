@@ -43,6 +43,7 @@ function requiredElement<T extends HTMLElement>(id: string): T {
 
 const hasDeleteProfileUi = document.getElementById("delete-profile-dialog") instanceof HTMLDialogElement;
 const macIconBase = "/ccswitch-icons";
+let draggedProfile: string | null = null;
 
 function macIcon(name: string, className = "cc-icon"): string {
   return `<img class="${className}" src="${macIconBase}/${name}.svg" alt="" aria-hidden="true" />`;
@@ -602,6 +603,7 @@ export function renderProfiles(
   onBaseUrl: (profile: string) => void,
   onLogin: (profile: string) => void,
   onToggleQuota: (profile: string) => void,
+  onReorder: (sourceProfile: string, targetProfile: string) => void,
 ): void {
   if (!dashboard.profiles.length) {
     elements.profilesGrid.innerHTML =
@@ -651,15 +653,20 @@ export function renderProfiles(
       if (!isWindowsUiTarget) {
         const displayTitle = profileDisplayTitle(profile);
         const showQuotaPanel = state.expandedQuotaProfiles.includes(profile.folder_name);
+        const needsRelogin = state.reloginProfiles.includes(profile.folder_name);
         const macCardMode = showQuotaPanel ? " mac-account-card--expanded" : " mac-account-card--compact";
-        const primaryActionLabel = profile.status === "current"
+        const primaryActionLabel = needsRelogin
+          ? t(state.locale, "reloginButton")
+          : profile.status === "current"
           ? (state.locale === "zh-CN" ? "已登录" : "Signed in")
           : t(state.locale, "switch");
-        const primaryActionAttribute = profile.status === "current"
+        const primaryActionAttribute = needsRelogin || profile.status === "current"
           ? `data-login-profile="${profile.folder_name}"`
           : `data-switch-profile="${profile.folder_name}"`;
-        const primaryActionDisabled = profile.status === "current" ? true : switchDisabled;
-        const primaryActionTitle = profile.status === "current"
+        const primaryActionDisabled = needsRelogin ? loginDisabled : profile.status === "current" ? true : switchDisabled;
+        const primaryActionTitle = needsRelogin
+          ? t(state.locale, "profileReloginReady")
+          : profile.status === "current"
           ? (state.locale === "zh-CN" ? "当前账号已登录" : "Current account is signed in")
           : (
               switchDisabled
@@ -668,8 +675,8 @@ export function renderProfiles(
             );
 
         return `
-          <article class="profile-card mac-account-card${macCardMode} status-${profile.status}${unavailable ? " is-unavailable-card" : ""}">
-            <div class="mac-card-grip" aria-hidden="true">${macIcon("grip-vertical", "cc-icon cc-icon--muted")}</div>
+          <article class="profile-card mac-account-card${macCardMode} status-${profile.status}${unavailable ? " is-unavailable-card" : ""}" data-profile-card="${profile.folder_name}">
+            <div class="mac-card-grip" draggable="true" data-drag-profile="${profile.folder_name}" title="${escapeHtml(t(state.locale, "dragToReorder"))}" aria-label="${escapeHtml(t(state.locale, "dragToReorder"))}">${macIcon("grip-vertical", "cc-icon cc-icon--muted")}</div>
             <div class="mac-provider-mark" aria-hidden="true">
               <img class="cc-icon cc-icon--provider" src="${macIconBase}/openai.svg" alt="" />
             </div>
@@ -696,7 +703,7 @@ export function renderProfiles(
                 ${primaryActionAttribute}
                 ${primaryActionDisabled ? "disabled" : ""}
               >
-                ${profile.status === "current" ? macIcon("openai", "cc-icon cc-icon--primary-action") : macIcon("play", "cc-icon cc-icon--primary-action")}
+                ${needsRelogin || profile.status === "current" ? macIcon("openai", "cc-icon cc-icon--primary-action") : macIcon("play", "cc-icon cc-icon--primary-action")}
                 <span class="mac-action-label">${escapeHtml(primaryActionLabel)}</span>
               </button>
               <button
@@ -886,6 +893,51 @@ export function renderProfiles(
   bindProfileButtons("data-toggle-quota-profile", onToggleQuota);
   bindProfileButtons("data-base-url-profile", onBaseUrl);
   bindProfileButtons("data-switch-profile", onSwitch);
+  bindProfileDragHandles(onReorder);
+}
+
+function bindProfileDragHandles(handler: (sourceProfile: string, targetProfile: string) => void): void {
+  const cards = elements.profilesGrid.querySelectorAll<HTMLElement>("[data-profile-card]");
+
+  for (const grip of elements.profilesGrid.querySelectorAll<HTMLElement>("[data-drag-profile]")) {
+    grip.addEventListener("dragstart", (event) => {
+      draggedProfile = grip.dataset.dragProfile ?? null;
+      event.dataTransfer?.setData("text/plain", draggedProfile ?? "");
+      event.dataTransfer?.setDragImage(grip, grip.clientWidth / 2, grip.clientHeight / 2);
+      grip.closest(".profile-card")?.classList.add("is-dragging");
+    });
+
+    grip.addEventListener("dragend", () => {
+      draggedProfile = null;
+      for (const card of cards) {
+        card.classList.remove("is-dragging", "is-drag-over");
+      }
+    });
+  }
+
+  for (const card of cards) {
+    card.addEventListener("dragover", (event) => {
+      if (!draggedProfile || draggedProfile === card.dataset.profileCard) {
+        return;
+      }
+      event.preventDefault();
+      card.classList.add("is-drag-over");
+    });
+
+    card.addEventListener("dragleave", () => {
+      card.classList.remove("is-drag-over");
+    });
+
+    card.addEventListener("drop", (event) => {
+      event.preventDefault();
+      card.classList.remove("is-drag-over");
+      const source = event.dataTransfer?.getData("text/plain") || draggedProfile;
+      const target = card.dataset.profileCard;
+      if (source && target && source !== target) {
+        handler(source, target);
+      }
+    });
+  }
 }
 
 export function renderPaging(
