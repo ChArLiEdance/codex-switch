@@ -2,7 +2,8 @@
 
 <p align="center">
   <a href="README.zh-CN.md">简体中文</a> |
-  <a href="CHANGELOG.md">Changelog</a>
+  <a href="CHANGELOG.md">Changelog</a> |
+  <a href="https://github.com/ChArLiEdance/codex-switch/releases">Releases</a>
 </p>
 
 <p align="center">
@@ -13,73 +14,54 @@
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white">
 </p>
 
-**Codex Switch** is a local desktop app for managing OpenAI Codex login profiles. This version has been migrated to the `codex-account-switch` style Tauri implementation, including its UI structure, runtime layout, account cards, login flow, switching flow, quota reading, and build scripts.
+**Codex Switch** is a local desktop app for managing multiple OpenAI Codex login profiles on one computer. It lets you view the active account, switch between saved local profiles, refresh quota information, and keep each account's local Codex state separated.
 
-The goal is simple: manage multiple Codex accounts on one machine, view the current account, plan, 5-hour quota, weekly quota, and usage context, then safely switch the local `~/.codex` state.
+Version `1.0.0` focuses on the account switching, login, quota, settings, and usage/history foundation. The **Skills** and **Prompts** pages are visible in the interface, but these two features are not finished yet and will be completed in a later release.
 
 > This is not an official OpenAI project. It only manages local, already-authorized Codex login state. It does not collect passwords, bypass MFA, scrape browser cookies, or provide account sharing.
 
-## Current Status
+## Software Features
 
-- Migrated to the `codex-account-switch` frontend and backend structure.
-- macOS native Tauri app builds and runs locally.
-- Supports account cards, login, switching, deletion, renaming, quota refresh, and Base URL indicators.
-- Reads plan and quota metadata and displays 5-hour and weekly remaining quota on account cards.
-- Includes an English default README and a Simplified Chinese README.
-- GitHub Actions includes build jobs for macOS arm64, macOS x64, Windows x64, and Linux x86_64.
+- **Account cards**: show nickname, detailed account name, plan badge, active login state, 5-hour quota, and weekly quota.
+- **Profile management**: add, log in, switch, rename, delete, and reorder local Codex account profiles.
+- **Quota lookup**: refresh and expand account quota details, with per-account usage query settings.
+- **Usage statistics**: read local Codex session usage, summarize token usage, and show usage trends.
+- **Session history**: browse local Codex sessions and resume or inspect previous conversations.
+- **Settings**: switch language, choose light/dark/system theme, configure update URL and Codex CLI path.
+- **Privacy-first local flow**: uses local Codex/OAuth state and does not store passwords or browser cookies in the repository.
 
-Verified locally:
+## Installation
 
-```bash
-npm run build
-npm run test:rust
-npm run tauri:build:macos-app
-```
+Download installers from the [GitHub Releases](https://github.com/ChArLiEdance/codex-switch/releases) page.
 
-Local app output:
+### macOS
 
-```text
-dist/codex_switch.app
-```
+1. Download the `.dmg` file for your Mac architecture.
+2. Open the `.dmg`.
+3. Drag `codex_switch.app` into `Applications`.
+4. Launch Codex Switch.
 
-## Features
+The current local package is unsigned or ad-hoc signed depending on the build environment. If macOS blocks the first launch, open **System Settings -> Privacy & Security** and allow the app.
 
-- **Current account view**: show the active Codex profile, plan state, quota windows, and refresh state.
-- **Multiple account management**: add, log in, switch, rename, and delete local Profiles.
-- **Quota view**: read ChatGPT / Codex account metadata and display 5-hour and weekly quota percentages.
-- **Account switching**: restore a target Profile into the active `~/.codex` state while keeping local account directories.
-- **Official login flow**: use `codex login` / OAuth; the app does not collect passwords.
-- **CLI path detection**: detect the Codex CLI path and allow manual override in Settings.
-- **Local cache**: cache account metadata and quota snapshots to reduce repeated requests.
-- **Cross-platform structure**: macOS and Windows runtimes are separated, with shared logic under `src-tauri/shared/`.
+### Windows
 
-## Quick Start
+1. Download the Windows `.exe` installer from Releases.
+2. Run the installer.
+3. Open Codex Switch from the Start menu or desktop shortcut.
 
-```bash
-git clone https://github.com/ChArLiEdance/codex-switch.git
-cd codex-switch
-npm install
-npm run tauri:dev
-```
-
-Build an unsigned macOS app for local testing:
-
-```bash
-npm run tauri:build:macos-app
-open -n dist/codex_switch.app
-```
+The Windows build uses the Tauri NSIS installer.
 
 ## Usage
 
-1. Make sure Codex CLI is installed.
+1. Install and verify Codex CLI on your machine.
 2. Open Codex Switch.
-3. Check the Codex CLI path in Settings.
-4. Add an account Profile on the Accounts page.
-5. Click Login and finish the official browser login flow.
-6. Refresh account information to view plan and quota.
-7. Add another account and switch between account cards.
+3. Go to Settings and confirm the Codex CLI path.
+4. Click the plus button to add an account profile.
+5. Click Login and finish the official browser OAuth flow.
+6. Refresh the account card to load plan and quota information.
+7. Add another profile and use Switch to move the active local Codex state between accounts.
 
-Local account state is centered around:
+Codex Switch works with local account state around:
 
 ```text
 ~/.codex/
@@ -89,46 +71,70 @@ Local account state is centered around:
 
 ## Repository Layout
 
+Current GitHub repository structure:
+
 ```text
-codex_switch/
+codex-switch/
+  .github/workflows/      GitHub Actions build and release workflow
+  macOS-backup/           Legacy shell-based macOS switching scripts
+  scripts/                Version sync, macOS artifact, and package helper scripts
   src-tauri/
-    mac/              macOS frontend shell and runtime
-    win/              Windows frontend shell and runtime
-    shared/           shared frontend, Tauri commands, and runtime logic
-    src/              Tauri entrypoint
-    capabilities/     Tauri capability config
-    icons/            app icons
-  scripts/            version sync, macOS artifact layout, pkg scripts
-  macOS-backup/       backup shell workflow
-  examples/           example account directory structure
-  .github/workflows/  CI build workflow
+    capabilities/         Tauri permission capability files
+    icons/                App icon assets for macOS and Windows
+    mac/                  macOS frontend shell and platform-specific runtime
+    shared/               Shared frontend, Tauri commands, metadata, quota, history, and switching logic
+    src/                  Tauri Rust entrypoint
+    win/                  Windows frontend shell and platform-specific runtime
+    Cargo.toml            Rust crate manifest
+    tauri.conf.json       Base Tauri configuration
+    tauri.macos.conf.json macOS bundle targets
+    tauri.windows.conf.json Windows NSIS installer target
+  CHANGELOG.md
+  LICENSE
+  README.md
+  README.zh-CN.md
+  package.json
+  package-lock.json
+  tsconfig.json
+  vite.config.ts
 ```
+
+Generated build outputs such as `dist/`, `node_modules/`, and `src-tauri/target/` are intentionally ignored by Git.
 
 ## Development
 
 ```bash
-npm install                         # install frontend and Tauri CLI dependencies
-npm run build                       # TypeScript + Vite production build
-npm run test:rust                   # Rust unit tests
-npm run tauri:dev                   # desktop development mode
-npm run tauri:build:macos-app       # unsigned macOS app for local testing
+npm install
+npm run build
+npm run test:rust
+npm run tauri:dev
 ```
 
-Windows / Linux builds are mainly handled by GitHub Actions:
+Build local macOS packages:
+
+```bash
+npm run tauri:build:macos-release
+```
+
+Build Windows installer on a Windows runner:
 
 ```bash
 npm run tauri:build:windows
-npm run tauri:build:linux
 ```
 
-## Local Test Build
+## Release Packaging
 
-```bash
-npm run tauri:build:macos-app
-open -n dist/codex_switch.app
+Installers should be uploaded as GitHub Release assets. They should not be committed into the source repository and do not belong inside `package.json`.
+
+Expected release assets for `1.0.0`:
+
+```text
+codex_switch_1.0.0_*.dmg
+codex_switch_1.0.0_*.pkg
+codex_switch_*_x64-setup.exe
 ```
 
-The local app is unsigned. On first launch, macOS may require allowing it from System Settings -> Privacy & Security.
+The repository also has GitHub Actions configured to build macOS, Windows, and Linux artifacts from version tags.
 
 ## Privacy And Safety
 
@@ -137,15 +143,15 @@ The local app is unsigned. On first launch, macOS may require allowing it from S
 - Does not bypass MFA.
 - Does not scrape browser cookies.
 - Does not write tokens, API keys, passwords, or cookies to Git.
-- Login state is used only for local Profile switching and quota lookup.
+- Login state is used only for local profile switching and quota lookup.
 
 ## Stack
 
 - Rust + Tauri 2
 - TypeScript + Vite
-- Native HTML/CSS frontend structure
-- ChatGPT / Codex account metadata lookup
-- GitHub Actions multi-platform builds
+- Native HTML/CSS frontend
+- Local Codex account metadata and quota lookup
+- GitHub Actions multi-platform build workflow
 
 ## License
 
