@@ -2987,14 +2987,39 @@ html[data-theme="jade-night"] .mac-route-badge {
 html[data-theme="jade-night"] .mac-quota-summary,
 html[data-theme="jade-night"] .settings-tab-button,
 html[data-theme="jade-night"] .settings-row,
+html[data-theme="jade-night"] .settings-row strong,
+html[data-theme="jade-night"] .settings-value,
+html[data-theme="jade-night"] .settings-value--inline,
+html[data-theme="jade-night"] .settings-value--strong,
+html[data-theme="jade-night"] #settings-codex-cli-label,
 html[data-theme="jade-night"] .settings-usage-header p,
 html[data-theme="jade-night"] .settings-usage-metrics span,
 html[data-theme="jade-night"] .settings-usage-row {
   color: #a8afbc;
 }
 
+html[data-theme="jade-night"] .settings-row strong,
+html[data-theme="jade-night"] #settings-codex-cli-label {
+  color: #e8ecf3 !important;
+}
+
 html[data-theme="jade-night"] .settings-row {
   border-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="jade-night"] .locale-segment {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(18, 20, 26, 0.72) !important;
+}
+
+html[data-theme="jade-night"] .locale-pill {
+  color: #b8bfcc;
+}
+
+html[data-theme="jade-night"] .locale-pill.is-active {
+  background: #0b0f17 !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.28);
 }
 
 html[data-theme="jade-night"] .settings-input,
@@ -3003,7 +3028,24 @@ html[data-theme="jade-night"] .settings-icon-button,
 html[data-theme="jade-night"] .theme-option {
   border-color: rgba(255, 255, 255, 0.12);
   background: rgba(24, 25, 30, 0.68);
-  color: #f2f5f8;
+  color: #f2f5f8 !important;
+}
+
+html[data-theme="jade-night"] .theme-option.is-active {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.12) !important;
+}
+
+html[data-theme="jade-night"] .theme-option--light .theme-option-text {
+  color: #f4f6fb;
+}
+
+html[data-theme="jade-night"] .theme-option--dark.is-active {
+  background: rgba(11, 15, 23, 0.92) !important;
+}
+
+html[data-theme="jade-night"] .theme-option--dark .theme-core-swatch {
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 html[data-theme="jade-night"] .settings-usage-row--head {
@@ -3015,4 +3057,34 @@ html[data-theme="jade-night"] .quota-track,
 html[data-theme="jade-night"] .mac-account-card .quota-track {
   border-color: rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme="jade-night"] .mac-profile-actions .profile-action-button:not(.mac-profile-primary) {
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: rgba(16, 18, 24, 0.72) !important;
+  color: #dbe1ea !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme="jade-night"] .mac-profile-actions .profile-action-button:not(.mac-profile-primary):hover:not(:disabled) {
+  background: rgba(44, 48, 58, 0.92) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="jade-night"] .mac-profile-actions .profile-action-button:not(.mac-profile-primary) .cc-icon {
+  filter: brightness(0) invert(1) !important;
+  opacity: 0.9 !important;
+}
+
+html[data-theme="jade-night"] .mac-profile-actions .mac-icon-button--gpt .cc-icon--openai {
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+html[data-theme="jade-night"] .mac-profile-actions .mac-icon-button--delete {
+  color: #f0a7a7 !important;
+}
+
+html[data-theme="jade-night"] .mac-profile-actions .profile-action-button:disabled {
+  opacity: 0.48 !important;
 }
