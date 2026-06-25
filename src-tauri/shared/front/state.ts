@@ -39,6 +39,7 @@ export const state = {
   sessionMessagesLoading: false,
   sessionSearch: "",
   sessionVisibleCount: 60,
+  sessionMessageVisibleCount: 40,
   expandedSessionMessages: [] as string[],
   settingsUsageProfile: null as string | null,
   usageSettingsByProfile: {} as Record<string, UsageQuerySettings>,

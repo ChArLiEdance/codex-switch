@@ -54,15 +54,32 @@ pub fn save_usage_query_settings(
 }
 
 #[tauri::command]
-pub fn list_codex_sessions() -> Result<Vec<CodexSessionMeta>, CommandError> {
-    crate::shared::session_usage::list_codex_sessions(None).map_err(Into::into)
+pub async fn list_codex_sessions() -> Result<Vec<CodexSessionMeta>, CommandError> {
+    tauri::async_runtime::spawn_blocking(|| crate::shared::session_usage::list_codex_sessions(None))
+        .await
+        .map_err(|error| {
+            CommandError::new(
+                "SESSION_SCAN_FAILED",
+                format!("Failed to scan Codex sessions: {error}"),
+            )
+        })?
+        .map_err(Into::into)
 }
 
 #[tauri::command]
-pub fn get_codex_session_messages(
+pub async fn get_codex_session_messages(
     source_path: String,
 ) -> Result<Vec<CodexSessionMessage>, CommandError> {
-    crate::shared::session_usage::load_codex_session_messages(&source_path, None)
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::shared::session_usage::load_codex_session_messages(&source_path, None)
+    })
+    .await
+    .map_err(|error| {
+        CommandError::new(
+            "SESSION_READ_FAILED",
+            format!("Failed to load Codex session messages: {error}"),
+        )
+    })?
         .map_err(Into::into)
 }
 

@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::fs;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Local, TimeZone};
@@ -746,9 +749,34 @@ fn collect_usage_file_sources(
     sources
 }
 
+fn read_head_tail_lines(
+    path: &Path,
+    head_count: usize,
+    tail_count: usize,
+) -> std::io::Result<(Vec<String>, Vec<String>)> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+    let mut head = Vec::with_capacity(head_count);
+    let mut tail = VecDeque::with_capacity(tail_count);
+
+    for line in reader.lines() {
+        let line = line?;
+        if head.len() < head_count {
+            head.push(line.clone());
+        }
+        if tail_count > 0 {
+            if tail.len() == tail_count {
+                tail.pop_front();
+            }
+            tail.push_back(line);
+        }
+    }
+
+    Ok((head, tail.into_iter().collect()))
+}
+
 fn parse_session_meta(path: &Path, profile: Option<&str>) -> Option<CodexSessionMeta> {
-    let raw = fs::read_to_string(path).ok()?;
-    let lines = raw.lines().collect::<Vec<_>>();
+    let (head, tail) = read_head_tail_lines(path, 10, 30).ok()?;
     let mut session_id: Option<String> = None;
     let mut project_dir: Option<String> = None;
     let mut created_at: Option<i64> = None;
@@ -756,8 +784,8 @@ fn parse_session_meta(path: &Path, profile: Option<&str>) -> Option<CodexSession
     let mut first_user_message: Option<String> = None;
     let mut summary: Option<String> = None;
 
-    for line in lines.iter().take(80) {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
+    for line in &head {
+        let Ok(value) = serde_json::from_str::<Value>(line.as_str()) else {
             continue;
         };
         if created_at.is_none() {
@@ -804,8 +832,8 @@ fn parse_session_meta(path: &Path, profile: Option<&str>) -> Option<CodexSession
         }
     }
 
-    for line in lines.iter().rev().take(80) {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
+    for line in tail.iter().rev() {
+        let Ok(value) = serde_json::from_str::<Value>(line.as_str()) else {
             continue;
         };
         if last_active_at.is_none() {
@@ -928,15 +956,19 @@ pub fn load_codex_session_messages(
             "Session path is outside managed Codex session directories.",
         ));
     }
-    let raw = fs::read_to_string(&path).map_err(|error| {
+    let file = File::open(&path).map_err(|error| {
         crate::errors::AppError::new(
             "SESSION_READ_FAILED",
             format!("Failed to read session file: {error}"),
         )
     })?;
     let mut messages = Vec::new();
-    for line in raw.lines() {
-        let Ok(value) = serde_json::from_str::<Value>(line) else {
+    let reader = BufReader::new(file);
+    for line in reader.lines() {
+        let Ok(line) = line else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
         if value.get("type").and_then(Value::as_str) != Some("response_item") {

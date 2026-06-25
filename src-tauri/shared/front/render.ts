@@ -999,10 +999,19 @@ export function renderSessionManager(): void {
     elements.historyMessageCount.textContent = String(state.codexSessionMessages.length);
   }
   if (elements.historyMessageList) {
+    const visibleMessages = state.codexSessionMessages.slice(0, state.sessionMessageVisibleCount);
     elements.historyMessageList.innerHTML = state.sessionMessagesLoading
       ? `<div class="session-empty session-empty--loading">${macIcon("refresh-cw", "cc-icon cc-icon--spin")}${escapeHtml(t(state.locale, "sessionLoading"))}</div>`
       : state.codexSessionMessages.length
-      ? state.codexSessionMessages.map(renderSessionMessage).join("")
+      ? [
+        ...visibleMessages.map(renderSessionMessage),
+        state.codexSessionMessages.length > visibleMessages.length
+          ? `<button class="session-load-more session-load-more--messages" type="button" data-session-message-load-more="true">${escapeHtml(t(state.locale, "sessionLoadMoreMessages", {
+            shown: String(visibleMessages.length),
+            total: String(state.codexSessionMessages.length),
+          }))}</button>`
+          : "",
+      ].join("")
       : `<div class="session-empty">${escapeHtml(t(state.locale, "sessionNoMessages"))}</div>`;
   }
 }

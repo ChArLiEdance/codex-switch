@@ -259,9 +259,14 @@ async function refreshCodexSessions(showError = false): Promise<void> {
     state.codexSessions = sessions;
     state.codexSessionMessageCache = {};
     state.sessionVisibleCount = 60;
+    state.sessionMessageVisibleCount = 40;
+    state.expandedSessionMessages = [];
     const selectedStillExists = sessions.some((session) => session.source_path === state.selectedCodexSessionPath);
     if (!selectedStillExists) {
-      state.selectedCodexSessionPath = sessions[0]?.source_path ?? null;
+      state.selectedCodexSessionPath = null;
+      state.codexSessionMessages = [];
+      renderSessionManager();
+      return;
     }
     await refreshSelectedCodexSessionMessages(false);
   } catch (error) {
@@ -280,6 +285,8 @@ async function selectCodexSession(sourcePath: string): Promise<void> {
     return;
   }
   state.selectedCodexSessionPath = sourcePath;
+  state.sessionMessageVisibleCount = 40;
+  state.expandedSessionMessages = [];
   renderSessionManager();
   await refreshSelectedCodexSessionMessages(true);
 }
@@ -1511,6 +1518,14 @@ export function bootstrap(): void {
     }
   });
   elements.historyMessageList?.addEventListener("click", (event) => {
+    const loadMore = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("[data-session-message-load-more]");
+    if (loadMore) {
+      runWithButtonBusy(loadMore, () => {
+        state.sessionMessageVisibleCount += 40;
+        renderSessionManager();
+      });
+      return;
+    }
     const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("[data-session-message-key]");
     const key = button?.dataset.sessionMessageKey;
     if (!key) {
