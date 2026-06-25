@@ -7,7 +7,8 @@ use crate::errors::{AppError, AppResult};
 
 pub const ACTIVE_MARKER_FILE: &str = ".active_profile";
 pub const CURRENT_PROFILE_FILENAME: &str = ".current_profile";
-pub const DEFAULT_PROFILES: [&str; 4] = ["a", "b", "c", "d"];
+pub const DEFAULT_PROFILE_NAME: &str = "default";
+pub const DEFAULT_PROFILES: [&str; 1] = [DEFAULT_PROFILE_NAME];
 pub const INSTALL_STATE_FILENAME: &str = "install_state.json";
 pub const QUOTA_CACHE_FILENAME: &str = "quota_cache.json";
 pub const PROFILES_INDEX_FILENAME: &str = "profiles.json";

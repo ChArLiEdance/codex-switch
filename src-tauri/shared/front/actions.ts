@@ -9,6 +9,7 @@ import {
   resolveInitialTheme,
   type ThemeId,
 } from "@front-shared/theme";
+import { persistShowAccountDetail } from "@front-shared/preferences";
 import {
   applyCurrentQuota,
   applySnapshot,
@@ -174,6 +175,12 @@ function setThemeFromValue(value: string | undefined): void {
   if (isThemeId(value)) {
     setTheme(value);
   }
+}
+
+function setShowAccountDetail(showDetail: boolean): void {
+  state.showAccountDetail = showDetail;
+  persistShowAccountDetail(showDetail);
+  rerenderDashboard();
 }
 
 function handleSystemThemeChange(): void {
@@ -1124,6 +1131,14 @@ export function bootstrap(): void {
   elements.settingsCodexCliButton.addEventListener("click", () => {
     void openCodexCliDialog();
   });
+  if (elements.settingsShowAccountDetailToggle instanceof HTMLInputElement) {
+    elements.settingsShowAccountDetailToggle.addEventListener("change", () => {
+      const toggle = elements.settingsShowAccountDetailToggle;
+      if (toggle instanceof HTMLInputElement) {
+        setShowAccountDetail(toggle.checked);
+      }
+    });
+  }
   elements.localeEnButton.addEventListener("click", () => {
     setLocale("en");
   });

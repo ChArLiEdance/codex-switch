@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::errors::AppError;
+use crate::shared::paths::DEFAULT_PROFILE_NAME;
 
 #[cfg(target_os = "macos")]
 use crate::macos as native;
@@ -18,8 +19,8 @@ fn print_install_summary(summary: &native::install::InstallSummary) {
         .runtime_cli_path
         .parent()
         .and_then(|runtime_dir| runtime_dir.parent())
-        .map(|backup_root| backup_root.join("a").join("auth.json"))
-        .unwrap_or_else(|| PathBuf::from("a").join("auth.json"));
+        .map(|backup_root| backup_root.join(DEFAULT_PROFILE_NAME).join("auth.json"))
+        .unwrap_or_else(|| PathBuf::from(DEFAULT_PROFILE_NAME).join("auth.json"));
 
     if summary.seeded_auth {
         println!(
@@ -38,7 +39,7 @@ fn print_install_summary(summary: &native::install::InstallSummary) {
     }
 
     if summary.initialized_default_profile {
-        println!("Initialized default active profile: a");
+        println!("Initialized default active profile: {DEFAULT_PROFILE_NAME}");
     }
 
     println!(

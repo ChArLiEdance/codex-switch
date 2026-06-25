@@ -5,7 +5,7 @@ use crate::errors::{AppError, AppResult};
 use crate::shared::fs_ops::remove_path;
 use crate::shared::paths::{
     get_backup_root, get_codex_home, utc_timestamp, ACTIVE_MARKER_FILE, CURRENT_PROFILE_FILENAME,
-    DEFAULT_PROFILES,
+    DEFAULT_PROFILES, DEFAULT_PROFILE_NAME,
 };
 
 use super::cli_shim::{
@@ -65,7 +65,7 @@ fn has_initialized_active_profile(backup_root: &Path) -> bool {
 
 pub(super) fn initialize_default_active_profile(backup_root: &Path) -> AppResult<()> {
     let current_profile_file = backup_root.join(CURRENT_PROFILE_FILENAME);
-    fs::write(&current_profile_file, "a\n").map_err(|error| {
+    fs::write(&current_profile_file, format!("{DEFAULT_PROFILE_NAME}\n")).map_err(|error| {
         AppError::new(
             "FS_WRITE_FAILED",
             format!(
@@ -75,7 +75,9 @@ pub(super) fn initialize_default_active_profile(backup_root: &Path) -> AppResult
         )
     })?;
 
-    let marker_path = backup_root.join("a").join(ACTIVE_MARKER_FILE);
+    let marker_path = backup_root
+        .join(DEFAULT_PROFILE_NAME)
+        .join(ACTIVE_MARKER_FILE);
     fs::write(&marker_path, format!("activated_at={}\n", utc_timestamp())).map_err(|error| {
         AppError::new(
             "FS_WRITE_FAILED",
@@ -133,7 +135,7 @@ pub(super) fn seed_default_profile(codex_home: &Path, backup_root: &Path) -> App
         return Ok(false);
     }
 
-    let default_profile_auth_file = backup_root.join("a").join("auth.json");
+    let default_profile_auth_file = backup_root.join(DEFAULT_PROFILE_NAME).join("auth.json");
     fs::copy(&root_auth_file, &default_profile_auth_file).map_err(|error| {
         AppError::new(
             "FS_COPY_FAILED",

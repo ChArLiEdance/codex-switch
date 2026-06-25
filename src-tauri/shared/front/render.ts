@@ -72,6 +72,7 @@ export const elements = {
   settingsUsageFiveHour: document.getElementById("settings-usage-five-hour"),
   settingsUsageWeekly: document.getElementById("settings-usage-weekly"),
   settingsUsageRows: document.getElementById("settings-usage-rows"),
+  settingsShowAccountDetailToggle: document.getElementById("settings-show-account-detail-toggle"),
   updateDialog: requiredElement<HTMLDialogElement>("update-dialog"),
   updateDialogCopy: requiredElement<HTMLParagraphElement>("update-dialog-copy"),
   updateDialogLaterButton: requiredElement<HTMLButtonElement>("update-dialog-later-button"),
@@ -249,6 +250,9 @@ function normalizeDisplayParts(
 
 function profileDisplayTitle(entry: Pick<ProfileCard, "folder_name" | "display_title" | "account_label">): string {
   const { folder, account } = normalizeDisplayParts(entry);
+  if (!state.showAccountDetail) {
+    return folder || account || "--";
+  }
   if (folder && account && folder !== account) {
     return `${folder} · ${account}`;
   }
@@ -258,6 +262,9 @@ function profileDisplayTitle(entry: Pick<ProfileCard, "folder_name" | "display_t
 
 function currentDisplayTitle(entry: Pick<CurrentCard, "folder_name" | "display_title" | "account_label">): string {
   const { folder, account } = normalizeDisplayParts(entry);
+  if (!state.showAccountDetail) {
+    return folder || account || "--";
+  }
   return account || folder || "--";
 }
 
@@ -1073,6 +1080,10 @@ export function applyLocale(): void {
   elements.baseUrlDialogTitle.textContent = t(state.locale, "baseUrlTitle");
   elements.baseUrlDialogCopy.textContent = baseUrlCopy;
   elements.folderNameLabel.textContent = t(state.locale, "folderName");
+  const accountDetailToggle = elements.settingsShowAccountDetailToggle;
+  if (accountDetailToggle instanceof HTMLInputElement) {
+    accountDetailToggle.checked = state.showAccountDetail;
+  }
   elements.addBaseUrlLabel.textContent = t(state.locale, "baseUrlLabel");
   elements.addBaseUrlInput.placeholder = t(state.locale, "baseUrlPlaceholder");
   elements.addBaseUrlCopy.textContent = baseUrlCopy;

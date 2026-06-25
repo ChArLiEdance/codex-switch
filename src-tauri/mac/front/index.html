@@ -230,6 +230,16 @@
                   </button>
                 </div>
               </div>
+              <div class="settings-row">
+                <div>
+                  <strong data-i18n-key="settingsShowAccountDetail">Show account detail</strong>
+                  <p class="settings-help" data-i18n-key="settingsShowAccountDetailCopy">When disabled, profile cards show only the nickname.</p>
+                </div>
+                <label class="settings-switch">
+                  <input id="settings-show-account-detail-toggle" type="checkbox" checked />
+                  <span aria-hidden="true"></span>
+                </label>
+              </div>
               <label class="settings-row settings-row--field">
                 <strong data-i18n-key="settingsUpdateUrl">Update URL</strong>
                 <input id="settings-update-url-input" class="settings-input" type="url" value="https://api.github.com/repos/ChArLiEdance/codex-switch/releases/latest" />
@@ -419,19 +429,23 @@
         <label class="field">
           <span id="folder-name-label">Folder name</span>
           <input id="folder-name-input" name="folder_name" type="text" autocomplete="off" required />
+          <span class="field-copy" data-i18n-key="accountNicknameCopy">This nickname is shown on the home page.</span>
         </label>
 
-        <label class="field">
-          <span id="add-base-url-label">Base Url</span>
-          <input
-            id="add-base-url-input"
-            name="openai_base_url"
-            type="text"
-            autocomplete="off"
-            placeholder="https://example.com/v1"
-          />
-          <span id="add-base-url-copy" class="field-copy">Must start with http:// or https://. Only fill this for API KEY logins, otherwise Codex will fail.</span>
-        </label>
+        <details class="advanced-options">
+          <summary data-i18n-key="advancedOptions">Advanced options</summary>
+          <label class="field">
+            <span id="add-base-url-label">Base Url</span>
+            <input
+              id="add-base-url-input"
+              name="openai_base_url"
+              type="text"
+              autocomplete="off"
+              placeholder="https://example.com/v1"
+            />
+            <span id="add-base-url-copy" class="field-copy">Must start with http:// or https://. Only fill this for API KEY logins, otherwise Codex will fail.</span>
+          </label>
+        </details>
 
         <p id="dialog-error" class="dialog-error" hidden></p>
 

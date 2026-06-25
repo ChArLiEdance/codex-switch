@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::errors::AppResult;
-use crate::shared::paths::{get_backup_root, get_codex_home};
+use crate::shared::paths::{get_backup_root, get_codex_home, list_profile_dirs};
 use crate::shared::profiles::resolve_current_profile;
 
 use super::cli_shim::get_refresh_runtime_dir;
@@ -29,6 +29,15 @@ pub fn ensure_backup_initialized(codex_home: Option<&Path>) -> AppResult<bool> {
     let codex_home = codex_home.map(PathBuf::from).unwrap_or_else(get_codex_home);
     let backup_root = get_backup_root(Some(&codex_home));
     if backup_root.is_dir() {
+        if list_profile_dirs(&backup_root).is_empty() {
+            super::install::ensure_default_profiles(&backup_root)?;
+            super::install::ensure_placeholder_auth_files(&backup_root)?;
+            let seeded_auth = super::install::seed_default_profile(&codex_home, &backup_root)?;
+            if seeded_auth && resolve_current_profile(&backup_root).is_none() {
+                super::install::initialize_default_active_profile(&backup_root)?;
+            }
+            crate::shared::profiles_index::load_profiles_index(Some(&codex_home))?;
+        }
         super::install::refresh_install_state(&codex_home)?;
         return Ok(false);
     }

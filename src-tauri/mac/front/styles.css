@@ -651,6 +651,29 @@ button.pager-pill:disabled {
   line-height: 1.45;
 }
 
+.advanced-options {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.advanced-options summary {
+  cursor: pointer;
+  color: var(--text-strong);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.advanced-options summary::-webkit-details-marker {
+  color: var(--text-muted);
+}
+
+.advanced-options:not([open]) .field {
+  display: none;
+}
+
 .dialog-error {
   margin-top: 14px;
   color: #a04949;

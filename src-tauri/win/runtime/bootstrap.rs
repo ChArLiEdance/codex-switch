@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use crate::errors::AppResult;
 
-use super::paths::{get_backup_root, get_codex_home, get_refresh_runtime_dir};
+use super::paths::{get_backup_root, get_codex_home, get_refresh_runtime_dir, list_profile_dirs};
 use super::profiles::resolve_current_profile;
 
 const REFRESH_RUNTIME_DEFAULT_CONFIG: &str = concat!(
@@ -28,6 +28,15 @@ pub fn ensure_backup_initialized(codex_home: Option<&Path>) -> AppResult<bool> {
     let codex_home = codex_home.map(PathBuf::from).unwrap_or_else(get_codex_home);
     let backup_root = get_backup_root(Some(&codex_home));
     if backup_root.is_dir() {
+        if list_profile_dirs(&backup_root).is_empty() {
+            super::install::ensure_default_profiles(&backup_root)?;
+            super::install::ensure_placeholder_auth_files(&backup_root)?;
+            let seeded_auth = super::install::seed_default_profile(&codex_home, &backup_root)?;
+            if seeded_auth && resolve_current_profile(&backup_root).is_none() {
+                super::install::initialize_default_active_profile(&backup_root)?;
+            }
+            super::profiles_index::load_profiles_index(Some(&codex_home))?;
+        }
         super::install::refresh_install_state(&codex_home)?;
         return Ok(false);
     }
@@ -110,7 +119,7 @@ mod tests {
         let initialized = ensure_backup_initialized(Some(&codex_home)).unwrap();
 
         assert!(initialized);
-        for profile in ["a", "b", "c", "d"] {
+        for profile in ["default"] {
             assert!(codex_home.join("account_backup").join(profile).is_dir());
             assert!(codex_home
                 .join("account_backup")
@@ -120,7 +129,7 @@ mod tests {
         }
         assert_eq!(
             fs::read_to_string(codex_home.join("account_backup").join(".current_profile")).unwrap(),
-            "a\n"
+            "default\n"
         );
 
         let _ = fs::remove_dir_all(&codex_home);

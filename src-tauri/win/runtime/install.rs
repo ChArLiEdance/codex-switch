@@ -7,7 +7,7 @@ use crate::errors::{AppError, AppResult};
 use super::fs_ops::remove_path;
 use super::paths::{
     get_backup_root, get_codex_home, get_install_state_file, get_runtime_dir, utc_timestamp,
-    ACTIVE_MARKER_FILE, CURRENT_PROFILE_FILENAME, DEFAULT_PROFILES,
+    ACTIVE_MARKER_FILE, CURRENT_PROFILE_FILENAME, DEFAULT_PROFILES, DEFAULT_PROFILE_NAME,
 };
 use super::process::{
     discover_real_codex_cli_path, hide_console_window, is_acceptable_real_codex_cli_path,
@@ -208,7 +208,7 @@ fn has_initialized_active_profile(backup_root: &Path) -> bool {
 
 pub(super) fn initialize_default_active_profile(backup_root: &Path) -> AppResult<()> {
     let current_profile_file = backup_root.join(CURRENT_PROFILE_FILENAME);
-    fs::write(&current_profile_file, "a\n").map_err(|error| {
+    fs::write(&current_profile_file, format!("{DEFAULT_PROFILE_NAME}\n")).map_err(|error| {
         AppError::new(
             "FS_WRITE_FAILED",
             format!(
@@ -218,7 +218,9 @@ pub(super) fn initialize_default_active_profile(backup_root: &Path) -> AppResult
         )
     })?;
 
-    let marker_path = backup_root.join("a").join(ACTIVE_MARKER_FILE);
+    let marker_path = backup_root
+        .join(DEFAULT_PROFILE_NAME)
+        .join(ACTIVE_MARKER_FILE);
     fs::write(&marker_path, format!("activated_at={}\n", utc_timestamp())).map_err(|error| {
         AppError::new(
             "FS_WRITE_FAILED",
@@ -276,7 +278,7 @@ pub(super) fn seed_default_profile(codex_home: &Path, backup_root: &Path) -> App
         return Ok(false);
     }
 
-    let default_profile_auth_file = backup_root.join("a").join("auth.json");
+    let default_profile_auth_file = backup_root.join(DEFAULT_PROFILE_NAME).join("auth.json");
     fs::copy(&root_auth_file, &default_profile_auth_file).map_err(|error| {
         AppError::new(
             "FS_COPY_FAILED",
@@ -639,7 +641,7 @@ mod tests {
         assert!(result.managed_shim_path.is_file());
         assert_eq!(
             fs::read_to_string(codex_home.join("account_backup").join(".current_profile")).unwrap(),
-            "a\n"
+            "default\n"
         );
         assert_eq!(
             load_install_state(Some(&codex_home)),
