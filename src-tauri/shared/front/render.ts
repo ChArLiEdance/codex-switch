@@ -43,7 +43,6 @@ function requiredElement<T extends HTMLElement>(id: string): T {
 
 const hasDeleteProfileUi = document.getElementById("delete-profile-dialog") instanceof HTMLDialogElement;
 const macIconBase = "/ccswitch-icons";
-let draggedProfile: string | null = null;
 
 function macIcon(name: string, className = "cc-icon"): string {
   return `<img class="${className}" src="${macIconBase}/${name}.svg" alt="" aria-hidden="true" />`;
@@ -676,7 +675,7 @@ export function renderProfiles(
 
         return `
           <article class="profile-card mac-account-card${macCardMode} status-${profile.status}${unavailable ? " is-unavailable-card" : ""}" data-profile-card="${profile.folder_name}">
-            <div class="mac-card-grip" draggable="true" data-drag-profile="${profile.folder_name}" title="${escapeHtml(t(state.locale, "dragToReorder"))}" aria-label="${escapeHtml(t(state.locale, "dragToReorder"))}">${macIcon("grip-vertical", "cc-icon cc-icon--muted")}</div>
+            <div class="mac-card-grip" data-drag-profile="${profile.folder_name}" title="${escapeHtml(t(state.locale, "dragToReorder"))}" aria-label="${escapeHtml(t(state.locale, "dragToReorder"))}">${macIcon("grip-vertical", "cc-icon cc-icon--muted")}</div>
             <div class="mac-provider-mark" aria-hidden="true">
               <img class="cc-icon cc-icon--provider" src="${macIconBase}/openai.svg" alt="" />
             </div>
@@ -897,45 +896,119 @@ export function renderProfiles(
 }
 
 function bindProfileDragHandles(handler: (sourceProfile: string, targetProfile: string) => void): void {
-  const cards = elements.profilesGrid.querySelectorAll<HTMLElement>("[data-profile-card]");
+  const cards = Array.from(
+    elements.profilesGrid.querySelectorAll<HTMLElement>("[data-profile-card]"),
+  );
+  const activationDistance = 8;
+
+  const clearDragClasses = (): void => {
+    for (const card of cards) {
+      card.classList.remove("is-dragging", "is-drag-over");
+    }
+  };
 
   for (const grip of elements.profilesGrid.querySelectorAll<HTMLElement>("[data-drag-profile]")) {
-    grip.addEventListener("dragstart", (event) => {
-      draggedProfile = grip.dataset.dragProfile ?? null;
-      event.dataTransfer?.setData("text/plain", draggedProfile ?? "");
-      event.dataTransfer?.setDragImage(grip, grip.clientWidth / 2, grip.clientHeight / 2);
-      grip.closest(".profile-card")?.classList.add("is-dragging");
-    });
-
-    grip.addEventListener("dragend", () => {
-      draggedProfile = null;
-      for (const card of cards) {
-        card.classList.remove("is-dragging", "is-drag-over");
-      }
-    });
-  }
-
-  for (const card of cards) {
-    card.addEventListener("dragover", (event) => {
-      if (!draggedProfile || draggedProfile === card.dataset.profileCard) {
+    grip.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) {
         return;
       }
-      event.preventDefault();
-      card.classList.add("is-drag-over");
-    });
 
-    card.addEventListener("dragleave", () => {
-      card.classList.remove("is-drag-over");
-    });
-
-    card.addEventListener("drop", (event) => {
-      event.preventDefault();
-      card.classList.remove("is-drag-over");
-      const source = event.dataTransfer?.getData("text/plain") || draggedProfile;
-      const target = card.dataset.profileCard;
-      if (source && target && source !== target) {
-        handler(source, target);
+      const sourceProfile = grip.dataset.dragProfile;
+      const sourceCard = grip.closest<HTMLElement>("[data-profile-card]");
+      if (!sourceProfile || !sourceCard) {
+        return;
       }
+
+      event.preventDefault();
+      const pointerId = event.pointerId;
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const sourceRect = sourceCard.getBoundingClientRect();
+      let dragStarted = false;
+      let dragPreview: HTMLElement | null = null;
+      let targetProfile: string | null = null;
+
+      const startDrag = (): void => {
+        dragStarted = true;
+        sourceCard.classList.add("is-dragging");
+
+        dragPreview = sourceCard.cloneNode(true) as HTMLElement;
+        dragPreview.classList.add("mac-drag-preview");
+        dragPreview.classList.remove("is-dragging", "is-drag-over");
+        dragPreview.removeAttribute("data-profile-card");
+        dragPreview.setAttribute("aria-hidden", "true");
+        dragPreview.style.width = `${sourceRect.width}px`;
+        dragPreview.style.height = `${sourceRect.height}px`;
+        dragPreview.style.left = `${sourceRect.left}px`;
+        dragPreview.style.top = `${sourceRect.top}px`;
+        document.body.append(dragPreview);
+      };
+
+      const movePreview = (clientX: number, clientY: number): void => {
+        if (!dragPreview) {
+          return;
+        }
+        dragPreview.style.transform = `translate3d(${clientX - startX}px, ${clientY - startY}px, 0)`;
+      };
+
+      const handlePointerMove = (moveEvent: PointerEvent): void => {
+        if (moveEvent.pointerId !== pointerId) {
+          return;
+        }
+
+        const distance = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY);
+        if (!dragStarted && distance < activationDistance) {
+          return;
+        }
+        if (!dragStarted) {
+          startDrag();
+        }
+
+        moveEvent.preventDefault();
+        movePreview(moveEvent.clientX, moveEvent.clientY);
+        const targetCard = document
+          .elementFromPoint(moveEvent.clientX, moveEvent.clientY)
+          ?.closest<HTMLElement>("[data-profile-card]");
+        const nextTarget = targetCard?.dataset.profileCard ?? null;
+
+        for (const card of cards) {
+          card.classList.toggle(
+            "is-drag-over",
+            Boolean(nextTarget && nextTarget !== sourceProfile && card === targetCard),
+          );
+        }
+        targetProfile = nextTarget && nextTarget !== sourceProfile ? nextTarget : null;
+      };
+
+      const cleanupDrag = (): void => {
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", finishDrag);
+        window.removeEventListener("pointercancel", cancelDrag);
+        dragPreview?.remove();
+        dragPreview = null;
+        clearDragClasses();
+      };
+
+      const finishDrag = (upEvent: PointerEvent): void => {
+        if (upEvent.pointerId !== pointerId) {
+          return;
+        }
+        cleanupDrag();
+        if (dragStarted && targetProfile) {
+          handler(sourceProfile, targetProfile);
+        }
+      };
+
+      const cancelDrag = (cancelEvent: PointerEvent): void => {
+        if (cancelEvent.pointerId !== pointerId) {
+          return;
+        }
+        cleanupDrag();
+      };
+
+      window.addEventListener("pointermove", handlePointerMove, { passive: false });
+      window.addEventListener("pointerup", finishDrag);
+      window.addEventListener("pointercancel", cancelDrag);
     });
   }
 }

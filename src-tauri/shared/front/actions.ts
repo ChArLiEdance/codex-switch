@@ -453,6 +453,7 @@ function handleReorderProfiles(sourceProfile: string, targetProfile: string): vo
   };
   persistProfileOrder(reordered);
   rerenderDashboard();
+  showToast(t(state.locale, "profileOrderUpdated"));
 }
 
 async function handleCancelLogin(profile: string): Promise<void> {

@@ -475,7 +475,7 @@ pub fn open_or_activate_codex_app(_codex_home: Option<&Path>) -> AppResult<Strin
 
     let mut command = Command::new("open");
     if let Some(app_path) = resolve_codex_app_path() {
-        command.args(["-a", &app_path]);
+        command.arg(&app_path);
         command.spawn().map_err(|error| {
             AppError::new("APP_OPEN_FAILED", format!("Failed to open Codex: {error}"))
         })?;
@@ -626,13 +626,11 @@ pub fn quit_codex_app_if_running() -> AppResult<bool> {
 }
 
 pub fn reopen_codex_app_if_needed(app_was_running: bool, codex_home: Option<&Path>) -> Vec<String> {
-    if !app_was_running {
-        return Vec::new();
-    }
+    let _ = app_was_running;
 
     if let Err(error) = open_or_activate_codex_app(codex_home) {
         return vec![format!(
-            "Warning: failed to relaunch Codex: {}",
+            "Warning: failed to open Codex after switching: {}",
             error.message
         )];
     }
