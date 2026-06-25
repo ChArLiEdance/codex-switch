@@ -779,6 +779,34 @@ function usageLineColor(kind: "cost" | "input" | "output" | "cacheCreate" | "cac
   }
 }
 
+function smoothSvgPath(points: Array<{ x: number; y: number }>): string {
+  if (points.length === 0) {
+    return "";
+  }
+  if (points.length === 1) {
+    return `M${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`;
+  }
+  const commands = [`M${points[0].x.toFixed(1)} ${points[0].y.toFixed(1)}`];
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const previous = points[Math.max(0, index - 1)];
+    const current = points[index];
+    const next = points[index + 1];
+    const afterNext = points[Math.min(points.length - 1, index + 2)];
+    const control1 = {
+      x: current.x + (next.x - previous.x) / 6,
+      y: current.y + (next.y - previous.y) / 6,
+    };
+    const control2 = {
+      x: next.x - (afterNext.x - current.x) / 6,
+      y: next.y - (afterNext.y - current.y) / 6,
+    };
+    commands.push(
+      `C${control1.x.toFixed(1)} ${control1.y.toFixed(1)} ${control2.x.toFixed(1)} ${control2.y.toFixed(1)} ${next.x.toFixed(1)} ${next.y.toFixed(1)}`,
+    );
+  }
+  return commands.join(" ");
+}
+
 function renderUsageTrendChart(stats: UsageStatsResponse): void {
   const container = elements.usageTrendChart;
   if (!container) {
@@ -799,48 +827,43 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
   };
   const yToken = (value: number) => pad.top + (height - pad.top - pad.bottom) * (1 - value / maxToken);
   const yCost = (value: number) => pad.top + (height - pad.top - pad.bottom) * (1 - value / maxCost);
-  const tokenPath = stats.trends.map((point, index) => `${index === 0 ? "M" : "L"}${x(index).toFixed(1)} ${yToken(point.real_total_tokens).toFixed(1)}`).join(" ");
-  const inputPath = stats.trends.map((point, index) => `${index === 0 ? "M" : "L"}${x(index).toFixed(1)} ${yToken(point.input_tokens).toFixed(1)}`).join(" ");
-  const outputPath = stats.trends.map((point, index) => `${index === 0 ? "M" : "L"}${x(index).toFixed(1)} ${yToken(point.output_tokens).toFixed(1)}`).join(" ");
-  const costPath = stats.trends.map((point, index) => `${index === 0 ? "M" : "L"}${x(index).toFixed(1)} ${yCost(point.total_cost_usd).toFixed(1)}`).join(" ");
-  const areaPath = `${tokenPath} L${x(stats.trends.length - 1).toFixed(1)} ${height - pad.bottom} L${pad.left} ${height - pad.bottom} Z`;
-  const ticks = stats.trends.filter((_, index) => index === 0 || index === stats.trends.length - 1 || index % Math.ceil(stats.trends.length / 4) === 0);
+  const chartPoints = stats.trends.map((point, index) => ({
+    index,
+    point,
+    x: x(index),
+    tokenY: yToken(point.real_total_tokens),
+    inputY: yToken(point.input_tokens),
+    outputY: yToken(point.output_tokens),
+    cacheCreateY: yToken(point.cache_creation_tokens),
+    cacheHitY: yToken(point.cache_read_tokens),
+    costY: yCost(point.total_cost_usd),
+  }));
+  const tokenPath = smoothSvgPath(chartPoints.map((entry) => ({ x: entry.x, y: entry.tokenY })));
+  const inputPath = smoothSvgPath(chartPoints.map((entry) => ({ x: entry.x, y: entry.inputY })));
+  const outputPath = smoothSvgPath(chartPoints.map((entry) => ({ x: entry.x, y: entry.outputY })));
+  const cacheCreatePath = smoothSvgPath(chartPoints.map((entry) => ({ x: entry.x, y: entry.cacheCreateY })));
+  const cacheHitPath = smoothSvgPath(chartPoints.map((entry) => ({ x: entry.x, y: entry.cacheHitY })));
+  const costPath = smoothSvgPath(chartPoints.map((entry) => ({ x: entry.x, y: entry.costY })));
+  const areaPath = `${tokenPath} L${chartPoints[chartPoints.length - 1].x.toFixed(1)} ${height - pad.bottom} L${pad.left} ${height - pad.bottom} Z`;
+  const tickStep = Math.max(1, Math.ceil(stats.trends.length / 4));
+  const tickIndexes = Array.from(new Set([
+    0,
+    ...stats.trends.map((_, index) => index).filter((index) => index % tickStep === 0),
+    stats.trends.length - 1,
+  ])).sort((left, right) => left - right);
   const showDateOnly = stats.end_at - stats.start_at > 24 * 60 * 60;
-  const points = stats.trends.map((point, index) => {
-    const pointX = x(index);
-    const pointY = yToken(point.real_total_tokens);
-    const previousX = index > 0 ? x(index - 1) : pad.left;
-    const nextX = index < stats.trends.length - 1 ? x(index + 1) : width - pad.right;
-    const hitStart = index > 0 ? (previousX + pointX) / 2 : pad.left;
-    const hitEnd = index < stats.trends.length - 1 ? (pointX + nextX) / 2 : width - pad.right;
-    const hitWidth = Math.max(12, hitEnd - hitStart);
-    const tooltipWidth = 176;
-    const tooltipHeight = 128;
-    const tooltipX = Math.min(width - pad.right - tooltipWidth, Math.max(pad.left, pointX + 12));
-    const tooltipY = Math.max(pad.top, pointY - tooltipHeight - 10);
-    const rows = [
-      [usageLineColor("input"), t(state.locale, "usageInput"), formatFullNumber(point.input_tokens)],
-      [usageLineColor("output"), t(state.locale, "usageOutput"), formatFullNumber(point.output_tokens)],
-      [usageLineColor("cacheCreate"), t(state.locale, "usageCacheCreate"), formatFullNumber(point.cache_creation_tokens)],
-      [usageLineColor("cacheHit"), t(state.locale, "usageCacheHit"), formatFullNumber(point.cache_read_tokens)],
-      [usageLineColor("cost"), t(state.locale, "usageCost"), formatMoney(point.total_cost_usd)],
-    ];
-    return `
-      <g class="usage-point-group" data-usage-index="${index}" tabindex="0">
-        <rect x="${hitStart.toFixed(1)}" y="${pad.top}" width="${hitWidth.toFixed(1)}" height="${height - pad.top - pad.bottom}" class="usage-hover-hitbox" />
-        <line x1="${pointX.toFixed(1)}" y1="${pad.top}" x2="${pointX.toFixed(1)}" y2="${height - pad.bottom}" class="usage-hover-line" />
-        <circle cx="${pointX.toFixed(1)}" cy="${pointY.toFixed(1)}" r="5" class="usage-point usage-point--cache" />
-        <g class="usage-hover-tooltip" transform="translate(${tooltipX.toFixed(1)} ${tooltipY.toFixed(1)})">
-          <rect width="${tooltipWidth}" height="${tooltipHeight}" rx="10" />
-          <text x="12" y="22" class="usage-tooltip-title">${escapeHtml(formatDateTime(point.timestamp))}</text>
-          ${rows.map((row, rowIndex) => `
-            <circle cx="14" cy="${44 + rowIndex * 17}" r="3" fill="${row[0]}" />
-            <text x="24" y="${48 + rowIndex * 17}" class="usage-tooltip-label">${escapeHtml(row[1])}: ${escapeHtml(row[2])}</text>
-          `).join("")}
-        </g>
-      </g>
-    `;
-  }).join("");
+  const tooltipRows = [
+    { key: "input", color: usageLineColor("input"), label: t(state.locale, "usageInput") },
+    { key: "output", color: usageLineColor("output"), label: t(state.locale, "usageOutput") },
+    { key: "cacheCreate", color: usageLineColor("cacheCreate"), label: t(state.locale, "usageCacheCreate") },
+    { key: "cacheHit", color: usageLineColor("cacheHit"), label: t(state.locale, "usageCacheHit") },
+    { key: "cost", color: usageLineColor("cost"), label: t(state.locale, "usageCost") },
+  ] as const;
+  const pointNodes = chartPoints.map((entry) => (
+    `<circle cx="${entry.x.toFixed(1)}" cy="${entry.tokenY.toFixed(1)}" r="4" class="usage-point" data-usage-point="${entry.index}" />`
+  )).join("");
+  const tooltipWidth = 178;
+  const tooltipHeight = 128;
   container.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(t(state.locale, "usageTrendTitle"))}">
       <defs>
@@ -854,17 +877,36 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
         return `<line x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}" class="usage-grid-line" />`;
       }).join("")}
       <path d="${areaPath}" fill="url(#usageTokenGradient)" />
-      <path d="${tokenPath}" class="usage-line usage-line--cache" />
+      <path d="${tokenPath}" class="usage-line usage-line--total" />
       <path d="${costPath}" class="usage-line usage-line--cost" />
+      <path d="${cacheCreatePath}" class="usage-line usage-line--cache-create" />
+      <path d="${cacheHitPath}" class="usage-line usage-line--cache" />
       <path d="${inputPath}" class="usage-line usage-line--input" />
       <path d="${outputPath}" class="usage-line usage-line--output" />
-      ${points}
-      ${ticks.map((point, index) => `<text x="${x(stats.trends.indexOf(point))}" y="${height - 12}" class="usage-axis-label" text-anchor="${index === 0 ? "start" : "middle"}">${escapeHtml(formatTrendAxisLabel(point.timestamp, showDateOnly))}</text>`).join("")}
+      ${pointNodes}
+      <rect x="${pad.left}" y="${pad.top}" width="${width - pad.left - pad.right}" height="${height - pad.top - pad.bottom}" class="usage-hover-capture" />
+      <g class="usage-active-layer">
+        <line x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${height - pad.bottom}" class="usage-hover-line" data-usage-cursor />
+        <circle cx="${pad.left}" cy="${pad.top}" r="6" class="usage-active-dot" data-usage-active-dot />
+        <g class="usage-hover-tooltip" data-usage-tooltip>
+          <rect width="${tooltipWidth}" height="${tooltipHeight}" rx="10" />
+          <text x="12" y="22" class="usage-tooltip-title" data-usage-tooltip-title>--</text>
+          ${tooltipRows.map((row, rowIndex) => `
+            <circle cx="14" cy="${44 + rowIndex * 17}" r="3" fill="${row.color}" />
+            <text x="24" y="${48 + rowIndex * 17}" class="usage-tooltip-label" data-usage-tooltip-value="${row.key}">${escapeHtml(row.label)}: --</text>
+          `).join("")}
+        </g>
+      </g>
+      ${tickIndexes.map((tickIndex, index) => {
+        const point = stats.trends[tickIndex];
+        return `<text x="${x(tickIndex)}" y="${height - 12}" class="usage-axis-label" text-anchor="${index === 0 ? "start" : "middle"}">${escapeHtml(formatTrendAxisLabel(point.timestamp, showDateOnly))}</text>`;
+      }).join("")}
       <text x="${pad.left}" y="${pad.top + 8}" class="usage-axis-label">tokens</text>
       <text x="${width - pad.right}" y="${pad.top + 8}" class="usage-axis-label" text-anchor="end">$</text>
     </svg>
     <div class="usage-legend">
       <span class="legend-cost">${escapeHtml(t(state.locale, "usageCost"))}</span>
+      <span class="legend-cache-create">${escapeHtml(t(state.locale, "usageCacheCreate"))}</span>
       <span class="legend-cache">${escapeHtml(t(state.locale, "usageCacheHit"))}</span>
       <span class="legend-input">${escapeHtml(t(state.locale, "usageInput"))}</span>
       <span class="legend-output">${escapeHtml(t(state.locale, "usageOutput"))}</span>
@@ -872,12 +914,58 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
   `;
 
   const svg = container.querySelector<SVGSVGElement>("svg");
-  const groups = Array.from(container.querySelectorAll<SVGGElement>(".usage-point-group"));
-  const setActivePoint = (activeIndex: number | null) => {
-    for (const group of groups) {
-      group.classList.toggle("is-active", group.dataset.usageIndex === String(activeIndex));
+  const activeLayer = container.querySelector<SVGGElement>(".usage-active-layer");
+  const cursor = container.querySelector<SVGLineElement>("[data-usage-cursor]");
+  const activeDot = container.querySelector<SVGCircleElement>("[data-usage-active-dot]");
+  const tooltip = container.querySelector<SVGGElement>("[data-usage-tooltip]");
+  const tooltipTitle = container.querySelector<SVGTextElement>("[data-usage-tooltip-title]");
+  const tooltipValues = Array.from(container.querySelectorAll<SVGTextElement>("[data-usage-tooltip-value]"));
+  const pointElements = Array.from(container.querySelectorAll<SVGCircleElement>("[data-usage-point]"));
+  let activeIndex = -1;
+  let pendingClientX: number | null = null;
+  let pendingFrame = 0;
+
+  const formatTooltipRow = (key: string, point: UsageStatsResponse["trends"][number]): string => {
+    if (key === "cost") {
+      return formatMoney(point.total_cost_usd);
+    }
+    if (key === "input") {
+      return formatFullNumber(point.input_tokens);
+    }
+    if (key === "output") {
+      return formatFullNumber(point.output_tokens);
+    }
+    if (key === "cacheCreate") {
+      return formatFullNumber(point.cache_creation_tokens);
+    }
+    return formatFullNumber(point.cache_read_tokens);
+  };
+
+  const setActivePoint = (nextIndex: number): void => {
+    if (!activeLayer || !cursor || !activeDot || !tooltip || !tooltipTitle || nextIndex === activeIndex) {
+      return;
+    }
+    activeIndex = nextIndex;
+    const entry = chartPoints[nextIndex];
+    const tooltipX = Math.min(width - pad.right - tooltipWidth, Math.max(pad.left, entry.x + 12));
+    const tooltipY = Math.max(pad.top, entry.tokenY - tooltipHeight - 10);
+    activeLayer.classList.add("is-active");
+    cursor.setAttribute("x1", entry.x.toFixed(1));
+    cursor.setAttribute("x2", entry.x.toFixed(1));
+    activeDot.setAttribute("cx", entry.x.toFixed(1));
+    activeDot.setAttribute("cy", entry.tokenY.toFixed(1));
+    tooltip.setAttribute("transform", `translate(${tooltipX.toFixed(1)} ${tooltipY.toFixed(1)})`);
+    tooltipTitle.textContent = formatDateTime(entry.point.timestamp);
+    for (const valueNode of tooltipValues) {
+      const key = valueNode.dataset.usageTooltipValue ?? "";
+      const row = tooltipRows.find((candidate) => candidate.key === key);
+      valueNode.textContent = `${row?.label ?? key}: ${formatTooltipRow(key, entry.point)}`;
+    }
+    for (const pointElement of pointElements) {
+      pointElement.classList.toggle("is-active", pointElement.dataset.usagePoint === String(nextIndex));
     }
   };
+
   const nearestIndexForClientX = (clientX: number): number => {
     if (!svg) {
       return stats.trends.length - 1;
@@ -895,12 +983,19 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
     });
     return nearestIndex;
   };
+
   setActivePoint(stats.trends.length - 1);
   svg?.addEventListener("pointermove", (event) => {
-    setActivePoint(nearestIndexForClientX(event.clientX));
-  });
-  svg?.addEventListener("pointerleave", () => {
-    setActivePoint(stats.trends.length - 1);
+    pendingClientX = event.clientX;
+    if (pendingFrame) {
+      return;
+    }
+    pendingFrame = window.requestAnimationFrame(() => {
+      pendingFrame = 0;
+      if (pendingClientX != null) {
+        setActivePoint(nearestIndexForClientX(pendingClientX));
+      }
+    });
   });
 }
 

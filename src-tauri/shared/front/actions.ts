@@ -73,6 +73,7 @@ import {
   renderShellRoute,
   renderSessionManager,
   renderThemeOptions,
+  renderUsageStats,
   routeFromLocation,
   showUpdateDialog,
   showToast,
@@ -275,7 +276,7 @@ async function refreshUsageStats(showError = false): Promise<void> {
       showToast(error instanceof Error ? error.message : t(state.locale, "usageEmpty"), true);
     }
   } finally {
-    rerenderDashboard();
+    renderUsageStats();
   }
 }
 

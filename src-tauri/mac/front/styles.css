@@ -3173,12 +3173,15 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
 
 .usage-trend-chart {
   min-height: 260px;
+  contain: layout paint;
 }
 
 .usage-trend-chart svg {
   display: block;
   width: 100%;
   height: auto;
+  overflow: visible;
+  cursor: crosshair;
 }
 
 .usage-grid-line {
@@ -3201,6 +3204,14 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
 
 .usage-line--cache {
   stroke: #a855f7;
+}
+
+.usage-line--cache-create {
+  stroke: #f97316;
+}
+
+.usage-line--total {
+  stroke: rgba(168, 85, 247, 0.28);
 }
 
 .usage-line--input {
@@ -3232,15 +3243,28 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
 
 .usage-trend-chart:hover .usage-point,
 .usage-point-group:focus .usage-point,
-.usage-point-group.is-active .usage-point {
+.usage-point-group.is-active .usage-point,
+.usage-point.is-active {
   opacity: 1;
 }
 
 .usage-point-group:hover .usage-point,
 .usage-point-group:focus .usage-point,
-.usage-point-group.is-active .usage-point {
+.usage-point-group.is-active .usage-point,
+.usage-point.is-active {
   r: 6;
   filter: drop-shadow(0 3px 8px rgba(168, 85, 247, 0.28));
+}
+
+.usage-hover-capture {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.usage-active-layer {
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity 120ms ease;
 }
 
 .usage-hover-line,
@@ -3248,6 +3272,18 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   opacity: 0;
   pointer-events: none;
   transition: opacity 120ms ease;
+}
+
+.usage-active-layer .usage-hover-line,
+.usage-active-layer .usage-hover-tooltip {
+  opacity: 1;
+}
+
+.usage-active-dot {
+  fill: #ffffff;
+  stroke: #a855f7;
+  stroke-width: 2;
+  filter: drop-shadow(0 3px 8px rgba(168, 85, 247, 0.28));
 }
 
 .usage-hover-line {
@@ -4189,6 +4225,11 @@ html[data-theme="jade-night"] .usage-point {
   stroke: #c084fc;
 }
 
+html[data-theme="jade-night"] .usage-active-dot {
+  fill: #171a21;
+  stroke: #c084fc;
+}
+
 html[data-theme="jade-night"] .usage-hover-line {
   stroke: rgba(255, 255, 255, 0.22) !important;
 }
@@ -4723,4 +4764,49 @@ html[data-theme="jade-night"] .mac-detail-route .settings-panel.settings-panel--
   border-color: transparent !important;
   background: transparent !important;
   box-shadow: none !important;
+}
+
+@keyframes ccSwitchContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page.active {
+  animation: ccSwitchContentIn 220ms ease-out both !important;
+}
+
+.mac-detail-route .page.active .mac-detail-header {
+  animation: ccSwitchContentIn 190ms ease-out both !important;
+}
+
+.mac-detail-route .page.active .settings-panel,
+.mac-detail-route .page.active .session-manager-panel,
+.mac-detail-route .page.active .guide-grid,
+.mac-detail-route .page.active .mac-placeholder-card,
+.settings-tab-panel.is-active:not([hidden]) {
+  animation: ccSwitchContentIn 240ms ease-out both !important;
+}
+
+.route-tab,
+.mac-feature-tab,
+.mac-settings-button,
+.mac-add-button,
+.settings-tab-button,
+.profile-action-button,
+.session-toolbar-button,
+.session-action-button,
+.settings-action-button {
+  transition:
+    transform 160ms ease-out,
+    opacity 160ms ease-out,
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    color 160ms ease-out,
+    box-shadow 160ms ease-out !important;
 }
