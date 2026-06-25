@@ -3079,13 +3079,13 @@ html[data-theme="jade-night"] .mac-account-card .quota-track {
 
 html[data-theme="jade-night"] .mac-profile-actions .profile-action-button:not(.mac-profile-primary) {
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  background: rgba(16, 18, 24, 0.72) !important;
+  background: transparent !important;
   color: #dbe1ea !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: none !important;
 }
 
 html[data-theme="jade-night"] .mac-profile-actions .profile-action-button:not(.mac-profile-primary):hover:not(:disabled) {
-  background: rgba(44, 48, 58, 0.92) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
   color: #ffffff !important;
 }
 
