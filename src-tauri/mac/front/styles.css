@@ -3196,6 +3196,43 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   filter: drop-shadow(0 3px 8px rgba(168, 85, 247, 0.28));
 }
 
+.usage-hover-line,
+.usage-hover-tooltip {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.usage-hover-line {
+  stroke: rgba(96, 107, 123, 0.28);
+  stroke-width: 1;
+}
+
+.usage-hover-tooltip rect {
+  fill: rgba(255, 255, 255, 0.97);
+  stroke: rgba(220, 227, 235, 0.98);
+  filter: drop-shadow(0 12px 20px rgba(15, 23, 42, 0.16));
+}
+
+.usage-tooltip-title {
+  fill: #101827;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.usage-tooltip-label {
+  fill: #334155;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.usage-point-group:hover .usage-hover-line,
+.usage-point-group:hover .usage-hover-tooltip,
+.usage-point-group:focus .usage-hover-line,
+.usage-point-group:focus .usage-hover-tooltip {
+  opacity: 1;
+}
+
 .usage-axis-label {
   fill: #737b8a;
   font-size: 10px;
@@ -3940,6 +3977,24 @@ html[data-theme="jade-night"] .history-session-table {
 html[data-theme="jade-night"] .usage-point {
   fill: #171a21;
   stroke: #c084fc;
+}
+
+html[data-theme="jade-night"] .usage-hover-line {
+  stroke: rgba(255, 255, 255, 0.22) !important;
+}
+
+html[data-theme="jade-night"] .usage-hover-tooltip rect {
+  fill: rgba(28, 30, 36, 0.98) !important;
+  stroke: rgba(255, 255, 255, 0.14) !important;
+  filter: drop-shadow(0 14px 22px rgba(0, 0, 0, 0.36));
+}
+
+html[data-theme="jade-night"] .usage-tooltip-title {
+  fill: #f5f7fb !important;
+}
+
+html[data-theme="jade-night"] .usage-tooltip-label {
+  fill: #d7dce5 !important;
 }
 
 html[data-theme="jade-night"] .session-sidebar,

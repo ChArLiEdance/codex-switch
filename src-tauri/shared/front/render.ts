@@ -575,11 +575,11 @@ function formatCompactNumber(value: number): string {
   if (!Number.isFinite(value)) {
     return "--";
   }
-  if (value >= 10_000_000) {
-    return `${(value / 10_000_000).toFixed(2)}kw`;
-  }
   if (value >= 10_000) {
-    return `${(value / 10_000).toFixed(1)}w`;
+    if (state.locale === "zh-CN") {
+      return `${(value / 10_000).toFixed(1)}万`;
+    }
+    return `${(value / 1_000_000).toFixed(2)} millions`;
   }
   return Math.round(value).toLocaleString();
 }
@@ -706,6 +706,21 @@ function renderUsageFilters(stats: UsageStatsResponse | null): void {
   });
 }
 
+function usageLineColor(kind: "cost" | "input" | "output" | "cacheCreate" | "cacheHit"): string {
+  switch (kind) {
+    case "cost":
+      return "#ff4770";
+    case "input":
+      return "#2f7dff";
+    case "output":
+      return "#22c55e";
+    case "cacheCreate":
+      return "#f97316";
+    case "cacheHit":
+      return "#a855f7";
+  }
+}
+
 function renderUsageTrendChart(stats: UsageStatsResponse): void {
   const container = elements.usageTrendChart;
   if (!container) {
@@ -733,17 +748,31 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
   const areaPath = `${tokenPath} L${x(stats.trends.length - 1).toFixed(1)} ${height - pad.bottom} L${pad.left} ${height - pad.bottom} Z`;
   const ticks = stats.trends.filter((_, index) => index === 0 || index === stats.trends.length - 1 || index % Math.ceil(stats.trends.length / 4) === 0);
   const points = stats.trends.map((point, index) => {
-    const label = [
-      point.bucket,
-      `${t(state.locale, "usageTokens")}: ${formatFullNumber(point.real_total_tokens)}`,
-      `${t(state.locale, "usageInput")}: ${formatFullNumber(point.input_tokens)}`,
-      `${t(state.locale, "usageOutput")}: ${formatFullNumber(point.output_tokens)}`,
-      `${t(state.locale, "usageCost")}: ${formatMoney(point.total_cost_usd)}`,
-    ].join("\n");
+    const pointX = x(index);
+    const pointY = yToken(point.real_total_tokens);
+    const tooltipWidth = 176;
+    const tooltipHeight = 128;
+    const tooltipX = Math.min(width - pad.right - tooltipWidth, Math.max(pad.left, pointX + 12));
+    const tooltipY = Math.max(pad.top, pointY - tooltipHeight - 10);
+    const rows = [
+      [usageLineColor("input"), t(state.locale, "usageInput"), formatFullNumber(point.input_tokens)],
+      [usageLineColor("output"), t(state.locale, "usageOutput"), formatFullNumber(point.output_tokens)],
+      [usageLineColor("cacheCreate"), t(state.locale, "usageCacheCreate"), formatFullNumber(point.cache_creation_tokens)],
+      [usageLineColor("cacheHit"), t(state.locale, "usageCacheHit"), formatFullNumber(point.cache_read_tokens)],
+      [usageLineColor("cost"), t(state.locale, "usageCost"), formatMoney(point.total_cost_usd)],
+    ];
     return `
       <g class="usage-point-group" tabindex="0">
-        <circle cx="${x(index).toFixed(1)}" cy="${yToken(point.real_total_tokens).toFixed(1)}" r="4.5" class="usage-point usage-point--cache" />
-        <title>${escapeHtml(label)}</title>
+        <line x1="${pointX.toFixed(1)}" y1="${pad.top}" x2="${pointX.toFixed(1)}" y2="${height - pad.bottom}" class="usage-hover-line" />
+        <circle cx="${pointX.toFixed(1)}" cy="${pointY.toFixed(1)}" r="5" class="usage-point usage-point--cache" />
+        <g class="usage-hover-tooltip" transform="translate(${tooltipX.toFixed(1)} ${tooltipY.toFixed(1)})">
+          <rect width="${tooltipWidth}" height="${tooltipHeight}" rx="10" />
+          <text x="12" y="22" class="usage-tooltip-title">${escapeHtml(formatDateTime(point.timestamp))}</text>
+          ${rows.map((row, rowIndex) => `
+            <circle cx="14" cy="${44 + rowIndex * 17}" r="3" fill="${row[0]}" />
+            <text x="24" y="${48 + rowIndex * 17}" class="usage-tooltip-label">${escapeHtml(row[1])}: ${escapeHtml(row[2])}</text>
+          `).join("")}
+        </g>
       </g>
     `;
   }).join("");

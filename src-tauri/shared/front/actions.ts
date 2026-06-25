@@ -181,7 +181,7 @@ function usageSettingsFromInputs(prefix: "settings" | "dialog"): UsageQuerySetti
   return {
     enabled: Boolean(enabled),
     timeout_seconds: Number.isFinite(timeout) ? Math.max(1, Math.round(timeout ?? 10)) : 10,
-    auto_query_interval_minutes: Number.isFinite(interval) ? Math.max(0, Math.round(interval ?? 5)) : 5,
+    auto_query_interval_minutes: Number.isFinite(interval) ? Math.max(1, Math.round(interval ?? 5)) : 5,
   };
 }
 

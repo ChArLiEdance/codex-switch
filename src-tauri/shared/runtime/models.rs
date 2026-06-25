@@ -250,13 +250,23 @@ pub struct SetCodexCliPathPayload {
     pub path: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct UsageQuerySettings {
     pub enabled: bool,
     pub timeout_seconds: u32,
-    /// Minutes. `0` means no automatic usage query.
+    /// Minutes between automatic usage queries.
     pub auto_query_interval_minutes: u32,
+}
+
+impl Default for UsageQuerySettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            timeout_seconds: 10,
+            auto_query_interval_minutes: 5,
+        }
+    }
 }
 
 impl UsageQuerySettings {
@@ -264,7 +274,11 @@ impl UsageQuerySettings {
         Self {
             enabled: self.enabled,
             timeout_seconds: self.timeout_seconds.clamp(1, 120),
-            auto_query_interval_minutes: self.auto_query_interval_minutes.min(1440),
+            auto_query_interval_minutes: if self.auto_query_interval_minutes == 0 {
+                5
+            } else {
+                self.auto_query_interval_minutes.min(1440)
+            },
         }
     }
 }

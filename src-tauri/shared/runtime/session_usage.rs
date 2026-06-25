@@ -93,6 +93,11 @@ struct SessionUsageAccumulator {
     total_cost_usd: f64,
 }
 
+struct UsageFileSource {
+    profile: String,
+    path: PathBuf,
+}
+
 fn get_sessions_root(codex_home: Option<&Path>) -> PathBuf {
     codex_home
         .map(Path::to_path_buf)
@@ -641,20 +646,104 @@ fn parse_usage_events_from_file(profile: &str, path: &Path) -> Vec<UsageEvent> {
     events
 }
 
-fn collect_usage_files_for_profile(
-    profile: &str,
-    codex_home: &Path,
-    current: Option<&str>,
-) -> Vec<PathBuf> {
-    let backup_root = super::paths::get_backup_root(Some(codex_home));
-    let mut files = Vec::new();
-    if current == Some(profile) {
-        collect_jsonl_files(&codex_home.join("sessions"), &mut files);
+fn usage_file_timestamp_ms(path: &Path) -> Option<u64> {
+    let raw = fs::read_to_string(path).ok()?;
+    let mut fallback = None;
+    for line in raw.lines().take(500) {
+        let Ok(value) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        let timestamp = value
+            .get("timestamp")
+            .and_then(parse_timestamp_value_to_seconds)
+            .and_then(|seconds| u64::try_from(seconds).ok())
+            .map(|seconds| seconds.saturating_mul(1000))
+            .or_else(|| {
+                value
+                    .get("payload")
+                    .and_then(|payload| payload.get("timestamp"))
+                    .and_then(parse_timestamp_value_to_seconds)
+                    .and_then(|seconds| u64::try_from(seconds).ok())
+                    .map(|seconds| seconds.saturating_mul(1000))
+            });
+
+        if fallback.is_none() {
+            fallback = timestamp;
+        }
+        if value.get("type").and_then(Value::as_str) == Some("event_msg")
+            && value
+                .get("payload")
+                .and_then(|payload| payload.get("type"))
+                .and_then(Value::as_str)
+                == Some("token_count")
+        {
+            return timestamp.or(fallback);
+        }
     }
-    collect_jsonl_files(&backup_root.join(profile).join("sessions"), &mut files);
-    files.sort();
-    files.dedup();
-    files
+    fallback.or_else(|| file_modified_ms(path))
+}
+
+fn infer_live_usage_profile(path: &Path, index: &crate::models::ProfilesIndex) -> Option<String> {
+    let timestamp_ms = usage_file_timestamp_ms(path).or_else(|| file_modified_ms(path));
+    let Some(timestamp_ms) = timestamp_ms else {
+        return index.current_profile.clone();
+    };
+
+    index
+        .profiles
+        .iter()
+        .filter_map(|profile| {
+            profile
+                .auth_mtime_ms
+                .filter(|mtime| *mtime <= timestamp_ms)
+                .map(|mtime| (mtime, profile.folder_name.clone()))
+        })
+        .max_by_key(|(mtime, _)| *mtime)
+        .map(|(_, profile)| profile)
+        .or_else(|| index.current_profile.clone())
+}
+
+fn collect_usage_file_sources(
+    selected_profiles: &[String],
+    codex_home: &Path,
+    index: &crate::models::ProfilesIndex,
+) -> Vec<UsageFileSource> {
+    let backup_root = super::paths::get_backup_root(Some(codex_home));
+    let selected = selected_profiles.iter().cloned().collect::<HashSet<_>>();
+    let mut seen = HashSet::new();
+    let mut sources = Vec::new();
+
+    for profile in selected_profiles {
+        let mut files = Vec::new();
+        collect_jsonl_files(&backup_root.join(profile).join("sessions"), &mut files);
+        for path in files {
+            let key = (profile.clone(), path.to_string_lossy().to_string());
+            if seen.insert(key) {
+                sources.push(UsageFileSource {
+                    profile: profile.clone(),
+                    path,
+                });
+            }
+        }
+    }
+
+    let mut live_files = Vec::new();
+    collect_jsonl_files(&codex_home.join("sessions"), &mut live_files);
+    for path in live_files {
+        let Some(profile) = infer_live_usage_profile(&path, index) else {
+            continue;
+        };
+        if !selected.contains(&profile) {
+            continue;
+        }
+        let key = (profile.clone(), path.to_string_lossy().to_string());
+        if seen.insert(key) {
+            sources.push(UsageFileSource { profile, path });
+        }
+    }
+
+    sources.sort_by(|left, right| left.path.cmp(&right.path));
+    sources
 }
 
 fn parse_session_meta(path: &Path, profile: Option<&str>) -> Option<CodexSessionMeta> {
@@ -975,56 +1064,51 @@ pub fn load_usage_stats(
     let mut trend_map: BTreeMap<i64, UsageTrendPoint> = BTreeMap::new();
     let mut session_map: BTreeMap<(String, String), SessionUsageAccumulator> = BTreeMap::new();
 
-    for profile in selected_names {
-        for file in
-            collect_usage_files_for_profile(&profile, &codex_home, index.current_profile.as_deref())
-        {
-            for event in parse_usage_events_from_file(&profile, &file) {
-                if event.timestamp < start_at || event.timestamp > end_at {
-                    continue;
-                }
-                push_totals(&mut totals, &event.delta, &event.model);
-
-                let fresh_input = event.delta.input.saturating_sub(event.delta.cached_input);
-                let bucket = bucket_timestamp(event.timestamp, start_at, end_at);
-                let trend = trend_map.entry(bucket).or_insert_with(|| UsageTrendPoint {
-                    bucket: Local
-                        .timestamp_opt(bucket, 0)
-                        .single()
-                        .map(|datetime| datetime.format("%Y-%m-%d %H:%M").to_string())
-                        .unwrap_or_else(|| bucket.to_string()),
-                    timestamp: bucket,
-                    input_tokens: 0,
-                    output_tokens: 0,
-                    cache_read_tokens: 0,
-                    cache_creation_tokens: 0,
-                    real_total_tokens: 0,
-                    total_cost_usd: 0.0,
-                });
-                trend.input_tokens += fresh_input;
-                trend.output_tokens += event.delta.output;
-                trend.cache_read_tokens += event.delta.cached_input;
-                trend.real_total_tokens +=
-                    fresh_input + event.delta.output + event.delta.cached_input;
-                let event_cost = cost_for_event(&event.model, &event.delta);
-                trend.total_cost_usd += event_cost;
-
-                let session = session_map
-                    .entry((event.profile.clone(), event.session_id.clone()))
-                    .or_insert_with(|| SessionUsageAccumulator {
-                        profile: event.profile.clone(),
-                        session_id: event.session_id.clone(),
-                        model: event.model.clone(),
-                        started_at: event.timestamp,
-                        ..SessionUsageAccumulator::default()
-                    });
-                session.started_at = session.started_at.min(event.timestamp);
-                session.model = event.model.clone();
-                session.input_tokens += fresh_input;
-                session.output_tokens += event.delta.output;
-                session.cache_read_tokens += event.delta.cached_input;
-                session.total_cost_usd += event_cost;
+    for source in collect_usage_file_sources(&selected_names, &codex_home, &index) {
+        for event in parse_usage_events_from_file(&source.profile, &source.path) {
+            if event.timestamp < start_at || event.timestamp > end_at {
+                continue;
             }
+            push_totals(&mut totals, &event.delta, &event.model);
+
+            let fresh_input = event.delta.input.saturating_sub(event.delta.cached_input);
+            let bucket = bucket_timestamp(event.timestamp, start_at, end_at);
+            let trend = trend_map.entry(bucket).or_insert_with(|| UsageTrendPoint {
+                bucket: Local
+                    .timestamp_opt(bucket, 0)
+                    .single()
+                    .map(|datetime| datetime.format("%Y-%m-%d %H:%M").to_string())
+                    .unwrap_or_else(|| bucket.to_string()),
+                timestamp: bucket,
+                input_tokens: 0,
+                output_tokens: 0,
+                cache_read_tokens: 0,
+                cache_creation_tokens: 0,
+                real_total_tokens: 0,
+                total_cost_usd: 0.0,
+            });
+            trend.input_tokens += fresh_input;
+            trend.output_tokens += event.delta.output;
+            trend.cache_read_tokens += event.delta.cached_input;
+            trend.real_total_tokens += fresh_input + event.delta.output + event.delta.cached_input;
+            let event_cost = cost_for_event(&event.model, &event.delta);
+            trend.total_cost_usd += event_cost;
+
+            let session = session_map
+                .entry((event.profile.clone(), event.session_id.clone()))
+                .or_insert_with(|| SessionUsageAccumulator {
+                    profile: event.profile.clone(),
+                    session_id: event.session_id.clone(),
+                    model: event.model.clone(),
+                    started_at: event.timestamp,
+                    ..SessionUsageAccumulator::default()
+                });
+            session.started_at = session.started_at.min(event.timestamp);
+            session.model = event.model.clone();
+            session.input_tokens += fresh_input;
+            session.output_tokens += event.delta.output;
+            session.cache_read_tokens += event.delta.cached_input;
+            session.total_cost_usd += event_cost;
         }
     }
 
@@ -1228,6 +1312,50 @@ mod tests {
 
         assert_eq!(quota.five_hour.remaining_percent, Some(95));
         assert_eq!(quota.weekly.remaining_percent, Some(94));
+    }
+
+    #[test]
+    fn live_usage_attribution_prefers_token_count_timestamp() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "codex-switch-live-usage-attribution-{unique}.jsonl"
+        ));
+        fs::write(
+            &path,
+            [
+                r#"{"timestamp":"2026-06-25T09:02:03Z","type":"session_meta","payload":{"id":"a"}}"#,
+                r#"{"timestamp":"2026-06-25T09:23:31Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":10,"cached_input_tokens":0,"output_tokens":1}}}}"#,
+            ]
+            .join("\n"),
+        )
+        .unwrap();
+
+        let index = crate::models::ProfilesIndex {
+            current_profile: Some("fallback".to_string()),
+            profiles: vec![
+                crate::models::ProfileIndexEntry {
+                    folder_name: "charlie".to_string(),
+                    auth_mtime_ms: Some(1_782_375_554_611),
+                    ..Default::default()
+                },
+                crate::models::ProfileIndexEntry {
+                    folder_name: "hester".to_string(),
+                    auth_mtime_ms: Some(1_782_378_356_078),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        assert_eq!(
+            infer_live_usage_profile(&path, &index).as_deref(),
+            Some("hester")
+        );
+
+        let _ = fs::remove_file(path);
     }
 
     /// Cache integration tests — guard the fast-path / per-file-cache
