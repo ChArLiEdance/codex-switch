@@ -27,6 +27,9 @@ export const state = {
   usageStats: null as UsageStatsResponse | null,
   usageStatsProfile: null as string | null,
   usageStatsRange: "today" as "today" | "7d" | "30d",
+  historyStats: null as UsageStatsResponse | null,
+  historyStatsProfile: null as string | null,
+  historyStatsRange: "today" as "today" | "7d" | "30d",
   settingsUsageProfile: null as string | null,
   usageSettingsByProfile: {} as Record<string, UsageQuerySettings>,
 };

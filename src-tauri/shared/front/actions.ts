@@ -123,7 +123,7 @@ function defaultUsageSettings(): UsageQuerySettings {
   };
 }
 
-function usageRangeBounds(range: typeof state.usageStatsRange): { start_at: number; end_at: number } {
+function usageRangeBounds(range: "today" | "7d" | "30d"): { start_at: number; end_at: number } {
   const now = new Date();
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
@@ -207,6 +207,23 @@ async function refreshUsageStats(showError = false): Promise<void> {
   }
 }
 
+async function refreshHistoryStats(showError = false): Promise<void> {
+  try {
+    const bounds = usageRangeBounds(state.historyStatsRange);
+    state.historyStats = await getUsageStats({
+      profile: state.historyStatsProfile,
+      start_at: bounds.start_at,
+      end_at: bounds.end_at,
+    });
+  } catch (error) {
+    if (showError) {
+      showToast(error instanceof Error ? error.message : t(state.locale, "usageEmpty"), true);
+    }
+  } finally {
+    rerenderDashboard();
+  }
+}
+
 function selectedSettingsUsageProfile(): string | null {
   const selected = elements.settingsUsageProfileSelect?.value || state.settingsUsageProfile;
   return selected || state.currentProfile || state.snapshot?.profiles[0]?.folder_name || null;
@@ -276,6 +293,7 @@ function scheduleUsageStatsRefresh(): void {
     }
     document.body.dataset.usageStatsLastRun = String(now);
     void refreshUsageStats(false);
+    void refreshHistoryStats(false);
   }, 60_000);
 }
 
@@ -487,6 +505,7 @@ async function refreshAllData(showError = true): Promise<void> {
     applyCurrentQuota(currentQuota);
     await loadUsageSettingsForProfiles(snapshot.profiles);
     await refreshUsageStats(false);
+    await refreshHistoryStats(false);
     rerenderDashboard();
     maybePromptUnmanagedAccount(snapshot.unmanaged_live_account);
   } catch (error) {
@@ -1387,6 +1406,20 @@ export function bootstrap(): void {
   });
   elements.usageRefreshButton?.addEventListener("click", () => {
     void refreshUsageStats(true);
+  });
+  elements.historyProfileFilter?.addEventListener("change", () => {
+    state.historyStatsProfile = elements.historyProfileFilter?.value || null;
+    void refreshHistoryStats(true);
+  });
+  elements.historyRangeFilter?.addEventListener("change", () => {
+    const value = elements.historyRangeFilter?.value;
+    if (value === "today" || value === "7d" || value === "30d") {
+      state.historyStatsRange = value;
+      void refreshHistoryStats(true);
+    }
+  });
+  elements.historyRefreshButton?.addEventListener("click", () => {
+    void refreshHistoryStats(true);
   });
   elements.localeEnButton.addEventListener("click", () => {
     setLocale("en");

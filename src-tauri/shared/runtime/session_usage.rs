@@ -84,6 +84,7 @@ struct SessionUsageAccumulator {
     input_tokens: u64,
     output_tokens: u64,
     cache_read_tokens: u64,
+    total_cost_usd: f64,
 }
 
 fn get_sessions_root(codex_home: Option<&Path>) -> PathBuf {
@@ -631,7 +632,8 @@ pub fn load_usage_stats(
                 trend.cache_read_tokens += event.delta.cached_input;
                 trend.real_total_tokens +=
                     fresh_input + event.delta.output + event.delta.cached_input;
-                trend.total_cost_usd += cost_for_event(&event.model, &event.delta);
+                let event_cost = cost_for_event(&event.model, &event.delta);
+                trend.total_cost_usd += event_cost;
 
                 let session = session_map
                     .entry((event.profile.clone(), event.session_id.clone()))
@@ -647,6 +649,7 @@ pub fn load_usage_stats(
                 session.input_tokens += fresh_input;
                 session.output_tokens += event.delta.output;
                 session.cache_read_tokens += event.delta.cached_input;
+                session.total_cost_usd += event_cost;
             }
         }
     }
@@ -667,7 +670,7 @@ pub fn load_usage_stats(
                 cache_read_tokens: session.cache_read_tokens,
                 cache_creation_tokens: 0,
                 real_total_tokens,
-                total_cost_usd: 0.0,
+                total_cost_usd: session.total_cost_usd,
             }
         })
         .collect();

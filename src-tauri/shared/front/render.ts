@@ -77,6 +77,7 @@ export const elements = {
   usageRangeFilter: document.getElementById("usage-range-filter") as HTMLSelectElement | null,
   usageRefreshButton: document.getElementById("usage-refresh-button") as HTMLButtonElement | null,
   usageRealTotal: document.getElementById("usage-real-total"),
+  usageRealTotalCompact: document.getElementById("usage-real-total-compact"),
   usageRequestCount: document.getElementById("usage-request-count"),
   usageTotalCost: document.getElementById("usage-total-cost"),
   usageInputTokens: document.getElementById("usage-input-tokens"),
@@ -88,6 +89,13 @@ export const elements = {
   usageTrendChart: document.getElementById("usage-trend-chart"),
   usageChartRange: document.getElementById("usage-chart-range"),
   usageSessionRows: document.getElementById("usage-session-rows"),
+  historyProfileFilter: document.getElementById("history-profile-filter") as HTMLSelectElement | null,
+  historyRangeFilter: document.getElementById("history-range-filter") as HTMLSelectElement | null,
+  historyRefreshButton: document.getElementById("history-refresh-button") as HTMLButtonElement | null,
+  historyRequestCount: document.getElementById("history-request-count"),
+  historyTokenCount: document.getElementById("history-token-count"),
+  historyCostTotal: document.getElementById("history-cost-total"),
+  historySessionRows: document.getElementById("history-session-rows"),
   settingsShowAccountDetailToggle: document.getElementById("settings-show-account-detail-toggle"),
   updateDialog: requiredElement<HTMLDialogElement>("update-dialog"),
   updateDialogCopy: requiredElement<HTMLParagraphElement>("update-dialog-copy"),
@@ -525,6 +533,7 @@ export function renderShellOverview(dashboard: DashboardViewModel | null): void 
     elements.dashboardReadyCount.textContent = "--";
     elements.dashboardMissingCount.textContent = "--";
     renderUsageStats();
+    renderHistoryStats();
     return;
   }
 
@@ -542,6 +551,7 @@ export function renderShellOverview(dashboard: DashboardViewModel | null): void 
   elements.dashboardMissingCount.textContent = String(Math.max(0, missingCount));
   renderUsageSettingsControls(profiles);
   renderUsageStats();
+  renderHistoryStats();
 }
 
 function formatCompactNumber(value: number): string {
@@ -555,6 +565,23 @@ function formatCompactNumber(value: number): string {
     return `${(value / 10_000).toFixed(1)}w`;
   }
   return Math.round(value).toLocaleString();
+}
+
+function formatFullNumber(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "--";
+  }
+  return Math.round(value).toLocaleString(state.locale === "zh-CN" ? "zh-CN" : "en-US");
+}
+
+function formatSecondaryTokenUnit(value: number): string {
+  if (!Number.isFinite(value)) {
+    return "--";
+  }
+  if (state.locale === "zh-CN") {
+    return `${(value / 10_000).toFixed(2)}万`;
+  }
+  return `${(value / 1_000_000).toFixed(2)} millions`;
 }
 
 function formatMoney(value: number): string {
@@ -599,20 +626,36 @@ function renderUsageSettingsControls(profiles: ProfileCard[]): void {
   }
 }
 
-function renderUsageFilters(stats: UsageStatsResponse | null): void {
-  if (elements.usageRangeFilter) {
-    elements.usageRangeFilter.value = state.usageStatsRange;
+function renderStatsFilters(options: {
+  stats: UsageStatsResponse | null;
+  profileSelect: HTMLSelectElement | null;
+  rangeSelect: HTMLSelectElement | null;
+  selectedProfile: string | null;
+  selectedRange: "today" | "7d" | "30d";
+}): void {
+  if (options.rangeSelect) {
+    options.rangeSelect.value = options.selectedRange;
   }
-  const select = elements.usageProfileFilter;
-  if (!select || !stats) {
+  const select = options.profileSelect;
+  if (!select || !options.stats) {
     return;
   }
   select.innerHTML = [
     `<option value="">${escapeHtml(t(state.locale, "usageFilterAll"))}</option>`,
-    ...stats.profiles.map((profile) => (
-      `<option value="${escapeHtml(profile.folder_name)}"${profile.folder_name === state.usageStatsProfile ? " selected" : ""}>${escapeHtml(profile.display_title)}</option>`
+    ...options.stats.profiles.map((profile) => (
+      `<option value="${escapeHtml(profile.folder_name)}"${profile.folder_name === options.selectedProfile ? " selected" : ""}>${escapeHtml(profile.display_title)}</option>`
     )),
   ].join("");
+}
+
+function renderUsageFilters(stats: UsageStatsResponse | null): void {
+  renderStatsFilters({
+    stats,
+    profileSelect: elements.usageProfileFilter,
+    rangeSelect: elements.usageRangeFilter,
+    selectedProfile: state.usageStatsProfile,
+    selectedRange: state.usageStatsRange,
+  });
 }
 
 function renderUsageTrendChart(stats: UsageStatsResponse): void {
@@ -641,6 +684,21 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
   const costPath = stats.trends.map((point, index) => `${index === 0 ? "M" : "L"}${x(index).toFixed(1)} ${yCost(point.total_cost_usd).toFixed(1)}`).join(" ");
   const areaPath = `${tokenPath} L${x(stats.trends.length - 1).toFixed(1)} ${height - pad.bottom} L${pad.left} ${height - pad.bottom} Z`;
   const ticks = stats.trends.filter((_, index) => index === 0 || index === stats.trends.length - 1 || index % Math.ceil(stats.trends.length / 4) === 0);
+  const points = stats.trends.map((point, index) => {
+    const label = [
+      point.bucket,
+      `${t(state.locale, "usageTokens")}: ${formatFullNumber(point.real_total_tokens)}`,
+      `${t(state.locale, "usageInput")}: ${formatFullNumber(point.input_tokens)}`,
+      `${t(state.locale, "usageOutput")}: ${formatFullNumber(point.output_tokens)}`,
+      `${t(state.locale, "usageCost")}: ${formatMoney(point.total_cost_usd)}`,
+    ].join("\n");
+    return `
+      <g class="usage-point-group" tabindex="0">
+        <circle cx="${x(index).toFixed(1)}" cy="${yToken(point.real_total_tokens).toFixed(1)}" r="4.5" class="usage-point usage-point--cache" />
+        <title>${escapeHtml(label)}</title>
+      </g>
+    `;
+  }).join("");
   container.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(t(state.locale, "usageTrendTitle"))}">
       <defs>
@@ -658,6 +716,7 @@ function renderUsageTrendChart(stats: UsageStatsResponse): void {
       <path d="${costPath}" class="usage-line usage-line--cost" />
       <path d="${inputPath}" class="usage-line usage-line--input" />
       <path d="${outputPath}" class="usage-line usage-line--output" />
+      ${points}
       ${ticks.map((point, index) => `<text x="${x(stats.trends.indexOf(point))}" y="${height - 12}" class="usage-axis-label" text-anchor="${index === 0 ? "start" : "middle"}">${escapeHtml(formatDateTime(point.timestamp))}</text>`).join("")}
       <text x="${pad.left}" y="${pad.top + 8}" class="usage-axis-label">tokens</text>
       <text x="${width - pad.right}" y="${pad.top + 8}" class="usage-axis-label" text-anchor="end">$</text>
@@ -677,6 +736,7 @@ export function renderUsageStats(): void {
   if (
     !stats ||
     !elements.usageRealTotal ||
+    !elements.usageRealTotalCompact ||
     !elements.usageRequestCount ||
     !elements.usageTotalCost ||
     !elements.usageInputTokens ||
@@ -690,7 +750,8 @@ export function renderUsageStats(): void {
     return;
   }
 
-  elements.usageRealTotal.textContent = formatCompactNumber(stats.totals.real_total_tokens);
+  elements.usageRealTotal.textContent = formatFullNumber(stats.totals.real_total_tokens);
+  elements.usageRealTotalCompact.textContent = formatSecondaryTokenUnit(stats.totals.real_total_tokens);
   elements.usageRequestCount.textContent = stats.totals.request_count.toLocaleString();
   elements.usageTotalCost.textContent = formatMoney(stats.totals.total_cost_usd);
   elements.usageInputTokens.textContent = formatCompactNumber(stats.totals.input_tokens);
@@ -714,6 +775,41 @@ export function renderUsageStats(): void {
           <span>${escapeHtml(row.model)}</span>
           <span>${escapeHtml(formatDateTime(row.started_at))}</span>
           <strong>${escapeHtml(formatCompactNumber(row.real_total_tokens))}</strong>
+        </div>
+      `).join("")
+    : `<div class="settings-usage-empty">${escapeHtml(t(state.locale, "usageEmpty"))}</div>`;
+}
+
+export function renderHistoryStats(): void {
+  const stats = state.historyStats;
+  renderStatsFilters({
+    stats,
+    profileSelect: elements.historyProfileFilter,
+    rangeSelect: elements.historyRangeFilter,
+    selectedProfile: state.historyStatsProfile,
+    selectedRange: state.historyStatsRange,
+  });
+  if (
+    !stats ||
+    !elements.historyRequestCount ||
+    !elements.historyTokenCount ||
+    !elements.historyCostTotal ||
+    !elements.historySessionRows
+  ) {
+    return;
+  }
+
+  elements.historyRequestCount.textContent = stats.totals.request_count.toLocaleString();
+  elements.historyTokenCount.textContent = formatFullNumber(stats.totals.real_total_tokens);
+  elements.historyCostTotal.textContent = formatMoney(stats.totals.total_cost_usd);
+  elements.historySessionRows.innerHTML = stats.sessions.length
+    ? stats.sessions.map((row) => `
+        <div class="usage-session-row">
+          <span title="${escapeHtml(row.session_id)}">${escapeHtml(row.session_id.slice(0, 14))}</span>
+          <span>${escapeHtml(row.profile)}</span>
+          <span>${escapeHtml(row.model)}</span>
+          <span>${escapeHtml(formatDateTime(row.started_at))}</span>
+          <strong title="${escapeHtml(formatMoney(row.total_cost_usd))}">${escapeHtml(formatFullNumber(row.real_total_tokens))}</strong>
         </div>
       `).join("")
     : `<div class="settings-usage-empty">${escapeHtml(t(state.locale, "usageEmpty"))}</div>`;
