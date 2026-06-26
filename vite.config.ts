@@ -15,6 +15,7 @@ const appVersion = packageJson.version;
 
 export default defineConfig({
   root,
+  publicDir: fileURLToPath(new URL("./src-tauri/shared/front/public", import.meta.url)),
   define: {
     __CODEX_UI_TARGET__: JSON.stringify(uiTarget),
     // Single source of truth for the app version that the front-end can
