@@ -33,22 +33,41 @@ Version `1.0.0` focuses on the account switching, login, quota, settings, and us
 
 ## Installation
 
-Download installers from the [GitHub Releases](https://github.com/ChArLiEdance/codex-switch/releases) page.
+Download installers from the [GitHub Releases](https://github.com/ChArLiEdance/codex-switch/releases) page. The current `1.0.0` release provides macOS Apple Silicon and Windows x64 installers.
 
 ### macOS
 
-1. Download the `.dmg` file for your Mac architecture.
+1. Download [`codex_switch_1.0.0_aarch64.dmg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_aarch64.dmg).
 2. Open the `.dmg`.
 3. Drag `codex_switch.app` into `Applications`.
 4. Launch Codex Switch.
+
+You can also download it from Terminal:
+
+```bash
+curl -L -o ~/Downloads/codex_switch_1.0.0_aarch64.dmg \
+  https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_aarch64.dmg
+```
+
+If you prefer a package installer, download [`codex_switch_1.0.0_aarch64.pkg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_aarch64.pkg) and open it.
+
+macOS x64 is not included in this release.
 
 The current local package is unsigned or ad-hoc signed depending on the build environment. If macOS blocks the first launch, open **System Settings -> Privacy & Security** and allow the app.
 
 ### Windows
 
-1. Download the Windows `.exe` installer from Releases.
+1. Download [`codex_switch_1.0.0_x64-setup.exe`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_x64-setup.exe).
 2. Run the installer.
 3. Open Codex Switch from the Start menu or desktop shortcut.
+
+You can also download it from PowerShell:
+
+```powershell
+Invoke-WebRequest `
+  -Uri "https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_x64-setup.exe" `
+  -OutFile "$env:USERPROFILE\Downloads\codex_switch_1.0.0_x64-setup.exe"
+```
 
 The Windows build uses the Tauri NSIS installer.
 
@@ -127,15 +146,15 @@ npm run tauri:build:windows
 
 Installers should be uploaded as GitHub Release assets. They should not be committed into the source repository and do not belong inside `package.json`.
 
-Expected release assets for `1.0.0`:
+Current release assets for `1.0.0`:
 
 ```text
-codex_switch_1.0.0_*.dmg
-codex_switch_1.0.0_*.pkg
-codex_switch_*_x64-setup.exe
+codex_switch_1.0.0_aarch64.dmg
+codex_switch_1.0.0_aarch64.pkg
+codex_switch_1.0.0_x64-setup.exe
 ```
 
-The repository also has GitHub Actions configured to build macOS, Windows, and Linux artifacts from version tags.
+The repository also has GitHub Actions configured to build release artifacts from version tags. The `1.0.0` public release intentionally does not include macOS x64.
 
 ## Privacy And Safety
 

@@ -33,22 +33,41 @@
 
 ## 安装方式
 
-请从 [GitHub Releases](https://github.com/ChArLiEdance/codex-switch/releases) 下载安装包。
+请从 [GitHub Releases](https://github.com/ChArLiEdance/codex-switch/releases) 下载安装包。当前 `1.0.0` 版本提供 macOS Apple Silicon 和 Windows x64 安装包。
 
 ### macOS
 
-1. 下载适合自己 Mac 架构的 `.dmg` 文件。
+1. 下载 [`codex_switch_1.0.0_aarch64.dmg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_aarch64.dmg)。
 2. 打开 `.dmg`。
 3. 将 `codex_switch.app` 拖入 `Applications`。
 4. 启动 Codex Switch。
+
+也可以在终端直接下载：
+
+```bash
+curl -L -o ~/Downloads/codex_switch_1.0.0_aarch64.dmg \
+  https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_aarch64.dmg
+```
+
+如果你更想使用安装器，可以下载 [`codex_switch_1.0.0_aarch64.pkg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_aarch64.pkg)，然后双击打开安装。
+
+当前版本不提供 macOS x64 安装包。
 
 当前安装包会根据构建环境使用未签名或 ad-hoc 签名。首次打开如果被 macOS 拦截，可以到「系统设置 -> 隐私与安全」中允许打开。
 
 ### Windows
 
-1. 从 Releases 下载 Windows `.exe` 安装包。
+1. 下载 [`codex_switch_1.0.0_x64-setup.exe`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_x64-setup.exe)。
 2. 运行安装程序。
 3. 从开始菜单或桌面快捷方式打开 Codex Switch。
+
+也可以在 PowerShell 直接下载：
+
+```powershell
+Invoke-WebRequest `
+  -Uri "https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_x64-setup.exe" `
+  -OutFile "$env:USERPROFILE\Downloads\codex_switch_1.0.0_x64-setup.exe"
+```
 
 Windows 版本使用 Tauri NSIS 安装器。
 
@@ -127,15 +146,15 @@ npm run tauri:build:windows
 
 安装包应该作为 GitHub Release assets 上传，不应该提交到源码仓库，也不应该放进 `package.json`。
 
-`1.0.0` 版本预期发布产物：
+`1.0.0` 版本当前发布产物：
 
 ```text
-codex_switch_1.0.0_*.dmg
-codex_switch_1.0.0_*.pkg
-codex_switch_*_x64-setup.exe
+codex_switch_1.0.0_aarch64.dmg
+codex_switch_1.0.0_aarch64.pkg
+codex_switch_1.0.0_x64-setup.exe
 ```
 
-仓库已经配置 GitHub Actions，可以根据版本 tag 构建 macOS、Windows 和 Linux 产物。
+仓库已经配置 GitHub Actions，可以根据版本 tag 构建发布产物。`1.0.0` 的公开 Release 不包含 macOS x64。
 
 ## 隐私与安全
 
