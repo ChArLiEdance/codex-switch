@@ -2973,12 +2973,16 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
 }
 
 .settings-section-card--flat {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   background: rgba(255, 255, 255, 0.28);
 }
 
 .settings-check-list {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
   gap: 10px;
 }
 
@@ -5099,4 +5103,14 @@ html[data-theme="jade-night"] .profile-card.mac-account-card.mac-account-card--c
 html[data-theme="jade-night"] .profile-card.mac-account-card.mac-account-card--expanded {
   border: 0 !important;
   box-shadow: var(--cc-hairline-blue) !important;
+}
+
+@media (max-width: 820px) {
+  .settings-section-card--flat {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-section-card--flat .settings-check-list {
+    justify-content: flex-start;
+  }
 }
