@@ -130,6 +130,22 @@ npm run test:rust
 npm run tauri:dev
 ```
 
+在浏览器里预览 Windows UI，并使用 mock Tauri 命令：
+
+```bash
+npm run dev:windows-preview
+```
+
+然后打开 `http://127.0.0.1:1421`。这个预览模式使用模拟账号、额度、用量统计、会话记录、设置和账号操作，不会读取或写入真实 Codex 凭证，也不会切换本地账号。
+
+不启动 dev server，只构建静态 Windows 预览产物：
+
+```bash
+npm run build:windows-preview
+```
+
+静态输出目录是 `dist/windows-preview`，和正式 Tauri 前端输出 `dist/web` 分开。
+
 本机构建 macOS 安装包：
 
 ```bash

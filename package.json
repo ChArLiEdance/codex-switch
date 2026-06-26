@@ -9,6 +9,8 @@
     "version:sync:release": "node scripts/version-sync.mjs --set-from-version-log src-tauri/target/release/version.md",
     "version:set": "node scripts/version-sync.mjs --set",
     "version:check": "node scripts/version-sync.mjs --check",
+    "dev:windows-preview": "node scripts/windows-ui-preview.mjs",
+    "build:windows-preview": "node scripts/windows-ui-preview.mjs --build",
     "build": "npm run version:sync && tsc && vite build",
     "macos:artifacts:prepare:app": "node scripts/macos-artifacts.mjs --phase=prepare --mode=app",
     "macos:artifacts:prepare:release": "node scripts/macos-artifacts.mjs --phase=prepare --mode=release",

@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 declare const __CODEX_UI_TARGET__: "windows" | "macos";
+declare const __CODEX_PREVIEW_MOCKS__: boolean;
 /// Build-time-injected app version. Mirrors `package.json` → propagated
 /// via `version-sync.mjs` to `Cargo.toml` + lockfiles, so the front-end
 /// settings row stays in lock-step with the binary version automatically.

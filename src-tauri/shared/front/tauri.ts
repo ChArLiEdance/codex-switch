@@ -31,6 +31,7 @@ type RuntimeWindow = typeof globalThis & {
 const hasTauriRuntime = Boolean(
   (globalThis as RuntimeWindow).__TAURI_INTERNALS__ || (globalThis as RuntimeWindow).__TAURI__,
 );
+const usePreviewMocks = __CODEX_PREVIEW_MOCKS__ || !hasTauriRuntime;
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -349,7 +350,7 @@ function toError(error: unknown): Error {
 }
 
 async function invokeCommand<T>(command: string, args?: Record<string, unknown>): Promise<T> {
-  if (!hasTauriRuntime) {
+  if (usePreviewMocks) {
     switch (command) {
       case "get_profiles_snapshot":
         return clone(previewSnapshot) as T;

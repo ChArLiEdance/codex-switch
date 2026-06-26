@@ -130,6 +130,25 @@ npm run test:rust
 npm run tauri:dev
 ```
 
+Preview the Windows UI in a browser with mocked Tauri commands:
+
+```bash
+npm run dev:windows-preview
+```
+
+Then open `http://127.0.0.1:1421`. This preview uses mock profiles, quota,
+usage statistics, session history, settings, and account actions. It does not
+read or write real Codex credentials and does not switch local accounts.
+
+Build static Windows preview assets without starting a dev server:
+
+```bash
+npm run build:windows-preview
+```
+
+The static output is written to `dist/windows-preview`, separate from the
+production Tauri front-end output in `dist/web`.
+
 Build local macOS packages:
 
 ```bash

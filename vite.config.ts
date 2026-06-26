@@ -5,6 +5,8 @@ import { defineConfig } from "vite";
 
 const uiTarget = process.env.CODEX_UI_TARGET ?? (process.platform === "darwin" ? "macos" : "windows");
 const root = uiTarget === "macos" ? "src-tauri/mac/front" : "src-tauri/win/front";
+const previewMocks = process.env.CODEX_PREVIEW_MOCKS === "1";
+const outDir = process.env.CODEX_PREVIEW_OUT_DIR ?? "../../../dist/web";
 
 const packageJson = JSON.parse(
   readFileSync(fileURLToPath(new URL("./package.json", import.meta.url)), "utf8"),
@@ -21,6 +23,7 @@ export default defineConfig({
     // Cargo manifest + lockfiles, so injecting from `package.json` here
     // keeps every surface in lock-step without a runtime IPC.
     __CODEX_APP_VERSION__: JSON.stringify(appVersion),
+    __CODEX_PREVIEW_MOCKS__: JSON.stringify(previewMocks),
   },
   resolve: {
     alias: {
@@ -40,7 +43,7 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
-    outDir: "../../../dist/web",
+    outDir,
     emptyOutDir: true,
   },
 });
