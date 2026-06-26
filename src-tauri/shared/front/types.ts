@@ -72,6 +72,33 @@ export interface SwitchResponse {
   warnings: string[];
 }
 
+export interface SwitchRestartTargets {
+  cli: boolean;
+  vscode: boolean;
+  codex_desktop: boolean;
+}
+
+export type CloseBehavior = "ask" | "hide" | "quit";
+
+export interface TrayProfileEntry {
+  folder_name: string;
+  display_title: string;
+  nickname: string;
+  plan_name: string | null;
+  quota: QuotaSummary;
+  status: string;
+  auth_present: boolean;
+}
+
+export interface TrayStatePayload {
+  locale: string;
+  current_profile: string | null;
+  current_title: string | null;
+  current_quota: QuotaSummary | null;
+  profiles: TrayProfileEntry[];
+  restart_targets: SwitchRestartTargets;
+}
+
 export interface ActionResponse {
   ok: boolean;
   message: string;

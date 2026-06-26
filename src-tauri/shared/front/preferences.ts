@@ -1,6 +1,13 @@
-import type { UsageStatsRangePreset, UsageStatsRefreshSeconds } from "@front-shared/types";
+import type {
+  CloseBehavior,
+  SwitchRestartTargets,
+  UsageStatsRangePreset,
+  UsageStatsRefreshSeconds,
+} from "@front-shared/types";
 
 const ACCOUNT_DETAIL_STORAGE_KEY = "codex-switch-show-account-detail";
+const SWITCH_RESTART_TARGETS_STORAGE_KEY = "codex-switch-restart-targets";
+const CLOSE_BEHAVIOR_STORAGE_KEY = "codex-switch-close-behavior";
 const USAGE_STATS_RANGE_STORAGE_KEY = "codex-switch-usage-stats-range";
 const USAGE_STATS_REFRESH_SECONDS_STORAGE_KEY = "codex-switch-usage-stats-refresh-seconds";
 const USAGE_STATS_CUSTOM_START_STORAGE_KEY = "codex-switch-usage-stats-custom-start";
@@ -16,6 +23,55 @@ export function resolveInitialShowAccountDetail(): boolean {
 
 export function persistShowAccountDetail(showDetail: boolean): void {
   globalThis.localStorage?.setItem(ACCOUNT_DETAIL_STORAGE_KEY, String(showDetail));
+}
+
+export function defaultSwitchRestartTargets(): SwitchRestartTargets {
+  return {
+    cli: true,
+    vscode: true,
+    codex_desktop: true,
+  };
+}
+
+function isBooleanRecord(value: unknown): value is Record<string, boolean> {
+  return Boolean(value) && typeof value === "object";
+}
+
+export function resolveInitialSwitchRestartTargets(): SwitchRestartTargets {
+  const fallback = defaultSwitchRestartTargets();
+  const stored = globalThis.localStorage?.getItem(SWITCH_RESTART_TARGETS_STORAGE_KEY);
+  if (!stored) {
+    return fallback;
+  }
+  try {
+    const parsed = JSON.parse(stored) as unknown;
+    if (!isBooleanRecord(parsed)) {
+      return fallback;
+    }
+    return {
+      cli: typeof parsed.cli === "boolean" ? parsed.cli : fallback.cli,
+      vscode: typeof parsed.vscode === "boolean" ? parsed.vscode : fallback.vscode,
+      codex_desktop: typeof parsed.codex_desktop === "boolean" ? parsed.codex_desktop : fallback.codex_desktop,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+export function persistSwitchRestartTargets(targets: SwitchRestartTargets): void {
+  globalThis.localStorage?.setItem(SWITCH_RESTART_TARGETS_STORAGE_KEY, JSON.stringify(targets));
+}
+
+export function normalizeCloseBehavior(value: unknown): CloseBehavior {
+  return value === "hide" || value === "quit" || value === "ask" ? value : "ask";
+}
+
+export function resolveInitialCloseBehavior(): CloseBehavior {
+  return normalizeCloseBehavior(globalThis.localStorage?.getItem(CLOSE_BEHAVIOR_STORAGE_KEY));
+}
+
+export function persistCloseBehavior(behavior: CloseBehavior): void {
+  globalThis.localStorage?.setItem(CLOSE_BEHAVIOR_STORAGE_KEY, behavior);
 }
 
 export function isUsageStatsRangePreset(value: unknown): value is UsageStatsRangePreset {

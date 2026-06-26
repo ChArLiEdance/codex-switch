@@ -12,7 +12,9 @@ import type {
   ProfileCard,
   ProfilesSnapshotResponse,
   QuotaSummary,
+  SwitchRestartTargets,
   SwitchResponse,
+  TrayStatePayload,
   UpdateCheckResponse,
   UsageQuerySettings,
   UsageStatsPayload,
@@ -527,6 +529,10 @@ async function invokeCommand<T>(command: string, args?: Record<string, unknown>)
         }) as Promise<T>;
       case "cancel_codex_login":
         return Promise.resolve(true) as Promise<T>;
+      case "sync_tray_state":
+      case "show_main_window":
+      case "hide_main_window":
+      case "quit_app":
       case "open_profile_folder":
       case "open_codex":
       case "login_current_profile":
@@ -591,8 +597,13 @@ export function saveUsageQuerySettings(
   });
 }
 
-export function switchProfile(profile: string): Promise<SwitchResponse> {
-  return invokeCommand<SwitchResponse>("switch_profile", { payload: { profile } });
+export function switchProfile(
+  profile: string,
+  restartTargets?: SwitchRestartTargets,
+): Promise<SwitchResponse> {
+  return invokeCommand<SwitchResponse>("switch_profile", {
+    payload: { profile, restart_targets: restartTargets ?? null },
+  });
 }
 
 export function openProfileFolder(profile: string): Promise<ActionResponse> {
@@ -688,4 +699,20 @@ export function redetectCodexCliPath(): Promise<CodexCliRedetectResult> {
 
 export function cancelCodexLogin(): Promise<boolean> {
   return invokeCommand<boolean>("cancel_codex_login");
+}
+
+export function syncTrayState(payload: TrayStatePayload): Promise<ActionResponse> {
+  return invokeCommand<ActionResponse>("sync_tray_state", { payload });
+}
+
+export function showMainWindow(): Promise<ActionResponse> {
+  return invokeCommand<ActionResponse>("show_main_window");
+}
+
+export function hideMainWindow(): Promise<ActionResponse> {
+  return invokeCommand<ActionResponse>("hide_main_window");
+}
+
+export function quitApp(): Promise<ActionResponse> {
+  return invokeCommand<ActionResponse>("quit_app");
 }

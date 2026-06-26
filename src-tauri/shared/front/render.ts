@@ -122,6 +122,15 @@ export const elements = {
   historyMessageCount: document.getElementById("history-message-count"),
   historyMessageList: document.getElementById("history-message-list"),
   settingsShowAccountDetailToggle: document.getElementById("settings-show-account-detail-toggle"),
+  settingsRestartCliToggle: document.getElementById("settings-restart-cli-toggle") as HTMLInputElement | null,
+  settingsRestartVscodeToggle: document.getElementById("settings-restart-vscode-toggle") as HTMLInputElement | null,
+  settingsRestartDesktopToggle: document.getElementById("settings-restart-desktop-toggle") as HTMLInputElement | null,
+  settingsCloseBehaviorSelect: document.getElementById("settings-close-behavior-select") as HTMLSelectElement | null,
+  closeChoiceDialog: requiredElement<HTMLDialogElement>("close-choice-dialog"),
+  closeChoiceRemember: requiredElement<HTMLInputElement>("close-choice-remember"),
+  closeChoiceHideButton: requiredElement<HTMLButtonElement>("close-choice-hide-button"),
+  closeChoiceQuitButton: requiredElement<HTMLButtonElement>("close-choice-quit-button"),
+  closeChoiceCancelButton: requiredElement<HTMLButtonElement>("close-choice-cancel-button"),
   updateDialog: requiredElement<HTMLDialogElement>("update-dialog"),
   updateDialogCopy: requiredElement<HTMLParagraphElement>("update-dialog-copy"),
   updateDialogLaterButton: requiredElement<HTMLButtonElement>("update-dialog-later-button"),
@@ -561,6 +570,7 @@ export function renderShellOverview(dashboard: DashboardViewModel | null): void 
     elements.dashboardMissingCount.textContent = "--";
     renderUsageStats();
     renderSessionManager();
+    renderGeneralSettingsControls();
     return;
   }
 
@@ -576,6 +586,7 @@ export function renderShellOverview(dashboard: DashboardViewModel | null): void 
   elements.dashboardProfileCount.textContent = String(profiles.length);
   elements.dashboardReadyCount.textContent = String(readyCount);
   elements.dashboardMissingCount.textContent = String(Math.max(0, missingCount));
+  renderGeneralSettingsControls();
   renderUsageSettingsControls(profiles);
   renderUsageStats();
   renderSessionManager();
@@ -704,6 +715,21 @@ function renderUsageSettingsControls(profiles: ProfileCard[]): void {
   }
   if (elements.settingsUsageIntervalInput) {
     elements.settingsUsageIntervalInput.value = String(settings?.auto_query_interval_minutes ?? 5);
+  }
+}
+
+function renderGeneralSettingsControls(): void {
+  if (elements.settingsRestartCliToggle) {
+    elements.settingsRestartCliToggle.checked = state.switchRestartTargets.cli;
+  }
+  if (elements.settingsRestartVscodeToggle) {
+    elements.settingsRestartVscodeToggle.checked = state.switchRestartTargets.vscode;
+  }
+  if (elements.settingsRestartDesktopToggle) {
+    elements.settingsRestartDesktopToggle.checked = state.switchRestartTargets.codex_desktop;
+  }
+  if (elements.settingsCloseBehaviorSelect) {
+    elements.settingsCloseBehaviorSelect.value = state.closeBehavior;
   }
 }
 

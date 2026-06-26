@@ -1,8 +1,8 @@
 use crate::errors::CommandError;
 use crate::models::{
     ActionResponse, AddProfilePayload, CodexCliRedetectResult, CodexCliStatus, OpenUrlPayload,
-    ProfilePayload, RenameProfilePayload, SetCodexCliPathPayload, UpdateCheckPayload,
-    UpdateCheckResponse, UpdateProfileBaseUrlPayload,
+    ProfilePayload, RenameProfilePayload, SetCodexCliPathPayload, TrayStatePayload,
+    UpdateCheckPayload, UpdateCheckResponse, UpdateProfileBaseUrlPayload,
 };
 
 #[cfg(target_os = "macos")]
@@ -202,9 +202,7 @@ pub fn get_codex_cli_status() -> Result<CodexCliStatus, CommandError> {
 }
 
 #[tauri::command]
-pub fn set_codex_cli_path(
-    payload: SetCodexCliPathPayload,
-) -> Result<CodexCliStatus, CommandError> {
+pub fn set_codex_cli_path(payload: SetCodexCliPathPayload) -> Result<CodexCliStatus, CommandError> {
     let codex_home = platform_runtime::paths::get_codex_home();
     Ok(crate::shared::codex_cli_path::set_codex_cli_path(
         platform_runtime::codex_cli_resolver(),
@@ -256,5 +254,60 @@ pub fn open_xiaohongshu(app: tauri::AppHandle) -> Result<ActionResponse, Command
         ok: true,
         message: "Opened Xiaohongshu URL.".to_string(),
         path: Some(path),
+    })
+}
+
+#[tauri::command]
+pub fn sync_tray_state(
+    app: tauri::AppHandle,
+    payload: TrayStatePayload,
+) -> Result<ActionResponse, CommandError> {
+    crate::shared::tray::sync_state(&app, payload).map_err(|error| {
+        CommandError::new("TRAY_SYNC_FAILED", format!("Failed to sync tray: {error}"))
+    })?;
+    Ok(ActionResponse {
+        ok: true,
+        message: "Synced tray state.".to_string(),
+        path: None,
+    })
+}
+
+#[tauri::command]
+pub fn show_main_window(app: tauri::AppHandle) -> Result<ActionResponse, CommandError> {
+    crate::shared::tray::show_main_window(&app).map_err(|error| {
+        CommandError::new(
+            "SHOW_WINDOW_FAILED",
+            format!("Failed to show main window: {error}"),
+        )
+    })?;
+    Ok(ActionResponse {
+        ok: true,
+        message: "Shown main window.".to_string(),
+        path: None,
+    })
+}
+
+#[tauri::command]
+pub fn hide_main_window(app: tauri::AppHandle) -> Result<ActionResponse, CommandError> {
+    crate::shared::tray::hide_main_window(&app).map_err(|error| {
+        CommandError::new(
+            "HIDE_WINDOW_FAILED",
+            format!("Failed to hide main window: {error}"),
+        )
+    })?;
+    Ok(ActionResponse {
+        ok: true,
+        message: "Hidden main window.".to_string(),
+        path: None,
+    })
+}
+
+#[tauri::command]
+pub fn quit_app(app: tauri::AppHandle) -> Result<ActionResponse, CommandError> {
+    app.exit(0);
+    Ok(ActionResponse {
+        ok: true,
+        message: "Quit app.".to_string(),
+        path: None,
     })
 }

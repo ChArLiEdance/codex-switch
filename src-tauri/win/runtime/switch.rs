@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::errors::{AppError, AppResult};
-use crate::models::{ProfileMetadata, QuotaSummary, SwitchResponse};
+use crate::models::{ProfileMetadata, QuotaSummary, SwitchResponse, SwitchRestartTargets};
 use crate::platform::hooks::PlatformHooks;
 
 use crate::{platform, shared::switch_core};
@@ -90,11 +90,30 @@ fn switch_profile_with_home_and_hooks<H: PlatformHooks + ?Sized>(
     profile_name: &str,
     codex_home: Option<&Path>,
 ) -> AppResult<SwitchResponse> {
+    switch_profile_with_home_hooks_and_targets(
+        hooks,
+        profile_name,
+        codex_home,
+        &SwitchRestartTargets::default(),
+    )
+}
+
+fn switch_profile_with_home_hooks_and_targets<H: PlatformHooks + ?Sized>(
+    hooks: &H,
+    profile_name: &str,
+    codex_home: Option<&Path>,
+    restart_targets: &SwitchRestartTargets,
+) -> AppResult<SwitchResponse> {
     let codex_home = codex_home.map(PathBuf::from).unwrap_or_else(get_codex_home);
     let profile_name = validate_profile_name(profile_name)?;
     sync_current_profile_quota_before_switch(&codex_home)?;
     prime_target_profile_quota_before_switch(&profile_name, &codex_home)?;
-    switch_core::switch_profile_with_home(hooks, &profile_name, Some(&codex_home))
+    switch_core::switch_profile_with_home_and_targets(
+        hooks,
+        &profile_name,
+        Some(&codex_home),
+        restart_targets,
+    )
 }
 
 pub fn switch_profile_with_home(
@@ -106,6 +125,18 @@ pub fn switch_profile_with_home(
 
 pub fn switch_profile(profile_name: &str) -> AppResult<SwitchResponse> {
     switch_profile_with_home(profile_name, None)
+}
+
+pub fn switch_profile_with_targets(
+    profile_name: &str,
+    restart_targets: &SwitchRestartTargets,
+) -> AppResult<SwitchResponse> {
+    switch_profile_with_home_hooks_and_targets(
+        platform::current_hooks(),
+        profile_name,
+        None,
+        restart_targets,
+    )
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::errors::{AppError, AppResult};
-use crate::models::SwitchResponse;
+use crate::models::{SwitchResponse, SwitchRestartTargets};
 use crate::platform::hooks::PlatformHooks;
 
 use super::fs_ops::{
@@ -27,6 +27,20 @@ pub fn switch_profile_with_home<H: PlatformHooks + ?Sized>(
     hooks: &H,
     profile_name: &str,
     codex_home: Option<&Path>,
+) -> AppResult<SwitchResponse> {
+    switch_profile_with_home_and_targets(
+        hooks,
+        profile_name,
+        codex_home,
+        &SwitchRestartTargets::default(),
+    )
+}
+
+pub fn switch_profile_with_home_and_targets<H: PlatformHooks + ?Sized>(
+    hooks: &H,
+    profile_name: &str,
+    codex_home: Option<&Path>,
+    restart_targets: &SwitchRestartTargets,
 ) -> AppResult<SwitchResponse> {
     let codex_home = codex_home.map(PathBuf::from).unwrap_or_else(get_codex_home);
     let backup_root = get_backup_root(Some(&codex_home));
@@ -56,7 +70,11 @@ pub fn switch_profile_with_home<H: PlatformHooks + ?Sized>(
         ));
     }
 
-    let app_was_running = hooks.quit_codex_app_if_running()?;
+    let app_was_running = if restart_targets.codex_desktop {
+        hooks.quit_codex_app_if_running()?
+    } else {
+        false
+    };
     // Back up the live root state to the profile it *actually* belongs to,
     // verified by account identity — never the `.current_profile` marker
     // blindly. If the live account drifted (manual `codex login`, external
@@ -71,7 +89,11 @@ pub fn switch_profile_with_home<H: PlatformHooks + ?Sized>(
     hooks.sync_root_openai_base_url_for_profile(&profile_name, Some(&codex_home))?;
     set_active_marker(&profile_name, &backup_root)?;
     load_profiles_index(Some(&codex_home))?;
-    let warnings = hooks.reopen_codex_app_if_needed(app_was_running, Some(&codex_home));
+    let warnings = if restart_targets.codex_desktop {
+        hooks.reopen_codex_app_if_needed(app_was_running, Some(&codex_home))
+    } else {
+        Vec::new()
+    };
 
     Ok(SwitchResponse {
         ok: true,
@@ -319,7 +341,8 @@ mod tests {
         let b_fresh = "{\"tokens\":{\"account_id\":\"acct_B\"},\"last_refresh\":\"new\"}";
         fs::write(codex_home.join("auth.json"), b_fresh).unwrap();
 
-        let synced = super::sync_root_state_to_current_profile_with_home(Some(&codex_home)).unwrap();
+        let synced =
+            super::sync_root_state_to_current_profile_with_home(Some(&codex_home)).unwrap();
 
         assert_eq!(synced.as_deref(), Some("b"));
         // Marker healed to the real owner.
@@ -356,7 +379,8 @@ mod tests {
         // Live root drifted to a brand-new, unmanaged account Z.
         fs::write(codex_home.join("auth.json"), auth_with_account("acct_Z")).unwrap();
 
-        let synced = super::sync_root_state_to_current_profile_with_home(Some(&codex_home)).unwrap();
+        let synced =
+            super::sync_root_state_to_current_profile_with_home(Some(&codex_home)).unwrap();
 
         assert_eq!(synced, None);
         // No contamination: "a" keeps its own account.
@@ -395,7 +419,8 @@ mod tests {
         let refreshed = "{\"tokens\":{\"account_id\":\"acct_X\"},\"last_refresh\":\"now\"}";
         fs::write(codex_home.join("auth.json"), refreshed).unwrap();
 
-        let synced = super::sync_root_state_to_current_profile_with_home(Some(&codex_home)).unwrap();
+        let synced =
+            super::sync_root_state_to_current_profile_with_home(Some(&codex_home)).unwrap();
 
         assert_eq!(synced.as_deref(), Some("a"));
         assert_eq!(

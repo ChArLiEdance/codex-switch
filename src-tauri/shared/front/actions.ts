@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { persistLocale, resolveInitialLocale, t, type Locale } from "@front-shared/i18n";
 import { state } from "@front-shared/state";
 import {
@@ -12,7 +13,9 @@ import {
 import {
   isUsageStatsRangePreset,
   normalizeUsageStatsRefreshSeconds,
+  persistCloseBehavior,
   persistShowAccountDetail,
+  persistSwitchRestartTargets,
   persistUsageStatsCustomRange,
   persistUsageStatsRange,
   persistUsageStatsRefreshSeconds,
@@ -36,6 +39,7 @@ import {
   getProfilesSnapshot,
   getUsageQuerySettings,
   getUsageStats,
+  hideMainWindow,
   loginCurrentProfile,
   listCodexSessions,
   openCodex,
@@ -53,13 +57,18 @@ import {
   saveUsageQuerySettings,
   setCodexCliPath,
   switchProfile,
+  syncTrayState,
+  quitApp,
   updateProfileBaseUrl,
 } from "@front-shared/tauri";
 import type {
+  CloseBehavior,
   CodexCliCandidate,
   CodexCliRedetectResult,
   CodexCliStatus,
   ProfileCard,
+  TrayProfileEntry,
+  TrayStatePayload,
   UsageQuerySettings,
   UsageStatsRangePreset,
 } from "@front-shared/types";
@@ -87,11 +96,13 @@ function rerenderDashboard(): void {
   state.route = routeFromLocation();
   applyLocale();
   renderShellRoute();
+  setupNativeEventListeners();
 
   const dashboard = buildDashboardViewModel();
   if (!dashboard) {
     renderPaging({ has_previous: false, has_next: false, page: 1, total_pages: 1 });
     renderShellOverview(null);
+    scheduleTraySync();
     return;
   }
 
@@ -113,6 +124,7 @@ function rerenderDashboard(): void {
   renderCurrentCard(dashboard);
   renderPaging(dashboard.paging);
   renderShellOverview(dashboard);
+  scheduleTraySync();
 }
 
 let renameSourceProfile: string | null = null;
@@ -122,6 +134,7 @@ let deleteSourceProfile: string | null = null;
 let pendingLoginRetry: (() => Promise<void>) | null = null;
 let cancelledLoginProfile: string | null = null;
 let usageConfigSourceProfile: string | null = null;
+let traySyncHandle: number | null = null;
 
 function isRefreshPending(profile: string): boolean {
   return state.refreshActiveProfiles.includes(profile);
@@ -133,6 +146,118 @@ function defaultUsageSettings(): UsageQuerySettings {
     timeout_seconds: 10,
     auto_query_interval_minutes: 5,
   };
+}
+
+function currentProfileTitle(): string | null {
+  const current = state.snapshot?.current_card;
+  if (!current) {
+    return null;
+  }
+  if (!state.showAccountDetail) {
+    return current.folder_name;
+  }
+  return current.account_label ?? current.display_title ?? current.folder_name;
+}
+
+function buildTrayProfiles(): TrayProfileEntry[] {
+  return (state.snapshot?.profiles ?? []).map((profile) => ({
+    folder_name: profile.folder_name,
+    display_title: profile.account_label ?? profile.display_title ?? profile.folder_name,
+    nickname: profile.folder_name,
+    plan_name: profile.plan_name,
+    quota: profile.quota,
+    status: profile.status,
+    auth_present: profile.auth_present,
+  }));
+}
+
+function buildTrayStatePayload(): TrayStatePayload {
+  return {
+    locale: state.locale,
+    current_profile: state.snapshot?.current_card?.folder_name ?? state.currentProfile,
+    current_title: currentProfileTitle(),
+    current_quota: state.currentQuota ?? state.snapshot?.current_quota_card ?? null,
+    profiles: buildTrayProfiles(),
+    restart_targets: state.switchRestartTargets,
+  };
+}
+
+function scheduleTraySync(): void {
+  if (traySyncHandle !== null) {
+    window.clearTimeout(traySyncHandle);
+  }
+  traySyncHandle = window.setTimeout(() => {
+    traySyncHandle = null;
+    void syncTrayState(buildTrayStatePayload()).catch((error) => {
+      console.warn("Tray sync failed:", error);
+    });
+  }, 120);
+}
+
+function setSwitchRestartTarget(target: keyof typeof state.switchRestartTargets, enabled: boolean): void {
+  state.switchRestartTargets = {
+    ...state.switchRestartTargets,
+    [target]: enabled,
+  };
+  persistSwitchRestartTargets(state.switchRestartTargets);
+  rerenderDashboard();
+}
+
+function setCloseBehavior(behavior: CloseBehavior): void {
+  state.closeBehavior = behavior;
+  persistCloseBehavior(behavior);
+  rerenderDashboard();
+}
+
+function openCloseChoiceDialog(): void {
+  elements.closeChoiceRemember.checked = false;
+  elements.closeChoiceDialog.showModal();
+}
+
+function rememberCloseBehavior(behavior: CloseBehavior): void {
+  if (elements.closeChoiceRemember.checked) {
+    setCloseBehavior(behavior);
+  }
+}
+
+async function hideMainWindowWithToast(): Promise<void> {
+  try {
+    await hideMainWindow();
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : "Failed to close main window.", true);
+  }
+}
+
+async function handleNativeCloseRequested(): Promise<void> {
+  if (state.closeBehavior === "hide") {
+    await hideMainWindowWithToast();
+    return;
+  }
+  if (state.closeBehavior === "quit") {
+    await quitApp();
+    return;
+  }
+  openCloseChoiceDialog();
+}
+
+function setupNativeEventListeners(): void {
+  void listen("codex-switch://close-requested", () => {
+    void handleNativeCloseRequested();
+  }).catch(() => {});
+  void listen<string>("codex-switch://tray-route", (event) => {
+    if (event.payload === "about") {
+      window.location.hash = "settings";
+      window.setTimeout(() => activateSettingsTab("about"), 0);
+      return;
+    }
+    window.location.hash = event.payload || "dashboard";
+  }).catch(() => {});
+  void listen<string>("codex-switch://tray-switch-finished", (event) => {
+    if (event.payload) {
+      showToast(event.payload);
+    }
+    void refreshAllData();
+  }).catch(() => {});
 }
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -733,7 +858,7 @@ async function handleSwitchProfile(profile: string): Promise<void> {
   }
   try {
     await runBlockingAction(async () => {
-      await switchProfile(profile);
+      await switchProfile(profile, state.switchRestartTargets);
       showToast(t(state.locale, "switchedTo", { profile }));
       await refreshAllData();
     });
@@ -1589,6 +1714,34 @@ export function bootstrap(): void {
       }
     });
   }
+  elements.settingsRestartCliToggle?.addEventListener("change", () => {
+    setSwitchRestartTarget("cli", Boolean(elements.settingsRestartCliToggle?.checked));
+  });
+  elements.settingsRestartVscodeToggle?.addEventListener("change", () => {
+    setSwitchRestartTarget("vscode", Boolean(elements.settingsRestartVscodeToggle?.checked));
+  });
+  elements.settingsRestartDesktopToggle?.addEventListener("change", () => {
+    setSwitchRestartTarget("codex_desktop", Boolean(elements.settingsRestartDesktopToggle?.checked));
+  });
+  elements.settingsCloseBehaviorSelect?.addEventListener("change", () => {
+    const value = elements.settingsCloseBehaviorSelect?.value;
+    if (value === "ask" || value === "hide" || value === "quit") {
+      setCloseBehavior(value);
+    }
+  });
+  elements.closeChoiceCancelButton.addEventListener("click", () => {
+    elements.closeChoiceDialog.close();
+  });
+  elements.closeChoiceHideButton.addEventListener("click", () => {
+    rememberCloseBehavior("hide");
+    elements.closeChoiceDialog.close();
+    void hideMainWindowWithToast();
+  });
+  elements.closeChoiceQuitButton.addEventListener("click", () => {
+    rememberCloseBehavior("quit");
+    elements.closeChoiceDialog.close();
+    void quitApp();
+  });
   elements.settingsUsageProfileSelect?.addEventListener("change", () => {
     const profile = elements.settingsUsageProfileSelect?.value || null;
     state.settingsUsageProfile = profile;

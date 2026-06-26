@@ -34,7 +34,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             platform::setup_runtime()?;
-            Ok(platform::install_windowing(app)?)
+            platform::install_windowing(app)?;
+            Ok(shared::tray::install(app)?)
         })
         .invoke_handler(tauri::generate_handler![
             commands::dashboard::get_profiles_snapshot,
@@ -66,6 +67,10 @@ pub fn run() {
             commands::actions::clear_codex_cli_path,
             commands::actions::redetect_codex_cli_path,
             commands::actions::cancel_codex_login,
+            commands::actions::sync_tray_state,
+            commands::actions::show_main_window,
+            commands::actions::hide_main_window,
+            commands::actions::quit_app,
             commands::switch::switch_profile,
         ])
         .run(tauri::generate_context!())

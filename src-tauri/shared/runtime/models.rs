@@ -146,6 +146,48 @@ pub struct CurrentQuotaResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProfilePayload {
     pub profile: String,
+    pub restart_targets: Option<SwitchRestartTargets>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SwitchRestartTargets {
+    pub cli: bool,
+    pub vscode: bool,
+    pub codex_desktop: bool,
+}
+
+impl Default for SwitchRestartTargets {
+    fn default() -> Self {
+        Self {
+            cli: true,
+            vscode: true,
+            codex_desktop: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct TrayProfileEntry {
+    pub folder_name: String,
+    pub display_title: String,
+    pub nickname: String,
+    pub plan_name: Option<String>,
+    pub quota: QuotaSummary,
+    pub status: String,
+    pub auth_present: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct TrayStatePayload {
+    pub locale: String,
+    pub current_profile: Option<String>,
+    pub current_title: Option<String>,
+    pub current_quota: Option<QuotaSummary>,
+    pub profiles: Vec<TrayProfileEntry>,
+    pub restart_targets: SwitchRestartTargets,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

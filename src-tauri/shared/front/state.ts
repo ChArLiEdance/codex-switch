@@ -1,9 +1,11 @@
 import type {
   CodexSessionMessage,
   CodexSessionMeta,
+  CloseBehavior,
   ProfilesSnapshotResponse,
   QuotaSummary,
   ShellRoute,
+  SwitchRestartTargets,
   UsageQuerySettings,
   UsageStatsRangePreset,
   UsageStatsRefreshSeconds,
@@ -13,6 +15,8 @@ import type { Locale } from "@front-shared/i18n";
 import type { ThemeId } from "@front-shared/theme";
 import {
   resolveInitialShowAccountDetail,
+  resolveInitialCloseBehavior,
+  resolveInitialSwitchRestartTargets,
   resolveInitialUsageStatsCustomRange,
   resolveInitialUsageStatsRange,
   resolveInitialUsageStatsRefreshSeconds,
@@ -32,6 +36,8 @@ export const state = {
   locale: "en" as Locale,
   theme: "light" as ThemeId,
   showAccountDetail: resolveInitialShowAccountDetail(),
+  switchRestartTargets: resolveInitialSwitchRestartTargets() as SwitchRestartTargets,
+  closeBehavior: resolveInitialCloseBehavior() as CloseBehavior,
   pageSize: 8,
   snapshot: null as ProfilesSnapshotResponse | null,
   currentQuota: null as QuotaSummary | null,

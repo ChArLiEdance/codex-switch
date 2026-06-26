@@ -306,6 +306,37 @@
                         <span aria-hidden="true"></span>
                       </label>
                     </div>
+                    <div class="settings-section-card settings-section-card--flat">
+                      <div class="settings-section-heading">
+                        <strong data-i18n-key="settingsRestartTargets">Restart after switching</strong>
+                        <p class="settings-help" data-i18n-key="settingsRestartTargetsCopy">Choose which Codex-related apps restart after account switching.</p>
+                      </div>
+                      <div class="settings-check-list">
+                        <label class="settings-check">
+                          <input id="settings-restart-cli-toggle" type="checkbox" checked />
+                          <span data-i18n-key="settingsRestartCli">CLI</span>
+                        </label>
+                        <label class="settings-check">
+                          <input id="settings-restart-vscode-toggle" type="checkbox" checked />
+                          <span data-i18n-key="settingsRestartVscode">VS Code</span>
+                        </label>
+                        <label class="settings-check">
+                          <input id="settings-restart-desktop-toggle" type="checkbox" checked />
+                          <span data-i18n-key="settingsRestartDesktop">Codex Desktop</span>
+                        </label>
+                      </div>
+                    </div>
+                    <label class="settings-row settings-row--field">
+                      <div>
+                        <strong data-i18n-key="settingsCloseBehavior">Close button behavior</strong>
+                        <p class="settings-help" data-i18n-key="settingsCloseBehaviorCopy">Choose what happens when you close the main window.</p>
+                      </div>
+                      <select id="settings-close-behavior-select" class="settings-input">
+                        <option value="ask" data-i18n-key="settingsCloseAsk">Ask every time</option>
+                        <option value="hide" data-i18n-key="settingsCloseHide">Close main page</option>
+                        <option value="quit" data-i18n-key="settingsCloseQuit">Quit app</option>
+                      </select>
+                    </label>
                     <div class="settings-section-card usage-query-settings-card">
                       <div class="settings-section-heading">
                         <strong data-i18n-key="settingsProfilePersonalization">Account personalization</strong>
@@ -749,6 +780,24 @@
           <button id="submit-codex-cli-button" class="primary-button" type="submit">Save</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="close-choice-dialog" class="dialog close-choice-dialog">
+      <div class="dialog-form">
+        <div class="dialog-copy">
+          <h3 data-i18n-key="closeChoiceTitle">Close Codex Switch?</h3>
+          <p data-i18n-key="closeChoiceCopy">Keep the tray icon running, or quit the app completely.</p>
+        </div>
+        <label class="settings-check close-choice-remember">
+          <input id="close-choice-remember" type="checkbox" />
+          <span data-i18n-key="closeChoiceRemember">Remember my choice</span>
+        </label>
+        <div class="dialog-actions">
+          <button id="close-choice-cancel-button" class="ghost-button" type="button" data-i18n-key="cancel">Cancel</button>
+          <button id="close-choice-hide-button" class="ghost-button" type="button" data-i18n-key="closeChoiceHide">Close main page</button>
+          <button id="close-choice-quit-button" class="primary-button" type="button" data-i18n-key="closeChoiceQuit">Quit app</button>
+        </div>
+      </div>
     </dialog>
 
     <dialog id="update-dialog" class="dialog">
