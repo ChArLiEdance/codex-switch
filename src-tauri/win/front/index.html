@@ -6,8 +6,8 @@
     <title>Codex Switch</title>
   </head>
   <body>
-    <div class="window-shell">
-      <header id="window-titlebar-drag-surface" class="window-titlebar">
+    <div class="window-shell window-shell--windows window-shell--macos">
+      <header id="window-titlebar-drag-surface" class="window-titlebar window-titlebar--windows">
         <div class="window-drag-region">
           <span class="window-app-mark" aria-hidden="true"></span>
           <span class="window-app-title">Codex Switch</span>
@@ -26,273 +26,554 @@
         </div>
       </header>
 
-      <main class="dashboard dashboard-shell">
-        <section class="app-toolbar" aria-label="Application navigation">
-          <nav class="route-tabs" aria-label="Primary navigation">
-            <a class="route-tab" href="#dashboard" data-route-tab="dashboard" data-i18n-key="navDashboard">Dashboard</a>
-            <a class="route-tab" href="#profiles" data-route-tab="profiles" data-i18n-key="navProfiles">Profiles</a>
-            <a class="route-tab" href="#settings" data-route-tab="settings" data-i18n-key="navSettings">Settings</a>
-            <a class="route-tab" href="#guide" data-route-tab="guide" data-i18n-key="navGuide">Guide</a>
-          </nav>
-        </section>
-
-        <section class="page active" id="page-dashboard" data-page="dashboard">
-          <div class="dashboard-grid">
-            <article class="rail-card current-account-card current-account-card--hero">
-              <div class="current-account-topbar">
-                <div class="card-heading current-account-heading">
-                  <h2 id="current-section-heading" class="section-title section-title-rail">Current Account</h2>
+      <main class="dashboard dashboard--macos dashboard--windows dashboard-shell">
+              <header class="mac-topbar" aria-label="Application navigation">
+                <div class="mac-brand-cluster">
+                  <h1 class="mac-brand-title">Codex Switch</h1>
+                  <a
+                    class="mac-settings-button route-tab"
+                    href="#settings"
+                    data-route-tab="settings"
+                    aria-label="Settings"
+                    title="Settings"
+                  >
+                    <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/settings.svg" alt="" aria-hidden="true" />
+                  </a>
                 </div>
 
-                <div class="utility-cluster current-utility-cluster">
-                  <div class="locale-segment" role="group" aria-label="Locale">
-                    <button id="locale-en-button" class="locale-pill" type="button">EN</button>
-                    <button id="locale-zh-button" class="locale-pill" type="button">中文</button>
+                <div class="mac-top-actions">
+                  <nav class="mac-feature-tabs route-tabs" aria-label="Codex tools">
+                    <a class="route-tab mac-feature-tab mac-feature-tab--account" href="#profiles" data-route-tab="profiles" aria-label="Accounts" title="Accounts">
+                      <img class="cc-icon cc-icon--toolbar cc-icon--codex-desktop" src="/ccswitch-icons/codex-desktop-symbol.png" draggable="false" alt="" aria-hidden="true" />
+                    </a>
+                    <a class="route-tab mac-feature-tab mac-feature-tab--skills" href="#skills" data-route-tab="skills" aria-label="Skills" title="Skills">
+                      <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/wrench.svg" alt="" aria-hidden="true" />
+                    </a>
+                    <a class="route-tab mac-feature-tab mac-feature-tab--prompts" href="#prompts" data-route-tab="prompts" aria-label="Prompts" title="Prompts">
+                      <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/book-open.svg" alt="" aria-hidden="true" />
+                    </a>
+                    <a class="route-tab mac-feature-tab mac-feature-tab--history" href="#history" data-route-tab="history" aria-label="Sessions" title="Sessions">
+                      <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/history.svg" alt="" aria-hidden="true" />
+                    </a>
+                  </nav>
+                  <button class="mac-add-button" type="button" data-add-profile aria-label="Add profile" title="Add profile">
+                    <img class="cc-icon cc-icon--add" src="/ccswitch-icons/plus.svg" alt="" aria-hidden="true" />
+                  </button>
+                </div>
+              </header>
+
+              <section class="page active" id="page-dashboard" data-page="dashboard">
+                <div class="dashboard-grid">
+                  <article class="rail-card current-account-card current-account-card--hero">
+                    <div class="current-account-topbar">
+                      <div class="card-heading current-account-heading">
+                        <h2 id="current-section-heading" class="section-title section-title-rail">Current Account</h2>
+                      </div>
+
+                      <div class="utility-cluster current-utility-cluster">
+                        <div class="locale-segment" role="group" aria-label="Locale">
+                          <button id="locale-en-button" class="locale-pill" type="button">EN</button>
+                          <button id="locale-zh-button" class="locale-pill" type="button">中文</button>
+                        </div>
+
+                        <div class="quota-monitor-pill">
+                          <span class="quota-monitor-dot" aria-hidden="true"></span>
+                          <span id="quota-monitor-label">Live quota monitor</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="current-identity">
+                      <h3 id="current-title" class="current-account-title">--</h3>
+                      <p id="current-plan" class="current-plan">--</p>
+                    </div>
+
+                    <div class="current-actions">
+                      <button id="current-login-button" class="action-button action-button-primary" type="button">Login</button>
+                      <button id="open-current-folder-button" class="action-button action-button-secondary" type="button">Open Folder</button>
+                    </div>
+
+                    <div id="current-quota-panel" class="current-quota-panel"></div>
+                  </article>
+
+                  <section class="overview-panel dashboard-hidden" aria-hidden="true">
+                    <div class="page-title-block">
+                      <h2 class="section-title" data-i18n-key="dashboardOverviewTitle">Dashboard</h2>
+                    </div>
+
+                    <div class="status-grid">
+                      <article class="status-card status-card--active-profile">
+                        <span data-i18n-key="metricActiveProfile">Active profile</span>
+                        <strong id="dashboard-active-profile">--</strong>
+                      </article>
+                      <article class="status-card">
+                        <span data-i18n-key="metricTotalProfiles">Total profiles</span>
+                        <strong id="dashboard-profile-count">--</strong>
+                      </article>
+                      <article class="status-card">
+                        <span data-i18n-key="metricReadyProfiles">Ready profiles</span>
+                        <strong id="dashboard-ready-count">--</strong>
+                      </article>
+                      <article class="status-card status-card-muted">
+                        <span data-i18n-key="metricNeedsLogin">Needs login</span>
+                        <strong id="dashboard-missing-count">--</strong>
+                      </article>
+                    </div>
+
+                    <article class="rail-card control-card control-card--wide">
+                      <div class="card-heading">
+                        <h2 id="control-deck-heading" class="section-title section-title-rail">Control Deck</h2>
+                      </div>
+
+                      <div class="control-stack control-stack--grid">
+                        <button id="add-profiles-button" class="control-button" type="button">Add Profiles</button>
+                        <button id="open-codex-button" class="control-button" type="button">Open Codex</button>
+                        <button id="star-button" class="control-button" type="button">Star</button>
+                        <button id="xiaohongshu-button" class="control-button" type="button">Xiaohongshu</button>
+                      </div>
+                    </article>
+                  </section>
+                </div>
+              </section>
+
+              <section class="page" id="page-profiles" data-page="profiles">
+                <section class="content-row content-row--profiles">
+                  <section class="profiles-stage">
+                    <div class="profiles-header mac-profiles-header">
+                      <div>
+                        <h2 id="profiles-heading" class="section-title">Accounts</h2>
+                      </div>
+
+                      <div class="pager-block">
+                        <div class="pager-row">
+                          <button class="pager-pill pager-add-profile" type="button" data-add-profile data-i18n-key="openAddProfile">Add profile</button>
+                          <button id="previous-page-button" class="pager-pill" type="button">Prev</button>
+                          <span id="page-indicator" class="pager-pill pager-current">1 / 1</span>
+                          <button id="next-page-button" class="pager-pill" type="button">Next</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div id="profiles-grid" class="profiles-grid"></div>
+                  </section>
+                </section>
+              </section>
+
+              <section class="page mac-tool-page" id="page-skills" data-page="skills">
+                <header class="mac-detail-header">
+                  <a class="mac-detail-back" href="#profiles" aria-label="Back" title="Back">
+                    <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/arrow-left.svg" alt="" aria-hidden="true" />
+                  </a>
+                  <h2 class="mac-detail-title" data-i18n-key="navSkills">Skills</h2>
+                </header>
+                <article class="mac-placeholder-card">
+                  <span class="mac-placeholder-icon mac-placeholder-icon--skills" aria-hidden="true"></span>
+                  <div>
+                    <p class="page-kicker" data-i18n-key="navSkills">Skills</p>
+                    <h2 class="section-title" data-i18n-key="skillsTitle">Codex Skills</h2>
+                    <p class="page-copy" data-i18n-key="skillsSubtitle">Codex-related skills will be surfaced here after local skill discovery is wired in.</p>
+                  </div>
+                </article>
+              </section>
+
+              <section class="page mac-tool-page" id="page-prompts" data-page="prompts">
+                <header class="mac-detail-header">
+                  <a class="mac-detail-back" href="#profiles" aria-label="Back" title="Back">
+                    <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/arrow-left.svg" alt="" aria-hidden="true" />
+                  </a>
+                  <h2 class="mac-detail-title" data-i18n-key="navPrompts">Prompts</h2>
+                </header>
+                <article class="mac-placeholder-card">
+                  <span class="mac-placeholder-icon mac-placeholder-icon--prompts" aria-hidden="true"></span>
+                  <div>
+                    <p class="page-kicker" data-i18n-key="navPrompts">Prompts</p>
+                    <h2 class="section-title" data-i18n-key="promptsTitle">Prompt Library</h2>
+                    <p class="page-copy" data-i18n-key="promptsSubtitle">Codex prompt templates and account-safe shortcuts will live here.</p>
+                  </div>
+                </article>
+              </section>
+
+              <section class="page mac-tool-page" id="page-history" data-page="history">
+                <header class="mac-detail-header">
+                  <a class="mac-detail-back" href="#profiles" aria-label="Back" title="Back">
+                    <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/arrow-left.svg" alt="" aria-hidden="true" />
+                  </a>
+                  <h2 class="mac-detail-title" data-i18n-key="navHistory">Sessions</h2>
+                </header>
+                <article class="session-manager-panel">
+                  <aside class="session-sidebar">
+                    <div class="session-sidebar-head">
+                      <div class="session-list-title">
+                        <strong data-i18n-key="sessionList">Session list</strong>
+                        <span id="history-session-count" class="session-count-pill">0</span>
+                      </div>
+                      <div class="session-toolbar">
+                        <button id="history-search-button" class="session-toolbar-button" type="button" data-i18n-key-title="sessionSearch" title="Search">
+                          <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/history.svg" alt="" aria-hidden="true" />
+                        </button>
+                        <button id="history-refresh-sessions-button" class="session-toolbar-button" type="button" data-i18n-key-title="sessionRefresh" title="Refresh">
+                          <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/refresh-cw.svg" alt="" aria-hidden="true" />
+                        </button>
+                      </div>
+                      <input id="history-search-input" class="settings-input session-search-input" type="search" placeholder="Search sessions" data-i18n-key-placeholder="sessionSearch" hidden />
+                    </div>
+                    <div id="history-session-list" class="session-list"></div>
+                  </aside>
+                  <section class="session-detail">
+                    <div id="history-detail-empty" class="session-detail-empty" data-i18n-key="sessionSelectEmpty">Select a session to view the conversation.</div>
+                    <div id="history-detail-body" class="session-detail-body" hidden>
+                      <div class="session-detail-top">
+                        <div class="session-detail-title-row">
+                          <img class="cc-icon cc-icon--openai" src="/ccswitch-icons/openai.svg" alt="" aria-hidden="true" />
+                          <div>
+                            <h3 id="history-detail-title">--</h3>
+                            <p id="history-detail-meta" class="session-detail-meta"></p>
+                          </div>
+                        </div>
+                        <div class="session-detail-actions">
+                          <button id="history-resume-button" class="session-action-button session-action-button--primary" type="button">
+                            <img class="cc-icon cc-icon--primary-action" src="/ccswitch-icons/play.svg" alt="" aria-hidden="true" />
+                            <span data-i18n-key="sessionResume">Resume session</span>
+                          </button>
+                          <button id="history-delete-button" class="session-action-button session-action-button--danger" type="button">
+                            <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/trash-2.svg" alt="" aria-hidden="true" />
+                            <span data-i18n-key="sessionDelete">Delete session</span>
+                          </button>
+                        </div>
+                      </div>
+                      <div class="session-command-row">
+                        <code id="history-resume-command">codex resume</code>
+                        <button id="history-copy-resume-button" class="session-toolbar-button" type="button" data-i18n-key-title="sessionCopyCommand" title="Copy command">
+                          <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/copy.svg" alt="" aria-hidden="true" />
+                        </button>
+                      </div>
+                      <div class="session-message-heading">
+                        <strong data-i18n-key="sessionConversation">Conversation</strong>
+                        <span id="history-message-count" class="session-count-pill">0</span>
+                      </div>
+                      <div id="history-message-list" class="session-message-list"></div>
+                    </div>
+                  </section>
+                </article>
+              </section>
+
+              <section class="page" id="page-settings" data-page="settings">
+                <header class="mac-detail-header">
+                  <a class="mac-detail-back" href="#profiles" aria-label="Back" title="Back">
+                    <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/arrow-left.svg" alt="" aria-hidden="true" />
+                  </a>
+                  <h2 class="mac-detail-title" data-i18n-key="settingsTitle">Settings</h2>
+                </header>
+                <article class="settings-panel settings-panel--runtime">
+                  <nav class="settings-tab-strip" aria-label="Settings sections">
+                    <button class="settings-tab-button is-active" type="button" data-settings-tab="general" data-i18n-key="settingsTabGeneral">General</button>
+                    <button class="settings-tab-button" type="button" data-settings-tab="usage" data-i18n-key="settingsUsageTitle">Usage Statistics</button>
+                    <button class="settings-tab-button" type="button" data-settings-tab="about" data-i18n-key="settingsTabAbout">About</button>
+                  </nav>
+
+                  <div class="settings-tab-panel is-active" data-settings-panel="general">
+                    <div class="settings-row">
+                      <strong data-i18n-key="settingsLanguage">Language</strong>
+                      <div class="locale-segment" role="group" aria-label="Locale">
+                        <button class="locale-pill" type="button" data-set-locale="en">EN</button>
+                        <button class="locale-pill" type="button" data-set-locale="zh-CN">中文</button>
+                      </div>
+                    </div>
+                    <div class="settings-row">
+                      <strong data-i18n-key="settingsTheme">Theme</strong>
+                      <div class="theme-options theme-options--compact" role="group" aria-label="Theme">
+                        <button class="theme-option theme-option--color theme-option--light" type="button" data-theme-option="light">
+                          <span class="theme-core-swatch" aria-hidden="true"></span>
+                          <span class="theme-option-text" data-i18n-key="themeLightName">Light</span>
+                        </button>
+                        <button class="theme-option theme-option--color theme-option--dark" type="button" data-theme-option="dark">
+                          <span class="theme-core-swatch" aria-hidden="true"></span>
+                          <span class="theme-option-text" data-i18n-key="themeDarkName">Dark</span>
+                        </button>
+                        <button class="theme-option theme-option--color theme-option--system" type="button" data-theme-option="system">
+                          <span class="theme-core-swatch" aria-hidden="true"></span>
+                          <span class="theme-option-text" data-i18n-key="themeSystemName">System</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="settings-row">
+                      <div>
+                        <strong data-i18n-key="settingsShowAccountDetail">Show account detail</strong>
+                        <p class="settings-help" data-i18n-key="settingsShowAccountDetailCopy">When disabled, profile cards show only the nickname.</p>
+                      </div>
+                      <label class="settings-switch">
+                        <input id="settings-show-account-detail-toggle" type="checkbox" checked />
+                        <span aria-hidden="true"></span>
+                      </label>
+                    </div>
+                    <div class="settings-section-card usage-query-settings-card">
+                      <div class="settings-section-heading">
+                        <strong data-i18n-key="settingsProfilePersonalization">Account personalization</strong>
+                        <p class="settings-help" data-i18n-key="settingsUsageQueryCopy">Choose an account and configure automatic usage query behavior.</p>
+                      </div>
+                      <label class="settings-row settings-row--field">
+                        <strong data-i18n-key="settingsUsageProfileSelect">Account</strong>
+                        <select id="settings-usage-profile-select" class="settings-input"></select>
+                      </label>
+                      <div class="settings-row">
+                        <strong data-i18n-key="usageQueryEnabled">Enable usage query</strong>
+                        <label class="settings-switch">
+                          <input id="settings-usage-enabled-toggle" type="checkbox" />
+                          <span aria-hidden="true"></span>
+                        </label>
+                      </div>
+                      <div class="settings-grid-two">
+                        <label class="settings-row settings-row--field">
+                          <strong data-i18n-key="usageQueryTimeout">Timeout (seconds)</strong>
+                          <input id="settings-usage-timeout-input" class="settings-input" type="number" min="1" max="120" value="10" />
+                        </label>
+                        <label class="settings-row settings-row--field">
+                          <strong data-i18n-key="usageQueryInterval">Auto query interval</strong>
+                          <input id="settings-usage-interval-input" class="settings-input" type="number" min="1" max="1440" value="5" />
+                        </label>
+                      </div>
+                      <div class="settings-actions-row">
+                        <button id="settings-usage-save-button" class="settings-action-button" type="button" data-i18n-key="usageQuerySave">Save usage config</button>
+                      </div>
+                    </div>
+                    <label class="settings-row settings-row--field">
+                      <strong data-i18n-key="settingsUpdateUrl">Update URL</strong>
+                      <input id="settings-update-url-input" class="settings-input" type="url" value="https://api.github.com/repos/ChArLiEdance/codex-switch/releases/latest" />
+                    </label>
+                    <div class="settings-row">
+                      <strong id="settings-codex-cli-label">Codex CLI path</strong>
+                      <div class="settings-cli-inline">
+                        <p id="settings-codex-cli-value" class="settings-value settings-value--inline">--</p>
+                        <button id="settings-codex-cli-detect-button" class="settings-action-button" type="button">Auto-detect</button>
+                        <button id="settings-codex-cli-button" class="settings-action-button" type="button">Change</button>
+                      </div>
+                    </div>
                   </div>
 
-                  <div class="quota-monitor-pill">
-                    <span class="quota-monitor-dot" aria-hidden="true"></span>
-                    <span id="quota-monitor-label">Live quota monitor</span>
+                  <section class="settings-tab-panel settings-usage-panel" data-settings-panel="usage" aria-labelledby="settings-usage-title" hidden>
+                    <div class="settings-usage-header">
+                      <div>
+                        <strong id="settings-usage-title" data-i18n-key="settingsUsageTitle">Usage Statistics</strong>
+                        <p data-i18n-key="settingsUsageSubtitle">Token usage parsed from local Codex session records.</p>
+                      </div>
+                      <div class="usage-filter-bar">
+                        <select id="usage-profile-filter" class="settings-input usage-filter-select"></select>
+                        <label class="usage-refresh-select-wrap" aria-label="Refresh interval">
+                          <img class="cc-icon cc-icon--refresh-select" src="/ccswitch-icons/refresh-cw.svg" alt="" aria-hidden="true" />
+                          <select id="usage-refresh-interval-filter" class="settings-input usage-filter-select usage-refresh-select" aria-label="Refresh interval">
+                            <option value="0" data-i18n-key="usageRefreshOff">Off</option>
+                            <option value="5">5s</option>
+                            <option value="10">10s</option>
+                            <option value="30">30s</option>
+                            <option value="60">60s</option>
+                          </select>
+                        </label>
+                        <select id="usage-range-filter" class="settings-input usage-filter-select">
+                          <option value="today" data-i18n-key="usageRangeToday">Today</option>
+                          <option value="1d" data-i18n-key="usageRange1d">1 day</option>
+                          <option value="7d" data-i18n-key="usageRange7d">7 days</option>
+                          <option value="14d" data-i18n-key="usageRange14d">14 days</option>
+                          <option value="30d" data-i18n-key="usageRange30d">30 days</option>
+                          <option value="custom" data-i18n-key="usageRangeCustom">Custom</option>
+                        </select>
+                        <button id="usage-refresh-button" class="settings-action-button" type="button" data-i18n-key="usageRefresh">Refresh usage</button>
+                      </div>
+                    </div>
+                    <div id="usage-custom-range-panel" class="usage-custom-range-panel" hidden>
+                      <label class="usage-custom-range-field">
+                        <span data-i18n-key="usageCustomStart">Start time</span>
+                        <input id="usage-custom-start-input" class="settings-input" type="datetime-local" />
+                      </label>
+                      <label class="usage-custom-range-field">
+                        <span data-i18n-key="usageCustomEnd">End time</span>
+                        <input id="usage-custom-end-input" class="settings-input" type="datetime-local" />
+                      </label>
+                      <button id="usage-custom-apply-button" class="settings-action-button" type="button" data-i18n-key="usageCustomApply">Apply range</button>
+                    </div>
+                    <div class="usage-hero-panel">
+                      <div class="usage-total-block">
+                        <span class="usage-hero-icon" aria-hidden="true">↯</span>
+                        <div>
+                          <span class="usage-label" data-i18n-key="usageRealTotal">Real consumed Tokens</span>
+                          <strong id="usage-real-total">--</strong>
+                          <small id="usage-real-total-compact" class="usage-total-compact">--</small>
+                        </div>
+                      </div>
+                      <div class="usage-mini-metrics">
+                        <article>
+                          <span data-i18n-key="usageRequests">Total requests</span>
+                          <strong id="usage-request-count">--</strong>
+                        </article>
+                        <article>
+                          <span data-i18n-key="usageCost">Estimated cost</span>
+                          <strong id="usage-total-cost">--</strong>
+                        </article>
+                      </div>
+                    </div>
+                    <div class="usage-metric-grid">
+                      <article><span data-i18n-key="usageInput">Fresh input</span><strong id="usage-input-tokens">--</strong></article>
+                      <article><span data-i18n-key="usageOutput">Output</span><strong id="usage-output-tokens">--</strong></article>
+                      <article><span data-i18n-key="usageCacheCreate">Cache creation</span><strong id="usage-cache-create-tokens">--</strong></article>
+                      <article><span data-i18n-key="usageCacheHit">Cache hit</span><strong id="usage-cache-hit-tokens">--</strong></article>
+                    </div>
+                    <div class="usage-cache-rate">
+                      <div class="usage-cache-rate-head">
+                        <span data-i18n-key="usageCacheHitRate">Cache hit rate</span>
+                        <strong id="usage-cache-hit-rate">--</strong>
+                      </div>
+                      <div class="usage-progress-track"><span id="usage-cache-hit-fill"></span></div>
+                    </div>
+                    <section class="usage-chart-panel">
+                      <div class="usage-chart-head">
+                        <strong data-i18n-key="usageTrendTitle">Usage Trends</strong>
+                        <span id="usage-chart-range">--</span>
+                      </div>
+                      <div id="usage-trend-chart" class="usage-trend-chart"></div>
+                    </section>
+                    <section class="usage-session-panel">
+                      <div class="usage-chart-head">
+                        <strong data-i18n-key="usageSessionTitle">Session token usage</strong>
+                      </div>
+                      <div class="usage-session-table">
+                        <div class="usage-session-row usage-session-row--head">
+                          <span data-i18n-key="usageSession">Session</span>
+                          <span data-i18n-key="settingsUsageProfileSelect">Account</span>
+                          <span data-i18n-key="usageModel">Model</span>
+                          <span data-i18n-key="usageStartedAt">Date</span>
+                          <strong data-i18n-key="usageTokens">Tokens</strong>
+                        </div>
+                        <div id="usage-session-rows"></div>
+                      </div>
+                    </section>
+                  </section>
+
+                  <div class="settings-tab-panel" data-settings-panel="about" hidden>
+                    <div class="settings-row">
+                      <strong data-i18n-key="settingsVersion">Version</strong>
+                      <span id="settings-version-value" class="settings-value settings-value--strong">—</span>
+                    </div>
+                    <div class="settings-row">
+                      <strong data-i18n-key="settingsLicense">License</strong>
+                      <span class="settings-value settings-value--strong">MIT License</span>
+                    </div>
+                    <div class="settings-row">
+                      <strong data-i18n-key="settingsCheckUpdate">Check updates</strong>
+                      <button id="settings-check-update-button" class="settings-action-button settings-action-button--icon" type="button">
+                        <span class="settings-action-icon settings-action-icon--download" aria-hidden="true"></span>
+                        <span data-i18n-key="settingsCheckUpdateButton">Check update</span>
+                      </button>
+                    </div>
+                    <div class="settings-row">
+                      <strong data-i18n-key="settingsGithub">GitHub</strong>
+                      <button id="settings-github-button" class="settings-icon-button" type="button" aria-label="GitHub">
+                        <span class="settings-external-icon" aria-hidden="true"></span>
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              </section>
+
+              <section class="page" id="page-guide" data-page="guide">
+                <header class="mac-detail-header">
+                  <a class="mac-detail-back" href="#profiles" aria-label="Back" title="Back">
+                    <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/arrow-left.svg" alt="" aria-hidden="true" />
+                  </a>
+                  <h2 class="mac-detail-title" data-i18n-key="navGuide">Guide</h2>
+                </header>
+                <div class="guide-hero">
+                  <span class="guide-mark" aria-hidden="true"></span>
+                  <div>
+                    <p class="page-kicker" data-i18n-key="navGuide">Guide</p>
+                    <h2 class="section-title" data-i18n-key="guideTitle">Usage Guide</h2>
+                    <p class="page-copy" data-i18n-key="guideSubtitle">A compact flow for adding, logging in, and switching accounts.</p>
                   </div>
                 </div>
-              </div>
 
-              <div class="current-identity">
-                <h3 id="current-title" class="current-account-title">--</h3>
-                <p id="current-plan" class="current-plan">--</p>
-              </div>
-
-              <div class="current-actions">
-                <button id="current-login-button" class="action-button action-button-primary" type="button">Login</button>
-                <button id="open-current-folder-button" class="action-button action-button-secondary" type="button">Open Folder</button>
-              </div>
-
-              <div id="current-quota-panel" class="current-quota-panel"></div>
-            </article>
-
-            <section class="overview-panel dashboard-hidden" aria-hidden="true">
-              <div class="page-title-block">
-                <h2 class="section-title" data-i18n-key="dashboardOverviewTitle">Dashboard</h2>
-              </div>
-
-              <div class="status-grid">
-                <article class="status-card status-card--active-profile">
-                  <span data-i18n-key="metricActiveProfile">Active profile</span>
-                  <strong id="dashboard-active-profile">--</strong>
-                </article>
-                <article class="status-card">
-                  <span data-i18n-key="metricTotalProfiles">Total profiles</span>
-                  <strong id="dashboard-profile-count">--</strong>
-                </article>
-                <article class="status-card">
-                  <span data-i18n-key="metricReadyProfiles">Ready profiles</span>
-                  <strong id="dashboard-ready-count">--</strong>
-                </article>
-                <article class="status-card status-card-muted">
-                  <span data-i18n-key="metricNeedsLogin">Needs login</span>
-                  <strong id="dashboard-missing-count">--</strong>
-                </article>
-              </div>
-
-              <article class="rail-card control-card control-card--wide">
-                <div class="card-heading">
-                  <h2 id="control-deck-heading" class="section-title section-title-rail">Control Deck</h2>
+                <h3 class="guide-section-heading" data-i18n-key="guideSectionStepsHeading">Workflow</h3>
+                <div class="timeline timeline--flex">
+                  <article class="timeline-card">
+                    <span>1</span>
+                    <div>
+                      <h3 data-i18n-key="guideStepProfileTitle">Create a profile</h3>
+                      <p data-i18n-key="guideStepProfileText">Create a backup folder before binding an account.</p>
+                    </div>
+                  </article>
+                  <article class="timeline-card">
+                    <span>2</span>
+                    <div>
+                      <h3 data-i18n-key="guideStepLoginTitle">Log in</h3>
+                      <p data-i18n-key="guideStepLoginText">Use the current profile login action to refresh the local account state.</p>
+                    </div>
+                  </article>
+                  <article class="timeline-card">
+                    <span>3</span>
+                    <div>
+                      <h3 data-i18n-key="guideStepSwitchTitle">Switch safely</h3>
+                      <p data-i18n-key="guideStepSwitchText">Use the profile cards to switch while preserving the previous account backup.</p>
+                    </div>
+                  </article>
+                  <article class="timeline-card">
+                    <span>4</span>
+                    <div>
+                      <h3 data-i18n-key="guideStepRefreshTitle">Refresh quota</h3>
+                      <p data-i18n-key="guideStepRefreshText">TODO: explain when to use the per-card Refresh button and what it costs.</p>
+                    </div>
+                  </article>
+                  <article class="timeline-card">
+                    <span>5</span>
+                    <div>
+                      <h3 data-i18n-key="guideStepBaseUrlTitle">Set a custom Base URL (optional)</h3>
+                      <p data-i18n-key="guideStepBaseUrlText">TODO: explain when a custom Base URL is needed and the warning indicator.</p>
+                    </div>
+                  </article>
+                  <article class="timeline-card">
+                    <span>6</span>
+                    <div>
+                      <h3 data-i18n-key="guideStepBackupTitle">Where backups live</h3>
+                      <p data-i18n-key="guideStepBackupText">TODO: explain the account_backup folder layout and the Open folder button.</p>
+                    </div>
+                  </article>
                 </div>
 
-                <div class="control-stack control-stack--grid">
-                  <button id="add-profiles-button" class="control-button" type="button">Add Profiles</button>
-                  <button id="open-codex-button" class="control-button" type="button">Open Codex</button>
-                  <button id="star-button" class="control-button" type="button">Star</button>
-                  <button id="xiaohongshu-button" class="control-button" type="button">Xiaohongshu</button>
-                </div>
-              </article>
-            </section>
-          </div>
-        </section>
-
-        <section class="page" id="page-profiles" data-page="profiles">
-          <section class="content-row content-row--profiles">
-            <section class="profiles-stage">
-              <div class="profiles-header">
-                <div>
-                  <h2 id="profiles-heading" class="section-title">Profiles</h2>
+                <h3 class="guide-section-heading" data-i18n-key="guideSectionTipsHeading">Tips &amp; warnings</h3>
+                <div class="guide-callouts">
+                  <aside class="guide-callout guide-callout--info">
+                    <strong data-i18n-key="guideTipFreshTitle">TODO: Quota freshness tip headline</strong>
+                    <p data-i18n-key="guideTipFreshText">TODO: explain the auto-refresh cadence (15s ticker, 5min silent ticker, daily plan refresh).</p>
+                  </aside>
+                  <aside class="guide-callout guide-callout--warn">
+                    <strong data-i18n-key="guideTipBaseUrlTitle">TODO: Base URL warning headline</strong>
+                    <p data-i18n-key="guideTipBaseUrlText">TODO: explain why a custom Base URL on a ChatGPT/OAuth account breaks login.</p>
+                  </aside>
+                  <aside class="guide-callout guide-callout--success">
+                    <strong data-i18n-key="guideTipMultiAccountTitle">TODO: Multi-account headline</strong>
+                    <p data-i18n-key="guideTipMultiAccountText">TODO: explain that switching never deletes the previous account state.</p>
+                  </aside>
                 </div>
 
-                <div class="pager-block">
-                  <div class="pager-row">
-                    <button class="pager-pill pager-add-profile" type="button" data-add-profile data-i18n-key="openAddProfile">Add profile</button>
-                    <button id="previous-page-button" class="pager-pill" type="button">Prev</button>
-                    <span id="page-indicator" class="pager-pill pager-current">1 / 1</span>
-                    <button id="next-page-button" class="pager-pill" type="button">Next</button>
-                  </div>
+                <h3 class="guide-section-heading" data-i18n-key="guideSectionFaqHeading">FAQ</h3>
+                <div class="guide-faq">
+                  <details>
+                    <summary data-i18n-key="guideFaqResetQ">TODO: FAQ — quota reset timing?</summary>
+                    <p data-i18n-key="guideFaqResetA">TODO: answer.</p>
+                  </details>
+                  <details>
+                    <summary data-i18n-key="guideFaqLoginQ">TODO: FAQ — login fails / Codex CLI not found?</summary>
+                    <p data-i18n-key="guideFaqLoginA">TODO: answer (point at Settings → Codex CLI path).</p>
+                  </details>
+                  <details>
+                    <summary data-i18n-key="guideFaqSwitchQ">TODO: FAQ — switch keeps spinning / locked?</summary>
+                    <p data-i18n-key="guideFaqSwitchA">TODO: answer (mention .switch.lock auto-cleanup).</p>
+                  </details>
+                  <details>
+                    <summary data-i18n-key="guideFaqDataQ">TODO: FAQ — where is data stored / how to back up?</summary>
+                    <p data-i18n-key="guideFaqDataA">TODO: answer (~/.codex/account_backup, optionally export).</p>
+                  </details>
                 </div>
-              </div>
 
-              <div id="profiles-grid" class="profiles-grid"></div>
-            </section>
-          </section>
-        </section>
-
-        <section class="page" id="page-settings" data-page="settings">
-          <article class="settings-panel settings-panel--runtime">
-            <div class="settings-row">
-              <strong data-i18n-key="settingsLanguage">Language</strong>
-              <div class="locale-segment" role="group" aria-label="Locale">
-                <button class="locale-pill" type="button" data-set-locale="en">EN</button>
-                <button class="locale-pill" type="button" data-set-locale="zh-CN">中文</button>
-              </div>
-            </div>
-            <div class="settings-row">
-              <strong data-i18n-key="settingsTheme">Theme</strong>
-              <div class="theme-options theme-options--compact" role="group" aria-label="Theme">
-                <button class="theme-option theme-option--color" type="button" data-theme-option="classic">
-                  <span class="theme-core-swatch" aria-hidden="true"></span>
-                </button>
-                <button class="theme-option theme-option--color" type="button" data-theme-option="mica">
-                  <span class="theme-core-swatch" aria-hidden="true"></span>
-                </button>
-                <button class="theme-option theme-option--color" type="button" data-theme-option="pine">
-                  <span class="theme-core-swatch" aria-hidden="true"></span>
-                </button>
-                <button class="theme-option theme-option--color" type="button" data-theme-option="sea-salt">
-                  <span class="theme-core-swatch" aria-hidden="true"></span>
-                </button>
-                <button class="theme-option theme-option--color" type="button" data-theme-option="jade-night">
-                  <span class="theme-core-swatch" aria-hidden="true"></span>
-                </button>
-              </div>
-            </div>
-            <label class="settings-row settings-row--field">
-              <strong data-i18n-key="settingsUpdateUrl">Update URL</strong>
-              <input id="settings-update-url-input" class="settings-input" type="url" value="https://api.github.com/repos/ChArLiEdance/codex-switch/releases/latest" />
-            </label>
-            <div class="settings-row">
-              <strong id="settings-codex-cli-label">Codex CLI path</strong>
-              <div class="settings-cli-inline">
-                <p id="settings-codex-cli-value" class="settings-value settings-value--inline">--</p>
-                <button id="settings-codex-cli-detect-button" class="settings-action-button" type="button">Auto-detect</button>
-                <button id="settings-codex-cli-button" class="settings-action-button" type="button">Change</button>
-              </div>
-            </div>
-            <div class="settings-row">
-              <strong data-i18n-key="settingsVersion">Version</strong>
-              <span id="settings-version-value" class="settings-value settings-value--strong">—</span>
-            </div>
-            <div class="settings-row">
-              <strong data-i18n-key="settingsLicense">License</strong>
-              <span class="settings-value settings-value--strong">MIT License</span>
-            </div>
-            <div class="settings-row">
-              <strong data-i18n-key="settingsCheckUpdate">Check updates</strong>
-              <button id="settings-check-update-button" class="settings-action-button settings-action-button--icon" type="button">
-                <span class="settings-action-icon settings-action-icon--download" aria-hidden="true"></span>
-                <span data-i18n-key="settingsCheckUpdateButton">Check update</span>
-              </button>
-            </div>
-            <div class="settings-row">
-              <strong data-i18n-key="settingsGithub">GitHub</strong>
-              <button id="settings-github-button" class="settings-icon-button" type="button" aria-label="GitHub">
-                <span class="settings-external-icon" aria-hidden="true"></span>
-              </button>
-            </div>
-          </article>
-        </section>
-
-        <section class="page" id="page-guide" data-page="guide">
-          <div class="guide-hero">
-            <span class="guide-mark" aria-hidden="true"></span>
-            <div>
-              <p class="page-kicker" data-i18n-key="navGuide">Guide</p>
-              <h2 class="section-title" data-i18n-key="guideTitle">Usage Guide</h2>
-              <p class="page-copy" data-i18n-key="guideSubtitle">A compact flow for adding, logging in, and switching accounts.</p>
-            </div>
-          </div>
-
-          <h3 class="guide-section-heading" data-i18n-key="guideSectionStepsHeading">Workflow</h3>
-          <div class="timeline timeline--flex">
-            <article class="timeline-card">
-              <span>1</span>
-              <div>
-                <h3 data-i18n-key="guideStepProfileTitle">Create a profile</h3>
-                <p data-i18n-key="guideStepProfileText">Create a backup folder before binding an account.</p>
-              </div>
-            </article>
-            <article class="timeline-card">
-              <span>2</span>
-              <div>
-                <h3 data-i18n-key="guideStepLoginTitle">Log in</h3>
-                <p data-i18n-key="guideStepLoginText">Use the current profile login action to refresh the local account state.</p>
-              </div>
-            </article>
-            <article class="timeline-card">
-              <span>3</span>
-              <div>
-                <h3 data-i18n-key="guideStepSwitchTitle">Switch safely</h3>
-                <p data-i18n-key="guideStepSwitchText">Use the profile cards to switch while preserving the previous account backup.</p>
-              </div>
-            </article>
-            <article class="timeline-card">
-              <span>4</span>
-              <div>
-                <h3 data-i18n-key="guideStepRefreshTitle">Refresh quota</h3>
-                <p data-i18n-key="guideStepRefreshText">TODO: explain when to use the per-card Refresh button and what it costs.</p>
-              </div>
-            </article>
-            <article class="timeline-card">
-              <span>5</span>
-              <div>
-                <h3 data-i18n-key="guideStepBaseUrlTitle">Set a custom Base URL (optional)</h3>
-                <p data-i18n-key="guideStepBaseUrlText">TODO: explain when a custom Base URL is needed and the warning indicator.</p>
-              </div>
-            </article>
-            <article class="timeline-card">
-              <span>6</span>
-              <div>
-                <h3 data-i18n-key="guideStepBackupTitle">Where backups live</h3>
-                <p data-i18n-key="guideStepBackupText">TODO: explain the account_backup folder layout and the Open folder button.</p>
-              </div>
-            </article>
-          </div>
-
-          <h3 class="guide-section-heading" data-i18n-key="guideSectionTipsHeading">Tips &amp; warnings</h3>
-          <div class="guide-callouts">
-            <aside class="guide-callout guide-callout--info">
-              <strong data-i18n-key="guideTipFreshTitle">TODO: Quota freshness tip headline</strong>
-              <p data-i18n-key="guideTipFreshText">TODO: explain the auto-refresh cadence (15s ticker, 5min silent ticker, daily plan refresh).</p>
-            </aside>
-            <aside class="guide-callout guide-callout--warn">
-              <strong data-i18n-key="guideTipBaseUrlTitle">TODO: Base URL warning headline</strong>
-              <p data-i18n-key="guideTipBaseUrlText">TODO: explain why a custom Base URL on a ChatGPT/OAuth account breaks login.</p>
-            </aside>
-            <aside class="guide-callout guide-callout--success">
-              <strong data-i18n-key="guideTipMultiAccountTitle">TODO: Multi-account headline</strong>
-              <p data-i18n-key="guideTipMultiAccountText">TODO: explain that switching never deletes the previous account state.</p>
-            </aside>
-          </div>
-
-          <h3 class="guide-section-heading" data-i18n-key="guideSectionFaqHeading">FAQ</h3>
-          <div class="guide-faq">
-            <details>
-              <summary data-i18n-key="guideFaqResetQ">TODO: FAQ — quota reset timing?</summary>
-              <p data-i18n-key="guideFaqResetA">TODO: answer.</p>
-            </details>
-            <details>
-              <summary data-i18n-key="guideFaqLoginQ">TODO: FAQ — login fails / Codex CLI not found?</summary>
-              <p data-i18n-key="guideFaqLoginA">TODO: answer (point at Settings → Codex CLI path).</p>
-            </details>
-            <details>
-              <summary data-i18n-key="guideFaqSwitchQ">TODO: FAQ — switch keeps spinning / locked?</summary>
-              <p data-i18n-key="guideFaqSwitchA">TODO: answer (mention .switch.lock auto-cleanup).</p>
-            </details>
-            <details>
-              <summary data-i18n-key="guideFaqDataQ">TODO: FAQ — where is data stored / how to back up?</summary>
-              <p data-i18n-key="guideFaqDataA">TODO: answer (~/.codex/account_backup, optionally export).</p>
-            </details>
-          </div>
-
-          <button class="primary-button guide-start" type="button" data-add-profile data-i18n-key="guideStart">Start with a profile</button>
-        </section>
-      </main>
+                <button class="primary-button guide-start" type="button" data-add-profile data-i18n-key="guideStart">Start with a profile</button>
+              </section>
+            </main>
     </div>
 
     <dialog id="add-profile-dialog" class="dialog">
@@ -305,19 +586,23 @@
         <label class="field">
           <span id="folder-name-label">Folder name</span>
           <input id="folder-name-input" name="folder_name" type="text" autocomplete="off" required />
+          <span class="field-copy" data-i18n-key="accountNicknameCopy">This nickname is shown on the home page.</span>
         </label>
 
-        <label class="field">
-          <span id="add-base-url-label">Base Url</span>
-          <input
-            id="add-base-url-input"
-            name="openai_base_url"
-            type="text"
-            autocomplete="off"
-            placeholder="https://example.com/v1"
-          />
-          <span id="add-base-url-copy" class="field-copy warning-copy">非 API 账号添加 Base Url 会导致账号失效，清空后可恢复。</span>
-        </label>
+        <details class="advanced-options">
+          <summary data-i18n-key="advancedOptions">Advanced options</summary>
+          <label class="field">
+            <span id="add-base-url-label">Base Url</span>
+            <input
+              id="add-base-url-input"
+              name="openai_base_url"
+              type="text"
+              autocomplete="off"
+              placeholder="https://example.com/v1"
+            />
+            <span id="add-base-url-copy" class="field-copy">Must start with http:// or https://. Only fill this for API KEY logins, otherwise Codex will fail.</span>
+          </label>
+        </details>
 
         <p id="dialog-error" class="dialog-error" hidden></p>
 
@@ -353,15 +638,15 @@
       <div class="dialog-form">
         <div class="dialog-copy">
           <h3 id="delete-profile-dialog-title">Delete Profile</h3>
-          <p id="delete-profile-dialog-copy">请确认彻底删除卡片还是仅清空卡片绑定的账号。</p>
+          <p id="delete-profile-dialog-copy">Please confirm whether to permanently delete this card or only clear the account bound to it.</p>
         </div>
 
         <p id="delete-profile-dialog-error" class="dialog-error" hidden></p>
 
         <div class="dialog-actions dialog-actions-wide">
-          <button id="delete-profile-button" class="ghost-button danger-button" type="button">删除卡片</button>
-          <button id="clear-profile-account-button" class="ghost-button" type="button">清空账号</button>
-          <button id="cancel-delete-profile-button" class="primary-button" type="button">取消</button>
+          <button id="delete-profile-button" class="ghost-button danger-button" type="button">Delete Card</button>
+          <button id="clear-profile-account-button" class="ghost-button" type="button">Clear Account</button>
+          <button id="cancel-delete-profile-button" class="primary-button" type="button">Cancel</button>
         </div>
       </div>
     </dialog>
@@ -370,7 +655,7 @@
       <form id="base-url-form" class="dialog-form" method="dialog">
         <div class="dialog-copy">
           <h3 id="base-url-dialog-title">Custom Base Url</h3>
-          <p id="base-url-dialog-copy" class="warning-copy">非 API 账号添加 Base Url 会导致账号失效，清空后可恢复。</p>
+          <p id="base-url-dialog-copy">Must start with http:// or https://. Only fill this for API KEY logins, otherwise Codex will fail.</p>
         </div>
 
         <label class="field">
@@ -389,6 +674,42 @@
         <div class="dialog-actions">
           <button id="cancel-base-url-button" class="ghost-button" type="button">Cancel</button>
           <button id="submit-base-url-button" class="primary-button" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="usage-config-dialog" class="dialog usage-config-dialog">
+      <form id="usage-config-form" class="dialog-form" method="dialog">
+        <div class="dialog-copy">
+          <h3 id="usage-config-dialog-title">Configure usage query</h3>
+          <p id="usage-config-dialog-copy">Read this Codex account's OAuth credentials and query official subscription quota.</p>
+        </div>
+
+        <div class="usage-config-enable-row">
+          <strong data-i18n-key="usageQueryEnabled">Enable usage query</strong>
+          <label class="settings-switch">
+            <input id="usage-config-enabled-toggle" type="checkbox" />
+            <span aria-hidden="true"></span>
+          </label>
+        </div>
+
+        <div class="settings-grid-two usage-config-fields">
+          <label class="field">
+            <span data-i18n-key="usageQueryTimeout">Timeout (seconds)</span>
+            <input id="usage-config-timeout-input" name="timeout_seconds" type="number" min="1" max="120" value="10" />
+          </label>
+          <label class="field">
+            <span data-i18n-key="usageQueryInterval">Auto query interval</span>
+            <input id="usage-config-interval-input" name="auto_query_interval_minutes" type="number" min="1" max="1440" value="5" />
+          </label>
+        </div>
+
+        <p id="usage-config-dialog-error" class="dialog-error" hidden></p>
+
+        <div class="dialog-actions">
+          <button id="cancel-usage-config-button" class="ghost-button" type="button">Cancel</button>
+          <button id="test-usage-config-button" class="ghost-button" type="button" data-i18n-key="usageQueryTest">Test script</button>
+          <button id="submit-usage-config-button" class="primary-button" type="submit" data-i18n-key="usageQuerySave">Save usage config</button>
         </div>
       </form>
     </dialog>
@@ -413,7 +734,7 @@
             type="text"
             autocomplete="off"
             spellcheck="false"
-            placeholder="C:\Users\You\AppData\Local\Programs\codex\codex.cmd"
+            placeholder="/full/path/to/codex"
           />
         </label>
 

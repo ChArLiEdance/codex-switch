@@ -18,7 +18,8 @@ import { state } from "@front-shared/state";
 import { getThemeOption, isThemeId } from "@front-shared/theme";
 
 const isWindowsUiTarget = __CODEX_UI_TARGET__ === "windows";
-const defaultRoute: ShellRoute = isWindowsUiTarget ? "dashboard" : "profiles";
+const defaultRoute: ShellRoute = "profiles";
+const usesUnifiedProfileCards = true as boolean;
 const shellRoutes: readonly ShellRoute[] = [
   "dashboard",
   "profiles",
@@ -539,7 +540,7 @@ export function renderThemeOptions(): void {
 
 export function renderShellRoute(): void {
   document.body.dataset.route = state.route;
-  document.body.classList.toggle("mac-detail-route", !isWindowsUiTarget && state.route !== "profiles");
+  document.body.classList.toggle("mac-detail-route", state.route !== "profiles");
 
   for (const page of elements.pages) {
     page.classList.toggle("active", page.dataset.page === state.route);
@@ -1306,7 +1307,7 @@ export function renderProfiles(
         .filter((value): value is string => value != null)
         .join(" ");
 
-      if (!isWindowsUiTarget) {
+      if (usesUnifiedProfileCards) {
         const displayTitle = profileDisplayTitle(profile);
         const showQuotaPanel = state.expandedQuotaProfiles.includes(profile.folder_name);
         const needsRelogin = state.reloginProfiles.includes(profile.folder_name);
@@ -1448,7 +1449,7 @@ export function renderProfiles(
 
           ${buildProfileQuotaMarkup(profile)}
 
-          <div class="profile-card-actions${isWindowsUiTarget ? " profile-card-actions--windows" : ""}">
+          <div class="profile-card-actions">
             ${
               hasDeleteProfileUi
                 ? `<button
