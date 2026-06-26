@@ -3010,13 +3010,30 @@ html[data-theme] .mac-profile-actions .mac-profile-primary--login:disabled,
   position: relative;
   display: inline-flex;
   align-items: center;
+  width: 124px;
 }
 
 .usage-refresh-select-wrap .usage-refresh-select {
-  min-width: 116px !important;
-  padding-left: 46px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  padding-left: 48px !important;
   padding-right: 34px !important;
   text-align: left;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.usage-refresh-select-wrap::after {
+  content: "";
+  position: absolute;
+  right: 16px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  opacity: 0.82;
+  pointer-events: none;
+  transform: translateY(-2px) rotate(45deg);
 }
 
 .cc-icon--refresh-select {
