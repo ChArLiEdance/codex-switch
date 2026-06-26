@@ -1,10 +1,12 @@
 use crate::models::{QuotaWindow, SwitchRestartTargets, TrayStatePayload};
 use std::sync::{Mutex, OnceLock};
+use tauri::image::Image;
 use tauri::menu::{MenuBuilder, SubmenuBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri::{App, AppHandle, Emitter, Manager};
 
 const TRAY_ID: &str = "codex-switch-main";
+const MACOS_TRAY_TEMPLATE_RGBA: &[u8] = include_bytes!("../../icons/tray-template.rgba");
 const ID_SHOW: &str = "tray_show_main";
 const ID_SETTINGS: &str = "tray_settings";
 const ID_ABOUT: &str = "tray_about";
@@ -73,8 +75,17 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| handle_menu_event(app, event.id().as_ref()));
 
-    if let Some(icon) = app.default_window_icon().cloned() {
-        builder = builder.icon(icon);
+    #[cfg(target_os = "macos")]
+    {
+        let icon = Image::new(MACOS_TRAY_TEMPLATE_RGBA, 32, 32);
+        builder = builder.icon(icon).icon_as_template(true);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Some(icon) = app.default_window_icon().cloned() {
+            builder = builder.icon(icon);
+        }
     }
 
     let _tray = builder.build(app)?;
