@@ -105,6 +105,26 @@ export interface ActionResponse {
   path: string | null;
 }
 
+export interface CodexSkillEntry {
+  id: string;
+  name: string;
+  description: string | null;
+  content: string;
+  path: string;
+  updated_at: number | null;
+}
+
+export interface CodexPromptEntry {
+  id: string;
+  name: string;
+  description: string | null;
+  content: string;
+  enabled: boolean;
+  path: string;
+  created_at: number | null;
+  updated_at: number | null;
+}
+
 export interface UpdateCheckResponse {
   ok: boolean;
   current_version: string;

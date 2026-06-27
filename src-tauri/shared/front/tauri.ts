@@ -4,8 +4,10 @@ import type {
   ActionResponse,
   CodexCliRedetectResult,
   CodexCliStatus,
+  CodexPromptEntry,
   CodexSessionMessage,
   CodexSessionMeta,
+  CodexSkillEntry,
   CommandError,
   CurrentCard,
   CurrentQuotaResponse,
@@ -211,6 +213,48 @@ const previewCodexMessages: CodexSessionMessage[] = [
     role: "assistant",
     content: "我会把会话记录做成左侧列表、右侧详情，并从本地 Codex 会话 JSONL 中读取记录。",
     ts: Math.floor(Date.now() / 1000) - 120,
+  },
+];
+
+let previewCodexSkills: CodexSkillEntry[] = [
+  {
+    id: "code-review",
+    name: "Code Review",
+    description: "Review local code changes with a bug-first checklist.",
+    content: "# Code Review\n\nReview local code changes with a bug-first checklist.\n",
+    path: "/preview/.codex/skills/code-review/SKILL.md",
+    updated_at: Date.now(),
+  },
+  {
+    id: "release-notes",
+    name: "Release Notes",
+    description: "Draft concise release notes from committed changes.",
+    content: "# Release Notes\n\nDraft concise release notes from committed changes.\n",
+    path: "/preview/.codex/skills/release-notes/SKILL.md",
+    updated_at: Date.now() - 3600_000,
+  },
+];
+
+let previewCodexPrompts: CodexPromptEntry[] = [
+  {
+    id: "default-agents",
+    name: "Default AGENTS",
+    description: "Current Codex project guidance.",
+    content: "# Default AGENTS\n\nFollow repository instructions and verify changes before reporting completion.\n",
+    enabled: true,
+    path: "/preview/.codex/prompts/default-agents.md",
+    created_at: Date.now() - 86_400_000,
+    updated_at: Date.now(),
+  },
+  {
+    id: "focused-fix",
+    name: "Focused Fix",
+    description: "Keep edits scoped to the requested bug.",
+    content: "# Focused Fix\n\nKeep edits scoped and avoid unrelated refactors.\n",
+    enabled: false,
+    path: "/preview/.codex/prompts/focused-fix.md",
+    created_at: Date.now() - 40_000,
+    updated_at: Date.now() - 40_000,
   },
 ];
 
@@ -529,6 +573,95 @@ async function invokeCommand<T>(command: string, args?: Record<string, unknown>)
         }) as Promise<T>;
       case "cancel_codex_login":
         return Promise.resolve(true) as Promise<T>;
+      case "list_codex_skills":
+        return clone(previewCodexSkills) as T;
+      case "save_codex_skill": {
+        const payload = args?.payload as {
+          id?: string | null;
+          name?: string;
+          description?: string | null;
+          content?: string;
+        } | undefined;
+        const id = payload?.id || (payload?.name || "skill").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const entry: CodexSkillEntry = {
+          id,
+          name: payload?.name || "Untitled Skill",
+          description: payload?.description ?? null,
+          content: payload?.content || `# ${payload?.name || "Untitled Skill"}\n\n`,
+          path: `/preview/.codex/skills/${id}/SKILL.md`,
+          updated_at: Date.now(),
+        };
+        previewCodexSkills = [entry, ...previewCodexSkills.filter((skill) => skill.id !== id)];
+        return clone(entry) as T;
+      }
+      case "delete_codex_skill": {
+        const id = (args?.payload as { id?: string } | undefined)?.id;
+        if (id) {
+          previewCodexSkills = previewCodexSkills.filter((skill) => skill.id !== id);
+        }
+        return mockAction("Deleted skill in preview mode") as Promise<T>;
+      }
+      case "open_codex_skills_folder":
+        return mockAction("Opened skills folder in preview mode", "/preview/.codex/skills") as Promise<T>;
+      case "list_codex_prompts":
+        return clone(previewCodexPrompts) as T;
+      case "save_codex_prompt": {
+        const payload = args?.payload as {
+          id?: string | null;
+          name?: string;
+          description?: string | null;
+          content?: string;
+          enabled?: boolean;
+        } | undefined;
+        const id = payload?.id || (payload?.name || "prompt").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const enabled = Boolean(payload?.enabled);
+        if (enabled) {
+          previewCodexPrompts = previewCodexPrompts.map((prompt) => ({ ...prompt, enabled: false }));
+        }
+        const entry: CodexPromptEntry = {
+          id,
+          name: payload?.name || "Untitled Prompt",
+          description: payload?.description ?? null,
+          content: payload?.content || `# ${payload?.name || "Untitled Prompt"}\n\n`,
+          enabled,
+          path: `/preview/.codex/prompts/${id}.md`,
+          created_at: previewCodexPrompts.find((prompt) => prompt.id === id)?.created_at ?? Date.now(),
+          updated_at: Date.now(),
+        };
+        previewCodexPrompts = [entry, ...previewCodexPrompts.filter((prompt) => prompt.id !== id)];
+        return clone(entry) as T;
+      }
+      case "enable_codex_prompt": {
+        const id = (args?.payload as { id?: string } | undefined)?.id;
+        if (id) {
+          previewCodexPrompts = previewCodexPrompts.map((prompt) => ({
+            ...prompt,
+            enabled: prompt.id === id,
+          }));
+        }
+        return mockAction("Enabled prompt in preview mode") as Promise<T>;
+      }
+      case "delete_codex_prompt": {
+        const id = (args?.payload as { id?: string } | undefined)?.id;
+        if (id) {
+          previewCodexPrompts = previewCodexPrompts.filter((prompt) => prompt.id !== id);
+        }
+        return mockAction("Deleted prompt in preview mode") as Promise<T>;
+      }
+      case "import_codex_prompt_from_agents": {
+        const entry: CodexPromptEntry = {
+          id: `imported-${Date.now()}`,
+          name: "Imported AGENTS",
+          description: "Imported from preview AGENTS.md",
+          content: "# Imported AGENTS\n\nPreview AGENTS content.",
+          enabled: false,
+          path: "/preview/.codex/prompts/imported-agents.md",
+          created_at: Date.now(),
+          updated_at: Date.now(),
+        };
+        previewCodexPrompts = [entry, ...previewCodexPrompts];
+        return clone(entry) as T;
+      }
       case "sync_tray_state":
       case "show_main_window":
       case "hide_main_window":
@@ -715,4 +848,51 @@ export function hideMainWindow(): Promise<ActionResponse> {
 
 export function quitApp(): Promise<ActionResponse> {
   return invokeCommand<ActionResponse>("quit_app");
+}
+
+export function listCodexSkills(): Promise<CodexSkillEntry[]> {
+  return invokeCommand<CodexSkillEntry[]>("list_codex_skills");
+}
+
+export function saveCodexSkill(payload: {
+  id?: string | null;
+  name: string;
+  description?: string | null;
+  content: string;
+}): Promise<CodexSkillEntry> {
+  return invokeCommand<CodexSkillEntry>("save_codex_skill", { payload });
+}
+
+export function deleteCodexSkill(id: string): Promise<ActionResponse> {
+  return invokeCommand<ActionResponse>("delete_codex_skill", { payload: { id } });
+}
+
+export function openCodexSkillsFolder(): Promise<ActionResponse> {
+  return invokeCommand<ActionResponse>("open_codex_skills_folder");
+}
+
+export function listCodexPrompts(): Promise<CodexPromptEntry[]> {
+  return invokeCommand<CodexPromptEntry[]>("list_codex_prompts");
+}
+
+export function saveCodexPrompt(payload: {
+  id?: string | null;
+  name: string;
+  description?: string | null;
+  content: string;
+  enabled: boolean;
+}): Promise<CodexPromptEntry> {
+  return invokeCommand<CodexPromptEntry>("save_codex_prompt", { payload });
+}
+
+export function enableCodexPrompt(id: string): Promise<ActionResponse> {
+  return invokeCommand<ActionResponse>("enable_codex_prompt", { payload: { id } });
+}
+
+export function deleteCodexPrompt(id: string): Promise<ActionResponse> {
+  return invokeCommand<ActionResponse>("delete_codex_prompt", { payload: { id } });
+}
+
+export function importCodexPromptFromAgents(): Promise<CodexPromptEntry> {
+  return invokeCommand<CodexPromptEntry>("import_codex_prompt_from_agents");
 }

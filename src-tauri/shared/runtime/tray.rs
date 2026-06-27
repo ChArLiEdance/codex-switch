@@ -30,6 +30,9 @@ struct TrayLabels {
     five_hour: &'static str,
     weekly: &'static str,
     refresh: &'static str,
+    used: &'static str,
+    left: &'static str,
+    resets: &'static str,
 }
 
 fn labels(locale: &str) -> TrayLabels {
@@ -42,9 +45,12 @@ fn labels(locale: &str) -> TrayLabels {
             about: "关于",
             quit: "退出",
             no_account: "暂无当前账号",
-            five_hour: "5 小时额度",
-            weekly: "周额度",
+            five_hour: "5h",
+            weekly: "7d",
             refresh: "下次刷新",
+            used: "已用",
+            left: "剩余",
+            resets: "重置",
         }
     } else {
         TrayLabels {
@@ -55,9 +61,12 @@ fn labels(locale: &str) -> TrayLabels {
             about: "About",
             quit: "Quit",
             no_account: "No active account",
-            five_hour: "5h quota",
-            weekly: "Weekly quota",
+            five_hour: "5h",
+            weekly: "7d",
             refresh: "Next refresh",
+            used: "Used",
+            left: "Left",
+            resets: "Resets",
         }
     }
 }
@@ -157,10 +166,10 @@ fn build_menu(
             .unwrap_or(label.no_account);
         let quota = payload.current_quota.as_ref();
         let five_hour = quota
-            .map(|summary| quota_line(label.five_hour, &summary.five_hour))
+            .map(|summary| quota_line(label.five_hour, &summary.five_hour, &label))
             .unwrap_or_else(|| format!("{}: --", label.five_hour));
         let weekly = quota
-            .map(|summary| quota_line(label.weekly, &summary.weekly))
+            .map(|summary| quota_line(label.weekly, &summary.weekly, &label))
             .unwrap_or_else(|| format!("{}: --", label.weekly));
         let refresh = quota
             .and_then(|summary| {
@@ -218,12 +227,34 @@ fn build_menu(
     }
 }
 
-fn quota_line(label: &str, window: &QuotaWindow) -> String {
-    let percent = window.remaining_percent.unwrap_or(0).min(100);
-    let filled = usize::from(percent / 10);
+fn quota_line(label: &str, window: &QuotaWindow, labels: &TrayLabels) -> String {
+    let Some(percent) = window.remaining_percent.map(|value| value.min(100)) else {
+        return format!("{label}  ▱▱▱▱▱▱▱▱▱▱  --");
+    };
+    let used = 100u8.saturating_sub(percent);
+    let bar = quota_bar(percent);
+    let reset = window
+        .refresh_at
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("--");
+    format!(
+        "{label}  {bar}  {} {used}%  {} {percent}%  {} {reset}",
+        labels.used, labels.left, labels.resets
+    )
+}
+
+fn quota_bar(percent: u8) -> String {
+    let filled = ((usize::from(percent) + 5) / 10).clamp(0, 10);
     let empty = 10usize.saturating_sub(filled);
-    let bar = format!("[{}{}]", "=".repeat(filled), "-".repeat(empty));
-    format!("{label}: {bar} {percent}%")
+    let block = if percent > 60 {
+        "🟩"
+    } else if percent >= 20 {
+        "🟧"
+    } else {
+        "🟥"
+    };
+    format!("{}{}", block.repeat(filled), "▱".repeat(empty))
 }
 
 fn handle_menu_event(app: &AppHandle, id: &str) {

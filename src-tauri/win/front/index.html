@@ -159,37 +159,114 @@
                 </section>
               </section>
 
-              <section class="page mac-tool-page" id="page-skills" data-page="skills">
+              <section class="page mac-tool-page codex-tool-page" id="page-skills" data-page="skills">
                 <header class="mac-detail-header">
                   <a class="mac-detail-back" href="#profiles" aria-label="Back" title="Back">
                     <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/arrow-left.svg" alt="" aria-hidden="true" />
                   </a>
                   <h2 class="mac-detail-title" data-i18n-key="navSkills">Skills</h2>
                 </header>
-                <article class="mac-placeholder-card">
-                  <span class="mac-placeholder-icon mac-placeholder-icon--skills" aria-hidden="true"></span>
-                  <div>
-                    <p class="page-kicker" data-i18n-key="navSkills">Skills</p>
-                    <h2 class="section-title" data-i18n-key="skillsTitle">Codex Skills</h2>
-                    <p class="page-copy" data-i18n-key="skillsSubtitle">Codex-related skills will be surfaced here after local skill discovery is wired in.</p>
-                  </div>
+                <article class="tool-manager-panel">
+                  <aside class="tool-sidebar">
+                    <div class="tool-sidebar-head">
+                      <div>
+                        <strong data-i18n-key="skillsTitle">Codex Skills</strong>
+                        <span id="skills-count" class="session-count-pill">0</span>
+                      </div>
+                      <div class="tool-toolbar">
+                        <button id="skills-refresh-button" class="session-icon-button" type="button" title="Refresh">
+                          <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/refresh-cw.svg" alt="" aria-hidden="true" />
+                        </button>
+                        <button id="skills-open-folder-button" class="session-icon-button" type="button" title="Open folder">
+                          <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/book-open.svg" alt="" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                    <div id="skills-list" class="tool-list"></div>
+                  </aside>
+                  <section class="tool-editor">
+                    <div class="tool-editor-head">
+                      <div>
+                        <p class="page-kicker" data-i18n-key="navSkills">Skills</p>
+                        <h3 id="skill-editor-heading" data-i18n-key="skillsTitle">Codex Skills</h3>
+                      </div>
+                      <div class="tool-editor-actions">
+                        <button id="skill-new-button" class="ghost-button" type="button">New</button>
+                        <button id="skill-delete-button" class="ghost-button danger-button" type="button">Delete</button>
+                        <button id="skill-save-button" class="primary-button" type="button">Save</button>
+                      </div>
+                    </div>
+                    <div class="tool-form-grid">
+                      <label>
+                        <span>Name</span>
+                        <input id="skill-name-input" class="settings-input" type="text" placeholder="Code review" />
+                      </label>
+                      <label>
+                        <span>Description</span>
+                        <input id="skill-description-input" class="settings-input" type="text" placeholder="When this skill should be used" />
+                      </label>
+                    </div>
+                    <label class="tool-editor-content">
+                      <span>SKILL.md</span>
+                      <textarea id="skill-content-input" spellcheck="false" placeholder="# Skill name&#10;&#10;Use this skill when..."></textarea>
+                    </label>
+                  </section>
                 </article>
               </section>
 
-              <section class="page mac-tool-page" id="page-prompts" data-page="prompts">
+              <section class="page mac-tool-page codex-tool-page" id="page-prompts" data-page="prompts">
                 <header class="mac-detail-header">
                   <a class="mac-detail-back" href="#profiles" aria-label="Back" title="Back">
                     <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/arrow-left.svg" alt="" aria-hidden="true" />
                   </a>
                   <h2 class="mac-detail-title" data-i18n-key="navPrompts">Prompts</h2>
                 </header>
-                <article class="mac-placeholder-card">
-                  <span class="mac-placeholder-icon mac-placeholder-icon--prompts" aria-hidden="true"></span>
-                  <div>
-                    <p class="page-kicker" data-i18n-key="navPrompts">Prompts</p>
-                    <h2 class="section-title" data-i18n-key="promptsTitle">Prompt Library</h2>
-                    <p class="page-copy" data-i18n-key="promptsSubtitle">Codex prompt templates and account-safe shortcuts will live here.</p>
-                  </div>
+                <article class="tool-manager-panel">
+                  <aside class="tool-sidebar">
+                    <div class="tool-sidebar-head">
+                      <div>
+                        <strong data-i18n-key="promptsTitle">Prompt Library</strong>
+                        <span id="prompts-count" class="session-count-pill">0</span>
+                      </div>
+                      <div class="tool-toolbar">
+                        <button id="prompts-import-button" class="session-icon-button" type="button" title="Import AGENTS">
+                          <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/copy.svg" alt="" aria-hidden="true" />
+                        </button>
+                        <button id="prompts-refresh-button" class="session-icon-button" type="button" title="Refresh">
+                          <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/refresh-cw.svg" alt="" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                    <div id="prompts-list" class="tool-list"></div>
+                  </aside>
+                  <section class="tool-editor">
+                    <div class="tool-editor-head">
+                      <div>
+                        <p class="page-kicker" data-i18n-key="navPrompts">Prompts</p>
+                        <h3 id="prompt-editor-heading" data-i18n-key="promptsTitle">Prompt Library</h3>
+                      </div>
+                      <div class="tool-editor-actions">
+                        <button id="prompt-new-button" class="ghost-button" type="button">New</button>
+                        <button id="prompt-enable-button" class="ghost-button" type="button">Enable</button>
+                        <button id="prompt-delete-button" class="ghost-button danger-button" type="button">Delete</button>
+                        <button id="prompt-save-button" class="primary-button" type="button">Save</button>
+                      </div>
+                    </div>
+                    <div class="tool-form-grid">
+                      <label>
+                        <span>Name</span>
+                        <input id="prompt-name-input" class="settings-input" type="text" placeholder="Default AGENTS" />
+                      </label>
+                      <label>
+                        <span>Description</span>
+                        <input id="prompt-description-input" class="settings-input" type="text" placeholder="Prompt usage note" />
+                      </label>
+                    </div>
+                    <label class="tool-editor-content">
+                      <span>Prompt markdown</span>
+                      <textarea id="prompt-content-input" spellcheck="false" placeholder="# Prompt name&#10;&#10;Instructions..."></textarea>
+                    </label>
+                  </section>
                 </article>
               </section>
 

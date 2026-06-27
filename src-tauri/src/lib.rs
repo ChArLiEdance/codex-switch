@@ -72,6 +72,15 @@ pub fn run() {
             commands::actions::hide_main_window,
             commands::actions::quit_app,
             commands::switch::switch_profile,
+            commands::tools::list_codex_skills,
+            commands::tools::save_codex_skill,
+            commands::tools::delete_codex_skill,
+            commands::tools::open_codex_skills_folder,
+            commands::tools::list_codex_prompts,
+            commands::tools::save_codex_prompt,
+            commands::tools::enable_codex_prompt,
+            commands::tools::delete_codex_prompt,
+            commands::tools::import_codex_prompt_from_agents,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

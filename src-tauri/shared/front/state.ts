@@ -1,6 +1,8 @@
 import type {
   CodexSessionMessage,
   CodexSessionMeta,
+  CodexPromptEntry,
+  CodexSkillEntry,
   CloseBehavior,
   ProfilesSnapshotResponse,
   QuotaSummary,
@@ -61,4 +63,10 @@ export const state = {
   expandedSessionMessages: [] as string[],
   settingsUsageProfile: null as string | null,
   usageSettingsByProfile: {} as Record<string, UsageQuerySettings>,
+  codexSkills: [] as CodexSkillEntry[],
+  selectedCodexSkillId: null as string | null,
+  codexSkillsLoading: false,
+  codexPrompts: [] as CodexPromptEntry[],
+  selectedCodexPromptId: null as string | null,
+  codexPromptsLoading: false,
 };

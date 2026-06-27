@@ -1,6 +1,8 @@
 import type {
   CodexSessionMessage,
   CodexSessionMeta,
+  CodexPromptEntry,
+  CodexSkillEntry,
   CurrentCard,
   DashboardViewModel,
   PagingInfo,
@@ -121,6 +123,29 @@ export const elements = {
   historyDeleteButton: document.getElementById("history-delete-button") as HTMLButtonElement | null,
   historyMessageCount: document.getElementById("history-message-count"),
   historyMessageList: document.getElementById("history-message-list"),
+  skillsCount: document.getElementById("skills-count"),
+  skillsList: document.getElementById("skills-list"),
+  skillsRefreshButton: document.getElementById("skills-refresh-button") as HTMLButtonElement | null,
+  skillsOpenFolderButton: document.getElementById("skills-open-folder-button") as HTMLButtonElement | null,
+  skillEditorHeading: document.getElementById("skill-editor-heading"),
+  skillNewButton: document.getElementById("skill-new-button") as HTMLButtonElement | null,
+  skillDeleteButton: document.getElementById("skill-delete-button") as HTMLButtonElement | null,
+  skillSaveButton: document.getElementById("skill-save-button") as HTMLButtonElement | null,
+  skillNameInput: document.getElementById("skill-name-input") as HTMLInputElement | null,
+  skillDescriptionInput: document.getElementById("skill-description-input") as HTMLInputElement | null,
+  skillContentInput: document.getElementById("skill-content-input") as HTMLTextAreaElement | null,
+  promptsCount: document.getElementById("prompts-count"),
+  promptsList: document.getElementById("prompts-list"),
+  promptsRefreshButton: document.getElementById("prompts-refresh-button") as HTMLButtonElement | null,
+  promptsImportButton: document.getElementById("prompts-import-button") as HTMLButtonElement | null,
+  promptEditorHeading: document.getElementById("prompt-editor-heading"),
+  promptNewButton: document.getElementById("prompt-new-button") as HTMLButtonElement | null,
+  promptEnableButton: document.getElementById("prompt-enable-button") as HTMLButtonElement | null,
+  promptDeleteButton: document.getElementById("prompt-delete-button") as HTMLButtonElement | null,
+  promptSaveButton: document.getElementById("prompt-save-button") as HTMLButtonElement | null,
+  promptNameInput: document.getElementById("prompt-name-input") as HTMLInputElement | null,
+  promptDescriptionInput: document.getElementById("prompt-description-input") as HTMLInputElement | null,
+  promptContentInput: document.getElementById("prompt-content-input") as HTMLTextAreaElement | null,
   settingsShowAccountDetailToggle: document.getElementById("settings-show-account-detail-toggle"),
   settingsRestartCliToggle: document.getElementById("settings-restart-cli-toggle") as HTMLInputElement | null,
   settingsRestartVscodeToggle: document.getElementById("settings-restart-vscode-toggle") as HTMLInputElement | null,
@@ -1236,6 +1261,136 @@ export function renderSessionManager(): void {
           : "",
       ].join("")
       : `<div class="session-empty">${escapeHtml(t(state.locale, "sessionNoMessages"))}</div>`;
+  }
+}
+
+function toolUpdatedAt(value: number | null | undefined): string {
+  if (!value) {
+    return "--";
+  }
+  const ms = value > 10_000_000_000 ? value : value * 1000;
+  return new Date(ms).toLocaleString(state.locale === "zh-CN" ? "zh-CN" : "en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function firstParagraph(content: string): string {
+  return content
+    .split(/\n{2,}/)
+    .map((value) => value.trim())
+    .find((value) => value && !value.startsWith("#"))
+    ?.slice(0, 150) ?? "";
+}
+
+function selectedSkill(): CodexSkillEntry | null {
+  return state.codexSkills.find((skill) => skill.id === state.selectedCodexSkillId) ?? null;
+}
+
+function selectedPrompt(): CodexPromptEntry | null {
+  return state.codexPrompts.find((prompt) => prompt.id === state.selectedCodexPromptId) ?? null;
+}
+
+function renderToolEmpty(label: string): string {
+  return `<div class="tool-empty">${escapeHtml(label)}</div>`;
+}
+
+export function renderCodexSkills(): void {
+  if (!elements.skillsList) {
+    return;
+  }
+  if (elements.skillsCount) {
+    elements.skillsCount.textContent = String(state.codexSkills.length);
+  }
+
+  if (state.codexSkillsLoading) {
+    elements.skillsList.innerHTML = renderToolEmpty(t(state.locale, "loading"));
+  } else if (state.codexSkills.length === 0) {
+    elements.skillsList.innerHTML = renderToolEmpty(t(state.locale, "skillsEmpty"));
+  } else {
+    elements.skillsList.innerHTML = state.codexSkills.map((skill) => {
+      const active = skill.id === state.selectedCodexSkillId;
+      return `
+        <button class="tool-list-item${active ? " is-active" : ""}" type="button" data-skill-id="${escapeHtml(skill.id)}">
+          <span class="tool-list-icon">${macIcon("wrench", "cc-icon cc-icon--inline")}</span>
+          <span class="tool-list-copy">
+            <strong>${escapeHtml(skill.name)}</strong>
+            <small>${escapeHtml(skill.description || firstParagraph(skill.content) || skill.id)}</small>
+            <em>${escapeHtml(toolUpdatedAt(skill.updated_at))}</em>
+          </span>
+          <span class="session-list-chevron">›</span>
+        </button>
+      `;
+    }).join("");
+  }
+
+  const skill = selectedSkill();
+  if (elements.skillEditorHeading) {
+    elements.skillEditorHeading.textContent = skill?.name || t(state.locale, "skillNewTitle");
+  }
+  if (elements.skillNameInput && elements.skillNameInput.value !== (skill?.name ?? "")) {
+    elements.skillNameInput.value = skill?.name ?? "";
+  }
+  if (elements.skillDescriptionInput && elements.skillDescriptionInput.value !== (skill?.description ?? "")) {
+    elements.skillDescriptionInput.value = skill?.description ?? "";
+  }
+  if (elements.skillContentInput && elements.skillContentInput.value !== (skill?.content ?? "")) {
+    elements.skillContentInput.value = skill?.content ?? "";
+  }
+  if (elements.skillDeleteButton) {
+    elements.skillDeleteButton.disabled = !skill;
+  }
+}
+
+export function renderCodexPrompts(): void {
+  if (!elements.promptsList) {
+    return;
+  }
+  if (elements.promptsCount) {
+    elements.promptsCount.textContent = String(state.codexPrompts.length);
+  }
+
+  if (state.codexPromptsLoading) {
+    elements.promptsList.innerHTML = renderToolEmpty(t(state.locale, "loading"));
+  } else if (state.codexPrompts.length === 0) {
+    elements.promptsList.innerHTML = renderToolEmpty(t(state.locale, "promptsEmpty"));
+  } else {
+    elements.promptsList.innerHTML = state.codexPrompts.map((prompt) => {
+      const active = prompt.id === state.selectedCodexPromptId;
+      return `
+        <button class="tool-list-item${active ? " is-active" : ""}" type="button" data-prompt-id="${escapeHtml(prompt.id)}">
+          <span class="tool-list-icon">${macIcon("book-open", "cc-icon cc-icon--inline")}</span>
+          <span class="tool-list-copy">
+            <strong>${escapeHtml(prompt.name)}${prompt.enabled ? ` <span class="tool-enabled-badge">${escapeHtml(t(state.locale, "promptEnabled"))}</span>` : ""}</strong>
+            <small>${escapeHtml(prompt.description || firstParagraph(prompt.content) || prompt.id)}</small>
+            <em>${escapeHtml(toolUpdatedAt(prompt.updated_at ?? prompt.created_at))}</em>
+          </span>
+          <span class="session-list-chevron">›</span>
+        </button>
+      `;
+    }).join("");
+  }
+
+  const prompt = selectedPrompt();
+  if (elements.promptEditorHeading) {
+    elements.promptEditorHeading.textContent = prompt?.name || t(state.locale, "promptNewTitle");
+  }
+  if (elements.promptNameInput && elements.promptNameInput.value !== (prompt?.name ?? "")) {
+    elements.promptNameInput.value = prompt?.name ?? "";
+  }
+  if (elements.promptDescriptionInput && elements.promptDescriptionInput.value !== (prompt?.description ?? "")) {
+    elements.promptDescriptionInput.value = prompt?.description ?? "";
+  }
+  if (elements.promptContentInput && elements.promptContentInput.value !== (prompt?.content ?? "")) {
+    elements.promptContentInput.value = prompt?.content ?? "";
+  }
+  if (elements.promptEnableButton) {
+    elements.promptEnableButton.disabled = !prompt || prompt.enabled;
+  }
+  if (elements.promptDeleteButton) {
+    elements.promptDeleteButton.disabled = !prompt || prompt.enabled;
   }
 }
 

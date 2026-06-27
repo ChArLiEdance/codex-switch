@@ -245,6 +245,55 @@ pub struct ActionResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexSkillEntry {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub content: String,
+    pub path: String,
+    pub updated_at: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveCodexSkillPayload {
+    pub id: Option<String>,
+    pub name: String,
+    pub description: Option<String>,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexSkillIdPayload {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexPromptEntry {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub content: String,
+    pub enabled: bool,
+    pub path: String,
+    pub created_at: Option<u64>,
+    pub updated_at: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaveCodexPromptPayload {
+    pub id: Option<String>,
+    pub name: String,
+    pub description: Option<String>,
+    pub content: String,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexPromptIdPayload {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CodexCliStatus {
     /// Currently resolved real-codex path, or None when nothing was
     /// found. Front-end uses this to decide whether the "已定位"

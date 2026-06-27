@@ -40,8 +40,15 @@ import {
   getUsageQuerySettings,
   getUsageStats,
   hideMainWindow,
+  deleteCodexPrompt,
+  deleteCodexSkill,
+  enableCodexPrompt,
+  importCodexPromptFromAgents,
   loginCurrentProfile,
+  listCodexPrompts,
+  listCodexSkills,
   listCodexSessions,
+  openCodexSkillsFolder,
   openCodex,
   openContact,
   openReleases,
@@ -55,6 +62,8 @@ import {
   redetectCodexCliPath,
   renameProfile,
   saveUsageQuerySettings,
+  saveCodexPrompt,
+  saveCodexSkill,
   setCodexCliPath,
   switchProfile,
   syncTrayState,
@@ -76,6 +85,8 @@ import {
   applyLocale,
   elements,
   renderCurrentCard,
+  renderCodexPrompts,
+  renderCodexSkills,
   renderPaging,
   renderProfiles,
   renderShellOverview,
@@ -485,6 +496,146 @@ async function selectCodexSession(sourcePath: string): Promise<void> {
   state.expandedSessionMessages = [];
   renderSessionManager();
   await refreshSelectedCodexSessionMessages(true);
+}
+
+function ensureSkillSelection(): void {
+  if (!state.codexSkills.some((skill) => skill.id === state.selectedCodexSkillId)) {
+    state.selectedCodexSkillId = state.codexSkills[0]?.id ?? null;
+  }
+}
+
+function ensurePromptSelection(): void {
+  if (!state.codexPrompts.some((prompt) => prompt.id === state.selectedCodexPromptId)) {
+    state.selectedCodexPromptId = state.codexPrompts[0]?.id ?? null;
+  }
+}
+
+async function refreshCodexSkills(showError = false): Promise<void> {
+  state.codexSkillsLoading = true;
+  renderCodexSkills();
+  try {
+    state.codexSkills = await listCodexSkills();
+    ensureSkillSelection();
+  } catch (error) {
+    state.codexSkills = [];
+    state.selectedCodexSkillId = null;
+    if (showError) {
+      showToast(error instanceof Error ? error.message : t(state.locale, "skillsEmpty"), true);
+    }
+  } finally {
+    state.codexSkillsLoading = false;
+    renderCodexSkills();
+  }
+}
+
+async function refreshCodexPrompts(showError = false): Promise<void> {
+  state.codexPromptsLoading = true;
+  renderCodexPrompts();
+  try {
+    state.codexPrompts = await listCodexPrompts();
+    ensurePromptSelection();
+  } catch (error) {
+    state.codexPrompts = [];
+    state.selectedCodexPromptId = null;
+    if (showError) {
+      showToast(error instanceof Error ? error.message : t(state.locale, "promptsEmpty"), true);
+    }
+  } finally {
+    state.codexPromptsLoading = false;
+    renderCodexPrompts();
+  }
+}
+
+function startNewSkill(): void {
+  state.selectedCodexSkillId = null;
+  if (elements.skillNameInput) elements.skillNameInput.value = "";
+  if (elements.skillDescriptionInput) elements.skillDescriptionInput.value = "";
+  if (elements.skillContentInput) elements.skillContentInput.value = "";
+  renderCodexSkills();
+  elements.skillNameInput?.focus();
+}
+
+function startNewPrompt(): void {
+  state.selectedCodexPromptId = null;
+  if (elements.promptNameInput) elements.promptNameInput.value = "";
+  if (elements.promptDescriptionInput) elements.promptDescriptionInput.value = "";
+  if (elements.promptContentInput) elements.promptContentInput.value = "";
+  renderCodexPrompts();
+  elements.promptNameInput?.focus();
+}
+
+async function saveSelectedSkill(): Promise<void> {
+  const name = elements.skillNameInput?.value.trim() ?? "";
+  if (!name) {
+    showToast(t(state.locale, "toolNameRequired"), true);
+    return;
+  }
+  const saved = await saveCodexSkill({
+    id: state.selectedCodexSkillId,
+    name,
+    description: elements.skillDescriptionInput?.value.trim() || null,
+    content: elements.skillContentInput?.value ?? "",
+  });
+  state.selectedCodexSkillId = saved.id;
+  showToast(t(state.locale, "savedSkill"));
+  await refreshCodexSkills(true);
+}
+
+async function deleteSelectedSkill(): Promise<void> {
+  const id = state.selectedCodexSkillId;
+  if (!id || !confirm(t(state.locale, "toolDeleteConfirm"))) {
+    return;
+  }
+  await deleteCodexSkill(id);
+  state.selectedCodexSkillId = null;
+  showToast(t(state.locale, "deletedSkill"));
+  await refreshCodexSkills(true);
+}
+
+async function saveSelectedPrompt(): Promise<void> {
+  const name = elements.promptNameInput?.value.trim() ?? "";
+  if (!name) {
+    showToast(t(state.locale, "toolNameRequired"), true);
+    return;
+  }
+  const existing = state.codexPrompts.find((prompt) => prompt.id === state.selectedCodexPromptId);
+  const saved = await saveCodexPrompt({
+    id: state.selectedCodexPromptId,
+    name,
+    description: elements.promptDescriptionInput?.value.trim() || null,
+    content: elements.promptContentInput?.value ?? "",
+    enabled: Boolean(existing?.enabled),
+  });
+  state.selectedCodexPromptId = saved.id;
+  showToast(t(state.locale, "savedPrompt"));
+  await refreshCodexPrompts(true);
+}
+
+async function enableSelectedPrompt(): Promise<void> {
+  const id = state.selectedCodexPromptId;
+  if (!id) {
+    return;
+  }
+  const name = elements.promptNameInput?.value.trim() ?? "";
+  const content = elements.promptContentInput?.value ?? "";
+  const existing = state.codexPrompts.find((prompt) => prompt.id === id);
+  if (existing && (name !== existing.name || content !== existing.content || (elements.promptDescriptionInput?.value.trim() ?? "") !== (existing.description ?? ""))) {
+    await saveSelectedPrompt();
+  }
+  await enableCodexPrompt(state.selectedCodexPromptId ?? id);
+  showToast(t(state.locale, "enabledPrompt"));
+  await refreshCodexPrompts(true);
+}
+
+async function deleteSelectedPrompt(): Promise<void> {
+  const id = state.selectedCodexPromptId;
+  if (!id || !confirm(t(state.locale, "toolDeleteConfirm"))) {
+    return;
+  }
+  await deleteCodexPrompt(id);
+  state.selectedCodexPromptId = null;
+  showToast(t(state.locale, "deletedPrompt"));
+  await refreshCodexPrompts(true);
 }
 
 function runWithButtonBusy(button: HTMLButtonElement | null | undefined, action: () => void | Promise<void>): void {
@@ -1596,6 +1747,18 @@ export function bootstrap(): void {
           void refreshSelectedCodexSessionMessages(false);
         }
       }
+    } else if (state.route === "skills") {
+      if (state.codexSkills.length === 0) {
+        void refreshCodexSkills(false);
+      } else {
+        renderCodexSkills();
+      }
+    } else if (state.route === "prompts") {
+      if (state.codexPrompts.length === 0) {
+        void refreshCodexPrompts(false);
+      } else {
+        renderCodexPrompts();
+      }
     }
   };
 
@@ -1857,6 +2020,61 @@ export function bootstrap(): void {
   elements.historyDeleteButton?.addEventListener("click", () => {
     runWithButtonBusy(elements.historyDeleteButton, () => showToast(t(state.locale, "sessionDeleteLocalOnly"), true));
   });
+  elements.skillsList?.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("[data-skill-id]");
+    const id = button?.dataset.skillId;
+    if (!id) {
+      return;
+    }
+    state.selectedCodexSkillId = id;
+    renderCodexSkills();
+  });
+  elements.skillsRefreshButton?.addEventListener("click", () => {
+    runWithButtonBusy(elements.skillsRefreshButton, () => refreshCodexSkills(true));
+  });
+  elements.skillsOpenFolderButton?.addEventListener("click", () => {
+    runWithButtonBusy(elements.skillsOpenFolderButton, async () => {
+      await openCodexSkillsFolder();
+      showToast(t(state.locale, "openedSkillsFolder"));
+    });
+  });
+  elements.skillNewButton?.addEventListener("click", startNewSkill);
+  elements.skillSaveButton?.addEventListener("click", () => {
+    runWithButtonBusy(elements.skillSaveButton, () => saveSelectedSkill());
+  });
+  elements.skillDeleteButton?.addEventListener("click", () => {
+    runWithButtonBusy(elements.skillDeleteButton, () => deleteSelectedSkill());
+  });
+  elements.promptsList?.addEventListener("click", (event) => {
+    const button = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("[data-prompt-id]");
+    const id = button?.dataset.promptId;
+    if (!id) {
+      return;
+    }
+    state.selectedCodexPromptId = id;
+    renderCodexPrompts();
+  });
+  elements.promptsRefreshButton?.addEventListener("click", () => {
+    runWithButtonBusy(elements.promptsRefreshButton, () => refreshCodexPrompts(true));
+  });
+  elements.promptsImportButton?.addEventListener("click", () => {
+    runWithButtonBusy(elements.promptsImportButton, async () => {
+      const imported = await importCodexPromptFromAgents();
+      state.selectedCodexPromptId = imported.id;
+      showToast(t(state.locale, "importedPrompt"));
+      await refreshCodexPrompts(true);
+    });
+  });
+  elements.promptNewButton?.addEventListener("click", startNewPrompt);
+  elements.promptSaveButton?.addEventListener("click", () => {
+    runWithButtonBusy(elements.promptSaveButton, () => saveSelectedPrompt());
+  });
+  elements.promptEnableButton?.addEventListener("click", () => {
+    runWithButtonBusy(elements.promptEnableButton, () => enableSelectedPrompt());
+  });
+  elements.promptDeleteButton?.addEventListener("click", () => {
+    runWithButtonBusy(elements.promptDeleteButton, () => deleteSelectedPrompt());
+  });
   elements.localeEnButton.addEventListener("click", () => {
     setLocale("en");
   });
@@ -1877,6 +2095,11 @@ export function bootstrap(): void {
     button.addEventListener("click", () => {
       activateSettingsTab(button.dataset.settingsTab ?? "general");
     });
+  }
+  if (state.route === "skills") {
+    void refreshCodexSkills(false);
+  } else if (state.route === "prompts") {
+    void refreshCodexPrompts(false);
   }
   window.setInterval(() => {
     void refreshCurrentQuota();

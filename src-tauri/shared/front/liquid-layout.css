@@ -5114,3 +5114,239 @@ html[data-theme="jade-night"] .profile-card.mac-account-card.mac-account-card--e
     justify-content: flex-start;
   }
 }
+
+.tool-manager-panel {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.34fr) minmax(0, 1fr);
+  gap: 18px;
+  min-height: min(640px, calc(100vh - 190px));
+}
+
+.tool-sidebar,
+.tool-editor {
+  min-width: 0;
+  border: 0;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(247, 251, 255, 0.52)),
+    rgba(255, 255, 255, 0.56);
+  -webkit-backdrop-filter: saturate(180%) blur(22px);
+  backdrop-filter: saturate(180%) blur(22px);
+  box-shadow: var(--cc-hairline-surface);
+}
+
+.tool-sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tool-sidebar-head,
+.tool-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 64px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(218, 226, 238, 0.72);
+}
+
+.tool-sidebar-head strong,
+.tool-editor-head h3 {
+  color: var(--text-strong);
+  font-size: 0.98rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.tool-toolbar,
+.tool-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.tool-list-item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 16px;
+  gap: 12px;
+  align-items: start;
+  width: 100%;
+  min-height: 76px;
+  padding: 13px 12px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text-strong);
+  text-align: left;
+  cursor: default;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.tool-list-item:hover,
+.tool-list-item.is-active {
+  border-color: rgba(73, 150, 255, 0.48);
+  background: rgba(232, 242, 255, 0.72);
+}
+
+.tool-list-item:active {
+  transform: scale(0.992);
+}
+
+.tool-list-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: #10a37f;
+}
+
+.tool-list-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.tool-list-copy strong,
+.tool-list-copy small,
+.tool-list-copy em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-list-copy strong {
+  color: var(--text-strong);
+  font-size: 0.92rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.tool-list-copy small,
+.tool-list-copy em {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 650;
+}
+
+.tool-enabled-badge {
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(20, 125, 255, 0.12);
+  color: #147dff;
+  font-size: 0.68rem;
+  vertical-align: 1px;
+}
+
+.tool-editor {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tool-editor-head {
+  align-items: flex-start;
+}
+
+.tool-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 18px;
+}
+
+.tool-form-grid label,
+.tool-editor-content {
+  display: grid;
+  gap: 8px;
+  color: var(--text-strong);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.tool-editor-content {
+  flex: 1;
+  min-height: 0;
+  padding: 0 18px 18px;
+}
+
+.tool-editor-content textarea {
+  width: 100%;
+  min-height: 320px;
+  height: 100%;
+  resize: none;
+  border: 1px solid rgba(208, 218, 231, 0.86);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--text-strong);
+  font: 0.84rem/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  outline: none;
+}
+
+.tool-editor-content textarea:focus,
+.tool-form-grid .settings-input:focus {
+  border-color: rgba(20, 125, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(20, 125, 255, 0.16);
+}
+
+.tool-empty {
+  padding: 26px 18px;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  font-weight: 650;
+  text-align: center;
+}
+
+html[data-theme="jade-night"] .tool-sidebar,
+html[data-theme="jade-night"] .tool-editor {
+  background:
+    linear-gradient(135deg, rgba(35, 41, 52, 0.88), rgba(24, 28, 37, 0.74)),
+    rgba(24, 27, 35, 0.68);
+  box-shadow: var(--cc-hairline-surface) !important;
+}
+
+html[data-theme="jade-night"] .tool-sidebar-head,
+html[data-theme="jade-night"] .tool-editor-head {
+  border-bottom-color: rgba(67, 75, 91, 0.68);
+}
+
+html[data-theme="jade-night"] .tool-list-item:hover,
+html[data-theme="jade-night"] .tool-list-item.is-active {
+  border-color: rgba(66, 133, 244, 0.74);
+  background: rgba(34, 44, 62, 0.82);
+}
+
+html[data-theme="jade-night"] .tool-editor-content textarea {
+  border-color: rgba(71, 79, 96, 0.82);
+  background: rgba(14, 18, 27, 0.56);
+}
+
+@media (max-width: 860px) {
+  .tool-manager-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-sidebar {
+    max-height: 260px;
+  }
+
+  .tool-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
