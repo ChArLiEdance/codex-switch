@@ -142,89 +142,70 @@ fn build_menu(
 ) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
     let label = labels(&payload.locale);
 
-    #[cfg(target_os = "windows")]
-    {
-        let current = payload
-            .current_title
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or(label.no_account);
-        return MenuBuilder::new(app)
-            .text(ID_SHOW, label.show)
-            .text(ID_CURRENT, format!("{}: {current}", label.current))
-            .separator()
-            .text(ID_QUIT, label.quit)
-            .build();
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    {
-        let current = payload
-            .current_title
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or(label.no_account);
-        let quota = payload.current_quota.as_ref();
-        let five_hour = quota
-            .map(|summary| quota_line(label.five_hour, &summary.five_hour, &label))
-            .unwrap_or_else(|| format!("{}: --", label.five_hour));
-        let weekly = quota
-            .map(|summary| quota_line(label.weekly, &summary.weekly, &label))
-            .unwrap_or_else(|| format!("{}: --", label.weekly));
-        let refresh = quota
-            .and_then(|summary| {
-                summary
-                    .five_hour
-                    .refresh_at
-                    .clone()
-                    .or_else(|| summary.weekly.refresh_at.clone())
-            })
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or_else(|| "--".to_string());
-
-        let mut switch_menu =
-            SubmenuBuilder::with_id(app, "tray_switch_menu", label.switch_accounts);
-        for profile in &payload.profiles {
-            let profile_label = if profile.nickname.trim().is_empty() {
-                profile.display_title.as_str()
-            } else {
-                profile.nickname.as_str()
-            };
-            let five = profile
-                .quota
+    let current = payload
+        .current_title
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or(label.no_account);
+    let quota = payload.current_quota.as_ref();
+    let five_hour = quota
+        .map(|summary| quota_line(label.five_hour, &summary.five_hour, &label))
+        .unwrap_or_else(|| format!("{}: --", label.five_hour));
+    let weekly = quota
+        .map(|summary| quota_line(label.weekly, &summary.weekly, &label))
+        .unwrap_or_else(|| format!("{}: --", label.weekly));
+    let refresh = quota
+        .and_then(|summary| {
+            summary
                 .five_hour
-                .remaining_percent
-                .map(|value| format!("{value}%"))
-                .unwrap_or_else(|| "--".to_string());
-            let weekly = profile
-                .quota
-                .weekly
-                .remaining_percent
-                .map(|value| format!("{value}%"))
-                .unwrap_or_else(|| "--".to_string());
-            switch_menu = switch_menu.text(
-                format!("{ID_SWITCH_PREFIX}{}", profile.folder_name),
-                format!("{profile_label}  5h {five} / 7d {weekly}"),
-            );
-        }
-        let switch_menu = switch_menu.build()?;
+                .refresh_at
+                .clone()
+                .or_else(|| summary.weekly.refresh_at.clone())
+        })
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "--".to_string());
 
-        MenuBuilder::new(app)
-            .text(ID_SHOW, label.show)
-            .separator()
-            .text(ID_CURRENT, format!("{}: {current}", label.current))
-            .text(ID_FIVE_HOUR, five_hour)
-            .text(ID_WEEKLY, weekly)
-            .text(ID_REFRESH, format!("{}: {refresh}", label.refresh))
-            .separator()
-            .item(&switch_menu)
-            .separator()
-            .text(ID_SETTINGS, label.settings)
-            .text(ID_ABOUT, label.about)
-            .separator()
-            .text(ID_QUIT, label.quit)
-            .build()
+    let mut switch_menu = SubmenuBuilder::with_id(app, "tray_switch_menu", label.switch_accounts);
+    for profile in &payload.profiles {
+        let profile_label = if profile.nickname.trim().is_empty() {
+            profile.display_title.as_str()
+        } else {
+            profile.nickname.as_str()
+        };
+        let five = profile
+            .quota
+            .five_hour
+            .remaining_percent
+            .map(|value| format!("{value}%"))
+            .unwrap_or_else(|| "--".to_string());
+        let weekly = profile
+            .quota
+            .weekly
+            .remaining_percent
+            .map(|value| format!("{value}%"))
+            .unwrap_or_else(|| "--".to_string());
+        switch_menu = switch_menu.text(
+            format!("{ID_SWITCH_PREFIX}{}", profile.folder_name),
+            format!("{profile_label}  5h {five} / 7d {weekly}"),
+        );
     }
+    let switch_menu = switch_menu.build()?;
+
+    MenuBuilder::new(app)
+        .text(ID_SHOW, label.show)
+        .separator()
+        .text(ID_CURRENT, format!("{}: {current}", label.current))
+        .text(ID_FIVE_HOUR, five_hour)
+        .text(ID_WEEKLY, weekly)
+        .text(ID_REFRESH, format!("{}: {refresh}", label.refresh))
+        .separator()
+        .item(&switch_menu)
+        .separator()
+        .text(ID_SETTINGS, label.settings)
+        .text(ID_ABOUT, label.about)
+        .separator()
+        .text(ID_QUIT, label.quit)
+        .build()
 }
 
 fn quota_line(label: &str, window: &QuotaWindow, labels: &TrayLabels) -> String {
