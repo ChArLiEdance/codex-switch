@@ -17,7 +17,7 @@
 
 **Codex Switch** is a local desktop app for managing multiple OpenAI Codex login profiles on one computer. It lets you view the active account, switch between saved local profiles, refresh quota information, and keep each account's local Codex state separated.
 
-Version `1.0.0` focuses on the account switching, login, quota, settings, and usage/history foundation. The **Skills** and **Prompts** pages are visible in the interface, but these two features are not finished yet and will be completed in a later release.
+Version `1.1.0` focuses on the account switching, login, quota, settings, and usage/history foundation. The **Skills** and **Prompts** pages are visible in the interface, but these two features are not finished yet and will be completed in a later release.
 
 > This is not an official OpenAI project. It only manages local, already-authorized Codex login state. It does not collect passwords, bypass MFA, scrape browser cookies, or provide account sharing.
 
@@ -33,11 +33,11 @@ Version `1.0.0` focuses on the account switching, login, quota, settings, and us
 
 ## Installation
 
-Download installers from the [GitHub Releases](https://github.com/ChArLiEdance/codex-switch/releases) page. The current `1.0.0` release provides macOS Apple Silicon and Windows x64 installers.
+Download installers from the [GitHub Releases](https://github.com/ChArLiEdance/codex-switch/releases) page. The current `1.1.0` release provides macOS Apple Silicon and Windows x64 installers.
 
 ### macOS
 
-1. Download [`codex_switch_1.0.0_aarch64.dmg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_aarch64.dmg).
+1. Download [`codex_switch_1.1.0_aarch64.dmg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.0/codex_switch_1.1.0_aarch64.dmg).
 2. Open the `.dmg`.
 3. Drag `codex_switch.app` into `Applications`.
 4. Launch Codex Switch.
@@ -45,11 +45,11 @@ Download installers from the [GitHub Releases](https://github.com/ChArLiEdance/c
 You can also download it from Terminal:
 
 ```bash
-curl -L -o ~/Downloads/codex_switch_1.0.0_aarch64.dmg \
-  https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_aarch64.dmg
+curl -L -o ~/Downloads/codex_switch_1.1.0_aarch64.dmg \
+  https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.0/codex_switch_1.1.0_aarch64.dmg
 ```
 
-If you prefer a package installer, download [`codex_switch_1.0.0_aarch64.pkg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_aarch64.pkg) and open it.
+If you prefer a package installer, download [`codex_switch_1.1.0_aarch64.pkg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.0/codex_switch_1.1.0_aarch64.pkg) and open it.
 
 macOS x64 is not included in this release.
 
@@ -57,7 +57,7 @@ The current local package is unsigned or ad-hoc signed depending on the build en
 
 ### Windows
 
-1. Download [`codex_switch_1.0.0_x64-setup.exe`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_x64-setup.exe).
+1. Download [`codex_switch_1.1.0_x64-setup.exe`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.0/codex_switch_1.1.0_x64-setup.exe).
 2. Run the installer.
 3. Open Codex Switch from the Start menu or desktop shortcut.
 
@@ -65,8 +65,8 @@ You can also download it from PowerShell:
 
 ```powershell
 Invoke-WebRequest `
-  -Uri "https://github.com/ChArLiEdance/codex-switch/releases/download/v1.0.0/codex_switch_1.0.0_x64-setup.exe" `
-  -OutFile "$env:USERPROFILE\Downloads\codex_switch_1.0.0_x64-setup.exe"
+  -Uri "https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.0/codex_switch_1.1.0_x64-setup.exe" `
+  -OutFile "$env:USERPROFILE\Downloads\codex_switch_1.1.0_x64-setup.exe"
 ```
 
 The Windows build uses the Tauri NSIS installer.
@@ -165,15 +165,15 @@ npm run tauri:build:windows
 
 Installers should be uploaded as GitHub Release assets. They should not be committed into the source repository and do not belong inside `package.json`.
 
-Current release assets for `1.0.0`:
+Current release assets for `1.1.0`:
 
 ```text
-codex_switch_1.0.0_aarch64.dmg
-codex_switch_1.0.0_aarch64.pkg
-codex_switch_1.0.0_x64-setup.exe
+codex_switch_1.1.0_aarch64.dmg
+codex_switch_1.1.0_aarch64.pkg
+codex_switch_1.1.0_x64-setup.exe
 ```
 
-The repository also has GitHub Actions configured to build release artifacts from version tags. The `1.0.0` public release intentionally does not include macOS x64.
+The repository also has GitHub Actions configured to build release artifacts from version tags. The `1.1.0` public release intentionally does not include macOS x64.
 
 ## Privacy And Safety
 
