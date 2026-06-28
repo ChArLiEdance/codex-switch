@@ -859,6 +859,33 @@
       </form>
     </dialog>
 
+    <dialog id="restart-choice-dialog" class="dialog close-choice-dialog">
+      <div class="dialog-form">
+        <div class="dialog-copy">
+          <h3 data-i18n-key="restartChoiceTitle">Restart apps after switching?</h3>
+          <p data-i18n-key="restartChoiceCopy">Choose which Codex-related apps should be restarted after this account switch.</p>
+        </div>
+        <div class="settings-check-row">
+          <label class="settings-check">
+            <input id="restart-choice-cli-toggle" type="checkbox" checked />
+            <span data-i18n-key="settingsRestartCli">CLI</span>
+          </label>
+          <label class="settings-check">
+            <input id="restart-choice-vscode-toggle" type="checkbox" checked />
+            <span data-i18n-key="settingsRestartVscode">VS Code</span>
+          </label>
+          <label class="settings-check">
+            <input id="restart-choice-desktop-toggle" type="checkbox" checked />
+            <span data-i18n-key="settingsRestartDesktop">Codex Desktop</span>
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button id="restart-choice-cancel-button" class="ghost-button" type="button" data-i18n-key="cancel">Cancel</button>
+          <button id="restart-choice-confirm-button" class="primary-button" type="button" data-i18n-key="restartChoiceConfirm">Continue switch</button>
+        </div>
+      </div>
+    </dialog>
+
     <dialog id="close-choice-dialog" class="dialog close-choice-dialog">
       <div class="dialog-form">
         <div class="dialog-copy">

@@ -7,6 +7,7 @@ import type {
 
 const ACCOUNT_DETAIL_STORAGE_KEY = "codex-switch-show-account-detail";
 const SWITCH_RESTART_TARGETS_STORAGE_KEY = "codex-switch-restart-targets";
+const SWITCH_RESTART_TARGETS_CONFIRMED_STORAGE_KEY = "codex-switch-restart-targets-confirmed";
 const CLOSE_BEHAVIOR_STORAGE_KEY = "codex-switch-close-behavior";
 const USAGE_STATS_RANGE_STORAGE_KEY = "codex-switch-usage-stats-range";
 const USAGE_STATS_REFRESH_SECONDS_STORAGE_KEY = "codex-switch-usage-stats-refresh-seconds";
@@ -60,6 +61,20 @@ export function resolveInitialSwitchRestartTargets(): SwitchRestartTargets {
 
 export function persistSwitchRestartTargets(targets: SwitchRestartTargets): void {
   globalThis.localStorage?.setItem(SWITCH_RESTART_TARGETS_STORAGE_KEY, JSON.stringify(targets));
+}
+
+export function resolveInitialSwitchRestartTargetsConfirmed(): boolean {
+  if (globalThis.localStorage?.getItem(SWITCH_RESTART_TARGETS_CONFIRMED_STORAGE_KEY) === "true") {
+    return true;
+  }
+
+  // If the user had already changed this setting before the confirmation
+  // dialog existed, treat that saved choice as intentional.
+  return globalThis.localStorage?.getItem(SWITCH_RESTART_TARGETS_STORAGE_KEY) !== null;
+}
+
+export function persistSwitchRestartTargetsConfirmed(confirmed: boolean): void {
+  globalThis.localStorage?.setItem(SWITCH_RESTART_TARGETS_CONFIRMED_STORAGE_KEY, String(confirmed));
 }
 
 export function normalizeCloseBehavior(value: unknown): CloseBehavior {

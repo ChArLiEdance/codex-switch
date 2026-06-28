@@ -16,6 +16,7 @@ import {
   persistCloseBehavior,
   persistShowAccountDetail,
   persistSwitchRestartTargets,
+  persistSwitchRestartTargetsConfirmed,
   persistUsageStatsCustomRange,
   persistUsageStatsRange,
   persistUsageStatsRefreshSeconds,
@@ -76,6 +77,7 @@ import type {
   CodexCliRedetectResult,
   CodexCliStatus,
   ProfileCard,
+  SwitchRestartTargets,
   TrayProfileEntry,
   TrayStatePayload,
   UsageQuerySettings,
@@ -146,6 +148,7 @@ let pendingLoginRetry: (() => Promise<void>) | null = null;
 let cancelledLoginProfile: string | null = null;
 let usageConfigSourceProfile: string | null = null;
 let traySyncHandle: number | null = null;
+let restartChoiceResolver: ((targets: SwitchRestartTargets | null) => void) | null = null;
 
 function isRefreshPending(profile: string): boolean {
   return state.refreshActiveProfiles.includes(profile);
@@ -211,7 +214,62 @@ function setSwitchRestartTarget(target: keyof typeof state.switchRestartTargets,
     [target]: enabled,
   };
   persistSwitchRestartTargets(state.switchRestartTargets);
+  state.switchRestartTargetsConfirmed = true;
+  persistSwitchRestartTargetsConfirmed(true);
   rerenderDashboard();
+}
+
+function setSwitchRestartTargets(targets: SwitchRestartTargets): void {
+  state.switchRestartTargets = targets;
+  persistSwitchRestartTargets(targets);
+  state.switchRestartTargetsConfirmed = true;
+  persistSwitchRestartTargetsConfirmed(true);
+  rerenderDashboard();
+}
+
+function readRestartChoiceTargets(): SwitchRestartTargets {
+  return {
+    cli: elements.restartChoiceCliToggle.checked,
+    vscode: elements.restartChoiceVscodeToggle.checked,
+    codex_desktop: elements.restartChoiceDesktopToggle.checked,
+  };
+}
+
+function closeRestartChoiceDialog(targets: SwitchRestartTargets | null): void {
+  const resolver = restartChoiceResolver;
+  restartChoiceResolver = null;
+  if (elements.restartChoiceDialog.open) {
+    elements.restartChoiceDialog.close();
+  }
+  resolver?.(targets);
+}
+
+function openRestartChoiceDialog(): Promise<SwitchRestartTargets | null> {
+  if (restartChoiceResolver) {
+    return Promise.resolve(null);
+  }
+
+  elements.restartChoiceCliToggle.checked = state.switchRestartTargets.cli;
+  elements.restartChoiceVscodeToggle.checked = state.switchRestartTargets.vscode;
+  elements.restartChoiceDesktopToggle.checked = state.switchRestartTargets.codex_desktop;
+  elements.restartChoiceDialog.showModal();
+
+  return new Promise((resolve) => {
+    restartChoiceResolver = resolve;
+  });
+}
+
+async function ensureSwitchRestartTargetsConfirmed(): Promise<SwitchRestartTargets | null> {
+  if (state.switchRestartTargetsConfirmed) {
+    return state.switchRestartTargets;
+  }
+
+  const targets = await openRestartChoiceDialog();
+  if (!targets) {
+    return null;
+  }
+  setSwitchRestartTargets(targets);
+  return targets;
 }
 
 function setCloseBehavior(behavior: CloseBehavior): void {
@@ -1007,9 +1065,13 @@ async function handleSwitchProfile(profile: string): Promise<void> {
   if (state.loading || state.loginActiveProfile !== null || isRefreshPending(profile)) {
     return;
   }
+  const restartTargets = await ensureSwitchRestartTargetsConfirmed();
+  if (!restartTargets) {
+    return;
+  }
   try {
     await runBlockingAction(async () => {
-      await switchProfile(profile, state.switchRestartTargets);
+      await switchProfile(profile, restartTargets);
       showToast(t(state.locale, "switchedTo", { profile }));
       await refreshAllData();
     });
@@ -1890,6 +1952,21 @@ export function bootstrap(): void {
     const value = elements.settingsCloseBehaviorSelect?.value;
     if (value === "ask" || value === "hide" || value === "quit") {
       setCloseBehavior(value);
+    }
+  });
+  elements.restartChoiceCancelButton.addEventListener("click", () => {
+    closeRestartChoiceDialog(null);
+  });
+  elements.restartChoiceConfirmButton.addEventListener("click", () => {
+    closeRestartChoiceDialog(readRestartChoiceTargets());
+  });
+  elements.restartChoiceDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeRestartChoiceDialog(null);
+  });
+  elements.restartChoiceDialog.addEventListener("close", () => {
+    if (restartChoiceResolver) {
+      closeRestartChoiceDialog(null);
     }
   });
   elements.closeChoiceCancelButton.addEventListener("click", () => {
