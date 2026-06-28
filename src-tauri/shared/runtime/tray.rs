@@ -1,23 +1,49 @@
-use crate::models::{QuotaWindow, SwitchRestartTargets, TrayStatePayload};
+#[cfg(not(target_os = "macos"))]
+use crate::models::QuotaWindow;
+use crate::models::{SwitchRestartTargets, TrayStatePayload};
+#[cfg(target_os = "macos")]
+use std::ffi::{CStr, CString};
+#[cfg(target_os = "macos")]
+use std::os::raw::c_char;
 use std::sync::{Mutex, OnceLock};
-use tauri::image::Image;
+#[cfg(not(target_os = "macos"))]
 use tauri::menu::{MenuBuilder, SubmenuBuilder};
+#[cfg(not(target_os = "macos"))]
 use tauri::tray::TrayIconBuilder;
 use tauri::{App, AppHandle, Emitter, Manager};
 
+#[cfg(not(target_os = "macos"))]
 const TRAY_ID: &str = "codex-switch-main";
+#[cfg(target_os = "macos")]
 const MACOS_TRAY_TEMPLATE_RGBA: &[u8] = include_bytes!("../../icons/tray-template.rgba");
 const ID_SHOW: &str = "tray_show_main";
 const ID_SETTINGS: &str = "tray_settings";
 const ID_ABOUT: &str = "tray_about";
 const ID_QUIT: &str = "tray_quit";
+#[cfg(not(target_os = "macos"))]
 const ID_CURRENT: &str = "tray_current";
+#[cfg(not(target_os = "macos"))]
 const ID_FIVE_HOUR: &str = "tray_quota_five_hour";
+#[cfg(not(target_os = "macos"))]
 const ID_WEEKLY: &str = "tray_quota_weekly";
+#[cfg(not(target_os = "macos"))]
 const ID_REFRESH: &str = "tray_quota_refresh";
 const ID_SWITCH_PREFIX: &str = "tray_switch_profile::";
 static TRAY_RESTART_TARGETS: OnceLock<Mutex<SwitchRestartTargets>> = OnceLock::new();
+#[cfg(target_os = "macos")]
+static TRAY_APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
+#[cfg(target_os = "macos")]
+extern "C" {
+    fn codex_switch_native_tray_install(
+        icon_bytes: *const u8,
+        icon_length: isize,
+        callback: extern "C" fn(*const c_char, *const c_char),
+    );
+    fn codex_switch_native_tray_sync(json: *const c_char);
+}
+
+#[cfg(not(target_os = "macos"))]
 #[derive(Debug, Clone, Copy)]
 struct TrayLabels {
     show: &'static str,
@@ -35,6 +61,7 @@ struct TrayLabels {
     resets: &'static str,
 }
 
+#[cfg(not(target_os = "macos"))]
 fn labels(locale: &str) -> TrayLabels {
     if locale.starts_with("zh") {
         TrayLabels {
@@ -77,47 +104,75 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
         locale: "en".to_string(),
         ..TrayStatePayload::default()
     };
-    let menu = build_menu(app.handle(), &payload)?;
-    let mut builder = TrayIconBuilder::with_id(TRAY_ID)
-        .menu(&menu)
-        .tooltip("Codex Switch")
-        .show_menu_on_left_click(true)
-        .on_menu_event(|app, event| handle_menu_event(app, event.id().as_ref()));
 
     #[cfg(target_os = "macos")]
     {
-        let icon = Image::new(MACOS_TRAY_TEMPLATE_RGBA, 32, 32);
-        builder = builder.icon(icon).icon_as_template(true);
+        let _ = TRAY_APP_HANDLE.set(app.handle().clone());
+        unsafe {
+            codex_switch_native_tray_install(
+                MACOS_TRAY_TEMPLATE_RGBA.as_ptr(),
+                MACOS_TRAY_TEMPLATE_RGBA.len() as isize,
+                native_tray_callback,
+            );
+        }
+        sync_state(app.handle(), payload)?;
+        return Ok(());
     }
 
     #[cfg(not(target_os = "macos"))]
     {
+        let menu = build_menu(app.handle(), &payload)?;
+        let mut builder = TrayIconBuilder::with_id(TRAY_ID)
+            .menu(&menu)
+            .tooltip("Codex Switch")
+            .show_menu_on_left_click(true)
+            .on_menu_event(|app, event| handle_menu_event(app, event.id().as_ref()));
+
         if let Some(icon) = app.default_window_icon().cloned() {
             builder = builder.icon(icon);
         }
-    }
 
-    let _tray = builder.build(app)?;
-    Ok(())
+        let _tray = builder.build(app)?;
+        Ok(())
+    }
 }
 
 pub fn sync_state(app: &AppHandle, payload: TrayStatePayload) -> tauri::Result<()> {
+    #[cfg(target_os = "macos")]
+    let _ = app;
+
     if let Some(targets) = TRAY_RESTART_TARGETS.get() {
         if let Ok(mut guard) = targets.lock() {
             *guard = payload.restart_targets.clone();
         }
     }
-    let menu = build_menu(app, &payload)?;
-    if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        tray.set_menu(Some(menu))?;
-        let title = payload
-            .current_title
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or("Codex Switch");
-        tray.set_tooltip(Some(format!("Codex Switch - {title}")))?;
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(json) = serde_json::to_string(&payload) {
+            if let Ok(json) = CString::new(json) {
+                unsafe {
+                    codex_switch_native_tray_sync(json.as_ptr());
+                }
+            }
+        }
+        return Ok(());
     }
-    Ok(())
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let menu = build_menu(app, &payload)?;
+        if let Some(tray) = app.tray_by_id(TRAY_ID) {
+            tray.set_menu(Some(menu))?;
+            let title = payload
+                .current_title
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or("Codex Switch");
+            tray.set_tooltip(Some(format!("Codex Switch - {title}")))?;
+        }
+        Ok(())
+    }
 }
 
 pub fn show_main_window(app: &AppHandle) -> tauri::Result<()> {
@@ -136,6 +191,7 @@ pub fn hide_main_window(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+#[cfg(not(target_os = "macos"))]
 fn build_menu(
     app: &AppHandle,
     payload: &TrayStatePayload,
@@ -208,6 +264,32 @@ fn build_menu(
         .build()
 }
 
+#[cfg(target_os = "macos")]
+extern "C" fn native_tray_callback(event: *const c_char, payload: *const c_char) {
+    if event.is_null() {
+        return;
+    }
+    let Some(app) = TRAY_APP_HANDLE.get() else {
+        return;
+    };
+
+    let event = unsafe { CStr::from_ptr(event) }
+        .to_string_lossy()
+        .to_string();
+
+    if event == "tray_switch_profile" {
+        if payload.is_null() {
+            return;
+        }
+        let profile = unsafe { CStr::from_ptr(payload) }.to_string_lossy();
+        handle_menu_event(app, &format!("{ID_SWITCH_PREFIX}{profile}"));
+        return;
+    }
+
+    handle_menu_event(app, &event);
+}
+
+#[cfg(not(target_os = "macos"))]
 fn quota_line(label: &str, window: &QuotaWindow, labels: &TrayLabels) -> String {
     let Some(percent) = window.remaining_percent.map(|value| value.min(100)) else {
         return format!("{label}  ▱▱▱▱▱▱▱▱▱▱  --");
@@ -225,6 +307,7 @@ fn quota_line(label: &str, window: &QuotaWindow, labels: &TrayLabels) -> String 
     )
 }
 
+#[cfg(not(target_os = "macos"))]
 fn quota_bar(percent: u8) -> String {
     let filled = ((usize::from(percent) + 5) / 10).clamp(0, 10);
     let empty = 10usize.saturating_sub(filled);

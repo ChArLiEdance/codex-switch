@@ -15,5 +15,17 @@ fn main() {
         );
     }
 
+    build_macos_native_tray();
+
     tauri_build::build()
 }
+
+#[cfg(target_os = "macos")]
+fn build_macos_native_tray() {
+    swift_rs::SwiftLinker::new("12.0")
+        .with_package("CodexSwitchNativeTray", "macos-native-tray")
+        .link();
+}
+
+#[cfg(not(target_os = "macos"))]
+fn build_macos_native_tray() {}
