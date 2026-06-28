@@ -188,10 +188,8 @@ private final class CodexSwitchNativeTrayController: NSObject, NSMenuDelegate {
     }
 
     private static func menuHeight(for payload: TrayPayload) -> CGFloat {
-        let quotaHeight: CGFloat = payload.currentQuota == nil ? 112 : 198
-        let profileCount = CGFloat(max(payload.profiles?.count ?? 0, 1))
-        let profileHeight = min(profileCount * 42, 190)
-        return 34 + quotaHeight + 46 + 34 + profileHeight + 118
+        let quotaHeight: CGFloat = payload.currentQuota == nil ? 94 : 172
+        return 42 + quotaHeight + 116 + 22
     }
 
     private static func makeTemplateIcon(bytes: [UInt8]) -> NSImage? {
@@ -209,47 +207,13 @@ private struct TrayMenuRootView: View {
     let labels: TrayLabels
     let onAction: (String, String?) -> Void
 
-    private var profiles: [TrayProfileEntry] {
-        payload.profiles ?? []
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            TrayMenuHeader(payload: payload, labels: labels)
-
-            TrayQuotaCard(payload: payload, labels: labels)
-
             TrayMenuActionRow(title: labels.show, systemImage: "macwindow", prominent: true) {
                 onAction("tray_show_main", nil)
             }
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(labels.switchAccounts)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 4)
-
-                if profiles.isEmpty {
-                    Text(labels.noAccount)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                } else {
-                    ScrollView {
-                        VStack(spacing: 6) {
-                            ForEach(profiles) { profile in
-                                TrayProfileRow(profile: profile) {
-                                    onAction("tray_switch_profile", profile.folderName)
-                                }
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 190)
-                }
-            }
+            TrayQuotaCard(payload: payload, labels: labels)
 
             VStack(spacing: 6) {
                 TrayMenuActionRow(title: labels.settings, systemImage: "gearshape") {
@@ -262,40 +226,10 @@ private struct TrayMenuRootView: View {
                     onAction("tray_quit", nil)
                 }
             }
+
+            Color.clear.frame(height: 12)
         }
         .padding(10)
-    }
-}
-
-private struct TrayMenuHeader: View {
-    let payload: TrayPayload
-    let labels: TrayLabels
-
-    private var currentTitle: String {
-        let current = payload.currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return current?.isEmpty == false ? current! : labels.noAccount
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "terminal.fill")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.blue)
-                .frame(width: 30, height: 30)
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Codex Switch")
-                    .font(.system(size: 13, weight: .semibold))
-                Text(currentTitle)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-
-            Spacer(minLength: 0)
-        }
     }
 }
 
@@ -336,16 +270,6 @@ private struct TrayQuotaCard: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.regularMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                )
-        )
-        .padding(.horizontal, 6)
-        .padding(.vertical, 6)
     }
 }
 
@@ -471,69 +395,6 @@ private struct TrayMenuActionRow: View {
     private var textColor: Color {
         if destructive { return .red }
         return .primary
-    }
-}
-
-private struct TrayProfileRow: View {
-    let profile: TrayProfileEntry
-    let action: () -> Void
-
-    @State private var hovered = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: "person.crop.circle")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.blue)
-                    .frame(width: 20)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text(profile.menuTitle)
-                            .font(.system(size: 12.5, weight: .semibold))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        if let plan = profile.planName?.trimmingCharacters(in: .whitespacesAndNewlines), !plan.isEmpty {
-                            Text(plan)
-                                .font(.system(size: 9.5, weight: .bold))
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(.thinMaterial, in: Capsule())
-                        }
-                    }
-
-                    Text("5h \(percentText(profile.quota.fiveHour.remainingPercent))  ·  7d \(percentText(profile.quota.weekly.remainingPercent))")
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(hovered ? .regularMaterial : .thinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(Color.primary.opacity(hovered ? 0.10 : 0.06), lineWidth: 1)
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .onHover { hovered = $0 }
-        .help(profile.nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? profile.displayTitle : profile.nickname)
-    }
-
-    private func percentText(_ value: UInt8?) -> String {
-        guard let value else { return "--" }
-        return "\(min(value, 100))%"
     }
 }
 
