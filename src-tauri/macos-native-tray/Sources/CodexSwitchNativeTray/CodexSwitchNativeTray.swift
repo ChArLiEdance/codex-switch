@@ -264,16 +264,6 @@ private struct TrayMenuRootView: View {
             }
         }
         .padding(10)
-        .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color.primary.opacity(0.10), lineWidth: 1)
-                )
-                .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 8)
-        }
-        .padding(4)
     }
 }
 
