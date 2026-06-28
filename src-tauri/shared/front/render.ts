@@ -1871,6 +1871,24 @@ export function applyLocale(): void {
     }
   }
 
+  for (const element of document.querySelectorAll<HTMLElement>("[data-i18n-key-title]")) {
+    const key = element.dataset.i18nKeyTitle as MessageKey | undefined;
+    if (key) {
+      const value = t(state.locale, key);
+      element.title = value;
+      element.setAttribute("aria-label", value);
+    }
+  }
+
+  for (const element of document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+    "[data-i18n-key-placeholder]",
+  )) {
+    const key = element.dataset.i18nKeyPlaceholder as MessageKey | undefined;
+    if (key) {
+      element.placeholder = t(state.locale, key);
+    }
+  }
+
   elements.profilesHeading.textContent = t(state.locale, "profilesHeading");
   elements.currentSectionHeading.textContent = t(state.locale, "currentSession");
   elements.controlDeckHeading.textContent = t(state.locale, "controlDeck");

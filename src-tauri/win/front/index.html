@@ -174,10 +174,10 @@
                         <span id="skills-count" class="session-count-pill">0</span>
                       </div>
                       <div class="tool-toolbar">
-                        <button id="skills-refresh-button" class="session-icon-button" type="button" title="Refresh">
+                        <button id="skills-refresh-button" class="session-icon-button" type="button" title="Refresh" data-i18n-key-title="toolRefresh">
                           <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/refresh-cw.svg" alt="" aria-hidden="true" />
                         </button>
-                        <button id="skills-open-folder-button" class="session-icon-button" type="button" title="Open folder">
+                        <button id="skills-open-folder-button" class="session-icon-button" type="button" title="Open folder" data-i18n-key-title="toolOpenFolder">
                           <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/book-open.svg" alt="" aria-hidden="true" />
                         </button>
                       </div>
@@ -191,24 +191,24 @@
                         <h3 id="skill-editor-heading" data-i18n-key="skillsTitle">Codex Skills</h3>
                       </div>
                       <div class="tool-editor-actions">
-                        <button id="skill-new-button" class="ghost-button" type="button">New</button>
-                        <button id="skill-delete-button" class="ghost-button danger-button" type="button">Delete</button>
-                        <button id="skill-save-button" class="primary-button" type="button">Save</button>
+                        <button id="skill-new-button" class="ghost-button" type="button" data-i18n-key="toolNew">New</button>
+                        <button id="skill-delete-button" class="ghost-button danger-button" type="button" data-i18n-key="toolDelete">Delete</button>
+                        <button id="skill-save-button" class="primary-button" type="button" data-i18n-key="toolSave">Save</button>
                       </div>
                     </div>
                     <div class="tool-form-grid">
                       <label>
-                        <span>Name</span>
-                        <input id="skill-name-input" class="settings-input" type="text" placeholder="Code review" />
+                        <span data-i18n-key="toolName">Name</span>
+                        <input id="skill-name-input" class="settings-input" type="text" placeholder="Code review" data-i18n-key-placeholder="skillNamePlaceholder" />
                       </label>
                       <label>
-                        <span>Description</span>
-                        <input id="skill-description-input" class="settings-input" type="text" placeholder="When this skill should be used" />
+                        <span data-i18n-key="toolDescription">Description</span>
+                        <input id="skill-description-input" class="settings-input" type="text" placeholder="When this skill should be used" data-i18n-key-placeholder="skillDescriptionPlaceholder" />
                       </label>
                     </div>
                     <label class="tool-editor-content">
-                      <span>SKILL.md</span>
-                      <textarea id="skill-content-input" spellcheck="false" placeholder="# Skill name&#10;&#10;Use this skill when..."></textarea>
+                      <span data-i18n-key="skillContentLabel">SKILL.md</span>
+                      <textarea id="skill-content-input" spellcheck="false" placeholder="# Skill name&#10;&#10;Use this skill when..." data-i18n-key-placeholder="skillContentPlaceholder"></textarea>
                     </label>
                   </section>
                 </article>
@@ -229,10 +229,10 @@
                         <span id="prompts-count" class="session-count-pill">0</span>
                       </div>
                       <div class="tool-toolbar">
-                        <button id="prompts-import-button" class="session-icon-button" type="button" title="Import AGENTS">
+                        <button id="prompts-import-button" class="session-icon-button" type="button" title="Import AGENTS" data-i18n-key-title="promptsImportAgents">
                           <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/copy.svg" alt="" aria-hidden="true" />
                         </button>
-                        <button id="prompts-refresh-button" class="session-icon-button" type="button" title="Refresh">
+                        <button id="prompts-refresh-button" class="session-icon-button" type="button" title="Refresh" data-i18n-key-title="toolRefresh">
                           <img class="cc-icon cc-icon--toolbar" src="/ccswitch-icons/refresh-cw.svg" alt="" aria-hidden="true" />
                         </button>
                       </div>
@@ -246,25 +246,25 @@
                         <h3 id="prompt-editor-heading" data-i18n-key="promptsTitle">Prompt Library</h3>
                       </div>
                       <div class="tool-editor-actions">
-                        <button id="prompt-new-button" class="ghost-button" type="button">New</button>
-                        <button id="prompt-enable-button" class="ghost-button" type="button">Enable</button>
-                        <button id="prompt-delete-button" class="ghost-button danger-button" type="button">Delete</button>
-                        <button id="prompt-save-button" class="primary-button" type="button">Save</button>
+                        <button id="prompt-new-button" class="ghost-button" type="button" data-i18n-key="toolNew">New</button>
+                        <button id="prompt-enable-button" class="ghost-button" type="button" data-i18n-key="toolEnable">Enable</button>
+                        <button id="prompt-delete-button" class="ghost-button danger-button" type="button" data-i18n-key="toolDelete">Delete</button>
+                        <button id="prompt-save-button" class="primary-button" type="button" data-i18n-key="toolSave">Save</button>
                       </div>
                     </div>
                     <div class="tool-form-grid">
                       <label>
-                        <span>Name</span>
-                        <input id="prompt-name-input" class="settings-input" type="text" placeholder="Default AGENTS" />
+                        <span data-i18n-key="toolName">Name</span>
+                        <input id="prompt-name-input" class="settings-input" type="text" placeholder="Default AGENTS" data-i18n-key-placeholder="promptNamePlaceholder" />
                       </label>
                       <label>
-                        <span>Description</span>
-                        <input id="prompt-description-input" class="settings-input" type="text" placeholder="Prompt usage note" />
+                        <span data-i18n-key="toolDescription">Description</span>
+                        <input id="prompt-description-input" class="settings-input" type="text" placeholder="Prompt usage note" data-i18n-key-placeholder="promptDescriptionPlaceholder" />
                       </label>
                     </div>
                     <label class="tool-editor-content">
-                      <span>Prompt markdown</span>
-                      <textarea id="prompt-content-input" spellcheck="false" placeholder="# Prompt name&#10;&#10;Instructions..."></textarea>
+                      <span data-i18n-key="promptContentLabel">Prompt markdown</span>
+                      <textarea id="prompt-content-input" spellcheck="false" placeholder="# Prompt name&#10;&#10;Instructions..." data-i18n-key-placeholder="promptContentPlaceholder"></textarea>
                     </label>
                   </section>
                 </article>
