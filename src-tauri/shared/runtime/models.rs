@@ -214,6 +214,11 @@ pub struct UpdateCheckPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstallUpdatePayload {
+    pub update_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenUrlPayload {
     pub url: String,
 }
@@ -227,6 +232,14 @@ pub struct UpdateCheckResponse {
     pub release_url: Option<String>,
     pub notes: Option<String>,
     pub checked_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InstallUpdateResponse {
+    pub ok: bool,
+    pub version: String,
+    pub asset_name: String,
+    pub path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

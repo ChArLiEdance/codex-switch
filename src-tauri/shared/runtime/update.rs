@@ -1,32 +1,30 @@
 use std::cmp::Ordering;
+use std::fs;
+use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
 
 use semver::Version;
 use serde_json::Value;
+use tauri_plugin_opener::OpenerExt;
 
 use crate::errors::{AppError, AppResult};
-use crate::models::UpdateCheckResponse;
+use crate::models::{InstallUpdateResponse, UpdateCheckResponse};
 use crate::shared::paths::{RELEASES_URL, UPDATE_CHECK_URL};
 
 const UPDATE_USER_AGENT: &str = "Codex-Switch-Updater";
+const DOWNLOAD_TIMEOUT_SECONDS: u64 = 180;
+
+#[derive(Debug, Clone)]
+struct ReleaseAsset {
+    name: String,
+    download_url: String,
+}
 
 pub fn check_update(update_url: &str) -> AppResult<UpdateCheckResponse> {
     let checked_url = normalize_update_url(update_url)?;
-    let body = fetch_update_json(&checked_url)?;
-    let payload: Value = serde_json::from_str(&body).map_err(|error| {
-        AppError::new(
-            "UPDATE_JSON_INVALID",
-            format!("Failed to parse update response JSON: {error}"),
-        )
-    })?;
-
-    let latest_version =
-        read_string_field(&payload, &["version", "tag_name"]).ok_or_else(|| {
-            AppError::new(
-                "UPDATE_VERSION_MISSING",
-                "Update response did not include a version.",
-            )
-        })?;
+    let payload = fetch_update_payload(&checked_url)?;
+    let latest_version = read_latest_version(&payload)?;
     let current_version = env!("CARGO_PKG_VERSION").to_string();
     let has_update = compare_versions(&latest_version, &current_version)? == Ordering::Greater;
     let release_url = read_string_field(&payload, &["html_url", "release_url"])
@@ -41,6 +39,40 @@ pub fn check_update(update_url: &str) -> AppResult<UpdateCheckResponse> {
         release_url,
         notes,
         checked_url,
+    })
+}
+
+pub fn download_and_open_update(
+    app: &tauri::AppHandle,
+    update_url: &str,
+) -> AppResult<InstallUpdateResponse> {
+    let checked_url = normalize_update_url(update_url)?;
+    let payload = fetch_update_payload(&checked_url)?;
+    let latest_version = read_latest_version(&payload)?;
+    let current_version = env!("CARGO_PKG_VERSION");
+    if compare_versions(&latest_version, current_version)? != Ordering::Greater {
+        return Err(AppError::new(
+            "UPDATE_ALREADY_CURRENT",
+            format!("Current version {current_version} is already up to date."),
+        ));
+    }
+
+    let asset = select_update_asset(&payload)?;
+    let path = download_update_asset(&latest_version, &asset)?;
+    app.opener()
+        .open_path(path.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|error| {
+            AppError::new(
+                "UPDATE_INSTALLER_OPEN_FAILED",
+                format!("Downloaded update but failed to open installer: {error}"),
+            )
+        })?;
+
+    Ok(InstallUpdateResponse {
+        ok: true,
+        version: latest_version,
+        asset_name: asset.name,
+        path: path.to_string_lossy().into_owned(),
     })
 }
 
@@ -62,6 +94,25 @@ fn normalize_update_url(update_url: &str) -> AppResult<String> {
     Ok(url.to_string())
 }
 
+fn fetch_update_payload(checked_url: &str) -> AppResult<Value> {
+    let body = fetch_update_json(checked_url)?;
+    serde_json::from_str(&body).map_err(|error| {
+        AppError::new(
+            "UPDATE_JSON_INVALID",
+            format!("Failed to parse update response JSON: {error}"),
+        )
+    })
+}
+
+fn read_latest_version(payload: &Value) -> AppResult<String> {
+    read_string_field(payload, &["version", "tag_name"]).ok_or_else(|| {
+        AppError::new(
+            "UPDATE_VERSION_MISSING",
+            "Update response did not include a version.",
+        )
+    })
+}
+
 fn read_string_field(payload: &Value, fields: &[&str]) -> Option<String> {
     fields.iter().find_map(|field| {
         payload
@@ -71,6 +122,175 @@ fn read_string_field(payload: &Value, fields: &[&str]) -> Option<String> {
             .filter(|value| !value.is_empty())
             .map(ToOwned::to_owned)
     })
+}
+
+fn select_update_asset(payload: &Value) -> AppResult<ReleaseAsset> {
+    let assets = payload
+        .get("assets")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            AppError::new(
+                "UPDATE_ASSETS_MISSING",
+                "Update response did not include release assets.",
+            )
+        })?;
+
+    let mut candidates = assets
+        .iter()
+        .filter_map(|asset| {
+            let name = read_string_field(asset, &["name"])?;
+            let download_url = read_string_field(asset, &["browser_download_url", "download_url"])?;
+            let score = candidate_asset_score(&name)?;
+            Some((score, ReleaseAsset { name, download_url }))
+        })
+        .collect::<Vec<_>>();
+
+    candidates.sort_by(|left, right| {
+        left.0
+            .cmp(&right.0)
+            .then_with(|| left.1.name.cmp(&right.1.name))
+    });
+
+    candidates
+        .into_iter()
+        .map(|(_, asset)| asset)
+        .next()
+        .ok_or_else(|| {
+            AppError::new(
+                "UPDATE_ASSET_UNSUPPORTED",
+                format!(
+                    "No update asset was found for this platform ({}/{}).",
+                    std::env::consts::OS,
+                    std::env::consts::ARCH
+                ),
+            )
+        })
+}
+
+fn candidate_asset_score(name: &str) -> Option<u8> {
+    let lower = name.to_ascii_lowercase();
+
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    {
+        if lower.ends_with("_aarch64.dmg") {
+            return Some(0);
+        }
+        if lower.ends_with("_aarch64.pkg") {
+            return Some(1);
+        }
+        return None;
+    }
+
+    #[cfg(all(windows, target_arch = "x86_64"))]
+    {
+        if lower.ends_with("_x64-setup.exe") || lower.ends_with("-x64-setup.exe") {
+            return Some(0);
+        }
+        return None;
+    }
+
+    #[cfg(not(any(
+        all(target_os = "macos", target_arch = "aarch64"),
+        all(windows, target_arch = "x86_64")
+    )))]
+    {
+        let _ = lower;
+        None
+    }
+}
+
+fn download_update_asset(version: &str, asset: &ReleaseAsset) -> AppResult<PathBuf> {
+    let file_name = safe_asset_file_name(&asset.name)?;
+    let url = asset.download_url.trim();
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err(AppError::new(
+            "UPDATE_ASSET_URL_INVALID",
+            "Update asset download URL must start with http:// or https://.",
+        ));
+    }
+
+    let cache_dir = std::env::temp_dir()
+        .join("codex-switch-updates")
+        .join(safe_cache_segment(version));
+    fs::create_dir_all(&cache_dir).map_err(|error| {
+        AppError::new(
+            "UPDATE_CACHE_CREATE_FAILED",
+            format!("Failed to create update cache directory: {error}"),
+        )
+    })?;
+
+    let path = cache_dir.join(file_name);
+    let bytes = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(DOWNLOAD_TIMEOUT_SECONDS))
+        .user_agent(UPDATE_USER_AGENT)
+        .build()
+        .map_err(|error| {
+            AppError::new(
+                "UPDATE_DOWNLOAD_CLIENT_FAILED",
+                format!("Failed to prepare update downloader: {error}"),
+            )
+        })?
+        .get(url)
+        .send()
+        .map_err(|error| {
+            AppError::new(
+                "UPDATE_DOWNLOAD_FAILED",
+                format!("Failed to download update asset: {error}"),
+            )
+        })?
+        .error_for_status()
+        .map_err(|error| {
+            AppError::new(
+                "UPDATE_DOWNLOAD_FAILED",
+                format!("Update asset download failed: {error}"),
+            )
+        })?
+        .bytes()
+        .map_err(|error| {
+            AppError::new(
+                "UPDATE_DOWNLOAD_FAILED",
+                format!("Failed to read update asset bytes: {error}"),
+            )
+        })?;
+
+    fs::write(&path, &bytes).map_err(|error| {
+        AppError::new(
+            "UPDATE_ASSET_WRITE_FAILED",
+            format!("Failed to write update asset: {error}"),
+        )
+    })?;
+
+    Ok(path)
+}
+
+fn safe_asset_file_name(name: &str) -> AppResult<&str> {
+    let trimmed = name.trim();
+    if trimmed.is_empty()
+        || trimmed == "."
+        || trimmed == ".."
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+    {
+        return Err(AppError::new(
+            "UPDATE_ASSET_NAME_INVALID",
+            "Update asset name is not safe to write locally.",
+        ));
+    }
+
+    Ok(trimmed)
+}
+
+fn safe_cache_segment(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '.' | '-' | '_') {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 fn compare_versions(latest_version: &str, current_version: &str) -> AppResult<Ordering> {

@@ -11,6 +11,7 @@ import type {
   CommandError,
   CurrentCard,
   CurrentQuotaResponse,
+  InstallUpdateResponse,
   ProfileCard,
   ProfilesSnapshotResponse,
   QuotaSummary,
@@ -804,6 +805,12 @@ export function openUrl(url: string): Promise<ActionResponse> {
 
 export function checkUpdate(updateUrl: string): Promise<UpdateCheckResponse> {
   return invokeCommand<UpdateCheckResponse>("check_update", {
+    payload: { update_url: updateUrl },
+  });
+}
+
+export function installUpdate(updateUrl: string): Promise<InstallUpdateResponse> {
+  return invokeCommand<InstallUpdateResponse>("install_update", {
     payload: { update_url: updateUrl },
   });
 }

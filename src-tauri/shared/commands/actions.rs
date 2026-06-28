@@ -1,8 +1,9 @@
 use crate::errors::CommandError;
 use crate::models::{
-    ActionResponse, AddProfilePayload, CodexCliRedetectResult, CodexCliStatus, OpenUrlPayload,
-    ProfilePayload, RenameProfilePayload, SetCodexCliPathPayload, TrayStatePayload,
-    UpdateCheckPayload, UpdateCheckResponse, UpdateProfileBaseUrlPayload,
+    ActionResponse, AddProfilePayload, CodexCliRedetectResult, CodexCliStatus,
+    InstallUpdatePayload, InstallUpdateResponse, OpenUrlPayload, ProfilePayload,
+    RenameProfilePayload, SetCodexCliPathPayload, TrayStatePayload, UpdateCheckPayload,
+    UpdateCheckResponse, UpdateProfileBaseUrlPayload,
 };
 
 #[cfg(target_os = "macos")]
@@ -190,6 +191,26 @@ pub async fn check_update(
             )
         })?
         .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn install_update(
+    app: tauri::AppHandle,
+    payload: InstallUpdatePayload,
+) -> Result<InstallUpdateResponse, CommandError> {
+    let update_url = payload.update_url;
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::shared::update::download_and_open_update(&app_handle, &update_url)
+    })
+    .await
+    .map_err(|error| {
+        CommandError::new(
+            "UPDATE_INSTALL_TASK_FAILED",
+            format!("Update install task failed: {error}"),
+        )
+    })?
+    .map_err(CommandError::from)
 }
 
 #[tauri::command]

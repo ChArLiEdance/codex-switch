@@ -61,6 +61,7 @@ pub fn run() {
             commands::actions::open_releases,
             commands::actions::open_url,
             commands::actions::check_update,
+            commands::actions::install_update,
             commands::actions::open_xiaohongshu,
             commands::actions::get_codex_cli_status,
             commands::actions::set_codex_cli_path,

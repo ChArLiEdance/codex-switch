@@ -135,6 +135,13 @@ export interface UpdateCheckResponse {
   checked_url: string;
 }
 
+export interface InstallUpdateResponse {
+  ok: boolean;
+  version: string;
+  asset_name: string;
+  path: string;
+}
+
 export interface CommandError {
   error_code?: string;
   message?: string;

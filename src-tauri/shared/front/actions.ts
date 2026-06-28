@@ -45,6 +45,7 @@ import {
   deleteCodexSkill,
   enableCodexPrompt,
   importCodexPromptFromAgents,
+  installUpdate,
   loginCurrentProfile,
   listCodexPrompts,
   listCodexSkills,
@@ -53,7 +54,6 @@ import {
   openCodex,
   openContact,
   openReleases,
-  openUrl,
   openXiaohongshu,
   openProfileFolder,
   loginProfile,
@@ -142,7 +142,6 @@ function rerenderDashboard(): void {
 
 let renameSourceProfile: string | null = null;
 let baseUrlSourceProfile: string | null = null;
-let pendingUpdateReleaseUrl: string | null = null;
 let deleteSourceProfile: string | null = null;
 let pendingLoginRetry: (() => Promise<void>) | null = null;
 let cancelledLoginProfile: string | null = null;
@@ -1331,21 +1330,6 @@ async function handleOpenReleases(): Promise<void> {
   }
 }
 
-async function handleOpenUpdateRelease(): Promise<void> {
-  const releaseUrl = pendingUpdateReleaseUrl;
-  if (!releaseUrl) {
-    await handleOpenReleases();
-    return;
-  }
-
-  try {
-    await openUrl(releaseUrl);
-    showToast(t(state.locale, "openedReleases"));
-  } catch (error) {
-    showToast(error instanceof Error ? error.message : t(state.locale, "failedToOpenReleases"), true);
-  }
-}
-
 async function handleCheckUpdate(silent = false): Promise<void> {
   if (!silent) {
     showToast(t(state.locale, "checkingUpdate"));
@@ -1354,7 +1338,6 @@ async function handleCheckUpdate(silent = false): Promise<void> {
   try {
     const update = await checkUpdate(elements.settingsUpdateUrlInput.value);
     if (update.has_update) {
-      pendingUpdateReleaseUrl = update.release_url;
       showUpdateDialog(update);
       if (!silent) {
         showToast(t(state.locale, "updateAvailable", {
@@ -1372,6 +1355,20 @@ async function handleCheckUpdate(silent = false): Promise<void> {
     if (!silent) {
       showToast(error instanceof Error ? error.message : t(state.locale, "failedToCheckUpdate"), true);
     }
+  }
+}
+
+async function handleInstallUpdate(): Promise<void> {
+  showToast(t(state.locale, "installingUpdate"));
+
+  try {
+    const update = await installUpdate(elements.settingsUpdateUrlInput.value);
+    showToast(t(state.locale, "installedUpdate", {
+      asset: update.asset_name,
+      version: update.version,
+    }));
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : t(state.locale, "failedToInstallUpdate"), true);
   }
 }
 
@@ -1868,7 +1865,7 @@ export function bootstrap(): void {
   });
   elements.updateDialogOpenButton.addEventListener("click", () => {
     elements.updateDialog.close();
-    void handleOpenUpdateRelease();
+    void handleInstallUpdate();
   });
   elements.starButton.addEventListener("click", () => {
     window.location.hash = "guide";
