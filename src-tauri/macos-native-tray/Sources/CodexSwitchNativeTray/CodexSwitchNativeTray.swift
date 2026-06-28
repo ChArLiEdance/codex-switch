@@ -238,8 +238,17 @@ private struct TrayQuotaCard: View {
     let labels: TrayLabels
 
     private var title: String {
-        let current = payload.currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return current?.isEmpty == false ? current! : labels.noAccount
+        if
+            let currentProfile = payload.currentProfile,
+            let profile = payload.profiles?.first(where: { $0.folderName == currentProfile })
+        {
+            let nickname = profile.nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !nickname.isEmpty {
+                return nickname
+            }
+        }
+        let fallback = payload.currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return fallback?.isEmpty == false ? fallback! : labels.noAccount
     }
 
     var body: some View {
@@ -299,7 +308,7 @@ private struct QuotaProgressRow: View {
                     .font(.system(size: 18, weight: .bold, design: .rounded))
                     .frame(width: 36, alignment: .leading)
                 VStack(alignment: .leading, spacing: 5) {
-                    ProgressBar(percent: Double(used), tint: tint)
+                    ProgressBar(percent: Double(left), tint: tint)
                     HStack(spacing: 8) {
                         Text("\(labels.used) \(String(format: "%.1f", Double(used)))%")
                         Spacer(minLength: 4)
