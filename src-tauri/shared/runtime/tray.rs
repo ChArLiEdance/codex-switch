@@ -15,7 +15,7 @@ use tauri::{App, AppHandle, Emitter, Manager};
 #[cfg(not(target_os = "macos"))]
 const TRAY_ID: &str = "codex-switch-main";
 #[cfg(target_os = "macos")]
-const MACOS_TRAY_TEMPLATE_RGBA: &[u8] = include_bytes!("../../icons/tray-template.rgba");
+const MACOS_TRAY_TEMPLATE_PNG: &[u8] = include_bytes!("../../icons/tray-template.png");
 const ID_SHOW: &str = "tray_show_main";
 const ID_SETTINGS: &str = "tray_settings";
 const ID_ABOUT: &str = "tray_about";
@@ -110,8 +110,8 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
         let _ = TRAY_APP_HANDLE.set(app.handle().clone());
         unsafe {
             codex_switch_native_tray_install(
-                MACOS_TRAY_TEMPLATE_RGBA.as_ptr(),
-                MACOS_TRAY_TEMPLATE_RGBA.len() as isize,
+                MACOS_TRAY_TEMPLATE_PNG.as_ptr(),
+                MACOS_TRAY_TEMPLATE_PNG.len() as isize,
                 native_tray_callback,
             );
         }

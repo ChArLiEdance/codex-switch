@@ -56,6 +56,7 @@ private struct TrayLabels {
     let left: String
     let resets: String
     let noQuota: String
+    let accountQuota: String
 
     static func resolve(locale: String?) -> TrayLabels {
         if locale?.hasPrefix("zh") == true {
@@ -72,7 +73,8 @@ private struct TrayLabels {
                 used: "已用",
                 left: "剩余",
                 resets: "重置",
-                noQuota: "暂无额度数据"
+                noQuota: "暂无额度数据",
+                accountQuota: "当前额度"
             )
         }
         return TrayLabels(
@@ -88,7 +90,8 @@ private struct TrayLabels {
             used: "Used",
             left: "Left",
             resets: "Resets",
-            noQuota: "No quota data"
+            noQuota: "No quota data",
+            accountQuota: "Current Quota"
         )
     }
 }
@@ -112,6 +115,7 @@ private final class CodexSwitchNativeTrayController: NSObject, NSMenuDelegate {
         item.autosaveName = "codex-switch-main"
         item.button?.image = self.templateIcon
         item.button?.imagePosition = .imageOnly
+        item.button?.imageScaling = .scaleProportionallyDown
         item.button?.toolTip = "Codex Switch"
         self.statusItem = item
         self.rebuildMenu()
@@ -132,95 +136,42 @@ private final class CodexSwitchNativeTrayController: NSObject, NSMenuDelegate {
         let menu = NSMenu()
         menu.autoenablesItems = false
         menu.delegate = self
+        menu.minimumWidth = 368
 
-        menu.addItem(self.makeQuotaCardItem(labels: labels))
-        menu.addItem(.separator())
-        menu.addItem(self.actionItem(title: labels.show, action: #selector(self.showMain(_:))))
-        menu.addItem(.separator())
-        menu.addItem(self.makeSwitchMenuItem(labels: labels))
-        menu.addItem(.separator())
-        menu.addItem(self.actionItem(title: labels.settings, action: #selector(self.openSettings(_:))))
-        menu.addItem(self.actionItem(title: labels.about, action: #selector(self.openAbout(_:))))
-        menu.addItem(.separator())
-        menu.addItem(self.actionItem(title: labels.quit, action: #selector(self.quit(_:))))
+        let root = TrayMenuRootView(
+            payload: self.payload,
+            labels: labels,
+            onAction: { [weak self] event, payload in
+                self?.perform(event: event, payload: payload)
+            }
+        )
+        .frame(width: 368)
+        .fixedSize(horizontal: false, vertical: true)
+
+        let hosting = NSHostingView(rootView: root)
+        hosting.wantsLayer = true
+        hosting.layer?.backgroundColor = NSColor.clear.cgColor
+        hosting.frame = NSRect(
+            x: 0,
+            y: 0,
+            width: 368,
+            height: Self.menuHeight(for: self.payload)
+        )
+
+        let item = NSMenuItem()
+        item.view = hosting
+        item.isEnabled = true
+        item.representedObject = "swiftui-root-menu"
+        menu.addItem(item)
 
         self.statusItem?.menu = menu
         let title = self.payload.currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.statusItem?.button?.toolTip = title?.isEmpty == false ? "Codex Switch - \(title!)" : "Codex Switch"
     }
 
-    private func makeQuotaCardItem(labels: TrayLabels) -> NSMenuItem {
-        let card = TrayQuotaCard(payload: self.payload, labels: labels)
-            .frame(width: 326)
-            .fixedSize(horizontal: false, vertical: true)
-
-        let hosting = NSHostingView(rootView: card)
-        hosting.frame = NSRect(x: 0, y: 0, width: 326, height: self.payload.currentQuota == nil ? 92 : 170)
-
-        let item = NSMenuItem()
-        item.view = hosting
-        item.isEnabled = false
-        item.representedObject = "quota-card"
-        return item
-    }
-
-    private func makeSwitchMenuItem(labels: TrayLabels) -> NSMenuItem {
-        let item = NSMenuItem(title: labels.switchAccounts, action: nil, keyEquivalent: "")
-        let submenu = NSMenu(title: labels.switchAccounts)
-        submenu.autoenablesItems = false
-
-        let profiles = self.payload.profiles ?? []
-        if profiles.isEmpty {
-            let empty = NSMenuItem(title: labels.noAccount, action: nil, keyEquivalent: "")
-            empty.isEnabled = false
-            submenu.addItem(empty)
-        } else {
-            for profile in profiles {
-                let five = Self.percentText(profile.quota.fiveHour.remainingPercent)
-                let weekly = Self.percentText(profile.quota.weekly.remainingPercent)
-                let row = NSMenuItem(
-                    title: "\(profile.menuTitle)   5h \(five) / 7d \(weekly)",
-                    action: #selector(self.switchProfile(_:)),
-                    keyEquivalent: ""
-                )
-                row.target = self
-                row.representedObject = profile.folderName
-                row.toolTip = profile.nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? profile.displayTitle : profile.nickname
-                row.isEnabled = true
-                submenu.addItem(row)
-            }
-        }
-
-        item.submenu = submenu
-        return item
-    }
-
-    private func actionItem(title: String, action: Selector) -> NSMenuItem {
-        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-        item.target = self
-        item.isEnabled = true
-        return item
-    }
-
-    @objc private func showMain(_ sender: NSMenuItem) {
-        self.send(event: "tray_show_main")
-    }
-
-    @objc private func openSettings(_ sender: NSMenuItem) {
-        self.send(event: "tray_settings")
-    }
-
-    @objc private func openAbout(_ sender: NSMenuItem) {
-        self.send(event: "tray_about")
-    }
-
-    @objc private func quit(_ sender: NSMenuItem) {
-        self.send(event: "tray_quit")
-    }
-
-    @objc private func switchProfile(_ sender: NSMenuItem) {
-        guard let folderName = sender.representedObject as? String else { return }
-        self.send(event: "tray_switch_profile", payload: folderName)
+    private func perform(event: String, payload: String? = nil) {
+        self.statusItem?.menu?.cancelTracking()
+        self.send(event: event, payload: payload)
     }
 
     private func send(event: String, payload: String? = nil) {
@@ -236,37 +187,125 @@ private final class CodexSwitchNativeTrayController: NSObject, NSMenuDelegate {
         }
     }
 
-    private static func percentText(_ value: UInt8?) -> String {
-        guard let value else { return "--" }
-        return "\(min(value, 100))%"
+    private static func menuHeight(for payload: TrayPayload) -> CGFloat {
+        let quotaHeight: CGFloat = payload.currentQuota == nil ? 112 : 198
+        let profileCount = CGFloat(max(payload.profiles?.count ?? 0, 1))
+        let profileHeight = min(profileCount * 42, 190)
+        return 34 + quotaHeight + 46 + 34 + profileHeight + 118
     }
 
     private static func makeTemplateIcon(bytes: [UInt8]) -> NSImage? {
-        let width = 32
-        let height = 32
-        let data = Data(bytes)
-        guard
-            let provider = CGDataProvider(data: data as CFData),
-            let image = CGImage(
-                width: width,
-                height: height,
-                bitsPerComponent: 8,
-                bitsPerPixel: 32,
-                bytesPerRow: width * 4,
-                space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
-                provider: provider,
-                decode: nil,
-                shouldInterpolate: true,
-                intent: .defaultIntent
-            )
-        else {
+        guard let nsImage = NSImage(data: Data(bytes)) else {
             return nil
         }
-
-        let nsImage = NSImage(cgImage: image, size: NSSize(width: 22, height: 22))
+        nsImage.size = NSSize(width: 18, height: 18)
         nsImage.isTemplate = true
         return nsImage
+    }
+}
+
+private struct TrayMenuRootView: View {
+    let payload: TrayPayload
+    let labels: TrayLabels
+    let onAction: (String, String?) -> Void
+
+    private var profiles: [TrayProfileEntry] {
+        payload.profiles ?? []
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TrayMenuHeader(payload: payload, labels: labels)
+
+            TrayQuotaCard(payload: payload, labels: labels)
+
+            TrayMenuActionRow(title: labels.show, systemImage: "macwindow", prominent: true) {
+                onAction("tray_show_main", nil)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(labels.switchAccounts)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 4)
+
+                if profiles.isEmpty {
+                    Text(labels.noAccount)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                } else {
+                    ScrollView {
+                        VStack(spacing: 6) {
+                            ForEach(profiles) { profile in
+                                TrayProfileRow(profile: profile) {
+                                    onAction("tray_switch_profile", profile.folderName)
+                                }
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 190)
+                }
+            }
+
+            VStack(spacing: 6) {
+                TrayMenuActionRow(title: labels.settings, systemImage: "gearshape") {
+                    onAction("tray_settings", nil)
+                }
+                TrayMenuActionRow(title: labels.about, systemImage: "info.circle") {
+                    onAction("tray_about", nil)
+                }
+                TrayMenuActionRow(title: labels.quit, systemImage: "power", destructive: true) {
+                    onAction("tray_quit", nil)
+                }
+            }
+        }
+        .padding(10)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(Color.primary.opacity(0.10), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 8)
+        }
+        .padding(4)
+    }
+}
+
+private struct TrayMenuHeader: View {
+    let payload: TrayPayload
+    let labels: TrayLabels
+
+    private var currentTitle: String {
+        let current = payload.currentTitle?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return current?.isEmpty == false ? current! : labels.noAccount
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "terminal.fill")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(.blue)
+                .frame(width: 30, height: 30)
+                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Codex Switch")
+                    .font(.system(size: 13, weight: .semibold))
+                Text(currentTitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            Spacer(minLength: 0)
+        }
     }
 }
 
@@ -282,7 +321,7 @@ private struct TrayQuotaCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(labels.current)
+                Text(labels.accountQuota)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 10)
@@ -387,6 +426,124 @@ private struct ProgressBar: View {
             }
         }
         .frame(height: 7)
+    }
+}
+
+private struct TrayMenuActionRow: View {
+    let title: String
+    let systemImage: String
+    var prominent = false
+    var destructive = false
+    let action: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(iconColor)
+                    .frame(width: 18)
+                Text(title)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(textColor)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(rowBackground)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
+    }
+
+    private var rowBackground: some View {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(backgroundMaterial)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.primary.opacity(hovered || prominent ? 0.10 : 0.06), lineWidth: 1)
+            )
+    }
+
+    private var backgroundMaterial: Material {
+        prominent || hovered ? .regularMaterial : .thinMaterial
+    }
+
+    private var iconColor: Color {
+        if destructive { return .red }
+        if prominent { return .blue }
+        return .primary.opacity(0.76)
+    }
+
+    private var textColor: Color {
+        if destructive { return .red }
+        return .primary
+    }
+}
+
+private struct TrayProfileRow: View {
+    let profile: TrayProfileEntry
+    let action: () -> Void
+
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: "person.crop.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.blue)
+                    .frame(width: 20)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(profile.menuTitle)
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if let plan = profile.planName?.trimmingCharacters(in: .whitespacesAndNewlines), !plan.isEmpty {
+                            Text(plan)
+                                .font(.system(size: 9.5, weight: .bold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(.thinMaterial, in: Capsule())
+                        }
+                    }
+
+                    Text("5h \(percentText(profile.quota.fiveHour.remainingPercent))  ·  7d \(percentText(profile.quota.weekly.remainingPercent))")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(hovered ? .regularMaterial : .thinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.primary.opacity(hovered ? 0.10 : 0.06), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
+        .help(profile.nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? profile.displayTitle : profile.nickname)
+    }
+
+    private func percentText(_ value: UInt8?) -> String {
+        guard let value else { return "--" }
+        return "\(min(value, 100))%"
     }
 }
 
