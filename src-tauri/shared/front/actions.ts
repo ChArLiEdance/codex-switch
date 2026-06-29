@@ -14,6 +14,8 @@ import {
   isUsageStatsRangePreset,
   normalizeUsageStatsRefreshSeconds,
   persistCloseBehavior,
+  defaultQuotaAlertSettings,
+  persistQuotaAlertSettings,
   persistShowAccountDetail,
   persistSwitchRestartTargets,
   persistSwitchRestartTargetsConfirmed,
@@ -81,6 +83,9 @@ import type {
   CodexCliRedetectResult,
   CodexCliStatus,
   ProfileCard,
+  QuotaAlertSettings,
+  QuotaSummary,
+  QuotaWindow,
   SwitchHealthResponse,
   SwitchRestartTargets,
   TrayProfileEntry,
@@ -163,6 +168,11 @@ let switchHealthResolver: ((confirmed: boolean) => void) | null = null;
 let nativeEventListenersStarted = false;
 let updateInstallRunning = false;
 let updateRestartTimer: number | null = null;
+let quotaAlertTickRunning = false;
+
+const QUOTA_ALERT_THRESHOLDS = [50, 20] as const;
+const QUOTA_ALERT_SENT_STORAGE_KEY = "codex-switch-quota-alert-sent";
+const QUOTA_RESET_REFRESH_STORAGE_KEY = "codex-switch-quota-reset-refresh";
 
 function isRefreshPending(profile: string): boolean {
   return state.refreshActiveProfiles.includes(profile);
@@ -592,6 +602,229 @@ async function saveUsageSettingsForProfile(profile: string, settings: UsageQuery
     ...state.usageSettingsByProfile,
     [profile]: saved,
   };
+}
+
+function quotaAlertSettingsFromInputs(): QuotaAlertSettings {
+  return {
+    enabled: Boolean(elements.settingsQuotaAlertEnabledToggle?.checked),
+    five_hour_enabled: elements.settingsQuotaAlertFiveHourToggle?.checked ?? true,
+    weekly_enabled: elements.settingsQuotaAlertWeeklyToggle?.checked ?? true,
+  };
+}
+
+function selectedSettingsQuotaAlertProfile(): string | null {
+  return elements.settingsQuotaAlertProfileSelect?.value || state.quotaAlertProfile;
+}
+
+function saveSettingsQuotaAlertProfile(): void {
+  const profile = selectedSettingsQuotaAlertProfile();
+  if (!profile) {
+    return;
+  }
+  state.quotaAlertSettingsByProfile = persistQuotaAlertSettings(
+    profile,
+    quotaAlertSettingsFromInputs(),
+    state.quotaAlertSettingsByProfile,
+  );
+  rerenderDashboard();
+  showToast(t(state.locale, "settingsQuotaAlertsSaved"));
+}
+
+function loadStringSet(key: string): Set<string> {
+  const raw = globalThis.localStorage?.getItem(key);
+  if (!raw) {
+    return new Set();
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return new Set(Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function persistStringSet(key: string, values: Set<string>): void {
+  globalThis.localStorage?.setItem(key, JSON.stringify([...values]));
+}
+
+function quotaAlertProfileTitle(profile: ProfileCard): string {
+  return profile.display_title || profile.account_label || profile.folder_name;
+}
+
+function quotaWindowAlertId(
+  profile: string,
+  windowKey: "five_hour" | "weekly",
+  threshold: number,
+  window: QuotaWindow,
+): string {
+  return `${profile}:${windowKey}:${threshold}:${window.reset_at_timestamp ?? window.refresh_at ?? "unknown"}`;
+}
+
+function quotaWindowRefreshId(profile: string, windowKey: "five_hour" | "weekly", window: QuotaWindow): string | null {
+  const reset = window.reset_at_timestamp;
+  return reset ? `${profile}:${windowKey}:${reset}` : null;
+}
+
+async function sendQuotaNotification(title: string, body: string): Promise<void> {
+  const notificationCtor = globalThis.Notification;
+  if (!notificationCtor) {
+    showToast(`${title} ${body}`);
+    return;
+  }
+  try {
+    let permission = notificationCtor.permission;
+    if (permission === "default") {
+      permission = await notificationCtor.requestPermission();
+    }
+    if (permission === "granted") {
+      new notificationCtor(title, { body });
+      return;
+    }
+  } catch {
+    // WebView notification support can vary by platform; toast is the safe fallback.
+  }
+  showToast(`${title} ${body}`);
+}
+
+function quotaAlertMessage(profile: ProfileCard, label: string, remaining: number, threshold: number): string {
+  return t(state.locale, "quotaAlertMessage", {
+    profile: quotaAlertProfileTitle(profile),
+    window: label,
+    remaining: String(remaining),
+    threshold: String(threshold),
+  });
+}
+
+async function maybeSendQuotaAlertForWindow(options: {
+  profile: ProfileCard;
+  settings: QuotaAlertSettings;
+  windowKey: "five_hour" | "weekly";
+  windowLabel: string;
+  window: QuotaWindow;
+  sent: Set<string>;
+}): Promise<boolean> {
+  if (!options.settings.enabled) {
+    return false;
+  }
+  if (options.windowKey === "five_hour" && !options.settings.five_hour_enabled) {
+    return false;
+  }
+  if (options.windowKey === "weekly" && !options.settings.weekly_enabled) {
+    return false;
+  }
+  const remaining = options.window.remaining_percent;
+  if (remaining == null) {
+    return false;
+  }
+
+  let changed = false;
+  for (const threshold of QUOTA_ALERT_THRESHOLDS) {
+    if (remaining > threshold) {
+      continue;
+    }
+    const id = quotaWindowAlertId(options.profile.folder_name, options.windowKey, threshold, options.window);
+    if (options.sent.has(id)) {
+      continue;
+    }
+    options.sent.add(id);
+    changed = true;
+    void sendQuotaNotification(
+      t(state.locale, "quotaAlertTitle"),
+      quotaAlertMessage(options.profile, options.windowLabel, remaining, threshold),
+    );
+  }
+  return changed;
+}
+
+async function maybeSendQuotaAlerts(): Promise<void> {
+  const profiles = state.snapshot?.profiles ?? [];
+  if (!profiles.length) {
+    return;
+  }
+  const sent = loadStringSet(QUOTA_ALERT_SENT_STORAGE_KEY);
+  let changed = false;
+  for (const profile of profiles) {
+    const settings = state.quotaAlertSettingsByProfile[profile.folder_name] ?? defaultQuotaAlertSettings();
+    const fiveChanged = await maybeSendQuotaAlertForWindow({
+      profile,
+      settings,
+      windowKey: "five_hour",
+      windowLabel: t(state.locale, "fiveHourAllowance"),
+      window: profile.quota.five_hour,
+      sent,
+    });
+    const weeklyChanged = await maybeSendQuotaAlertForWindow({
+      profile,
+      settings,
+      windowKey: "weekly",
+      windowLabel: t(state.locale, "weeklyAllowance"),
+      window: profile.quota.weekly,
+      sent,
+    });
+    changed = changed || fiveChanged || weeklyChanged;
+  }
+  if (changed) {
+    persistStringSet(QUOTA_ALERT_SENT_STORAGE_KEY, sent);
+  }
+}
+
+function quotaResetRefreshDue(profile: ProfileCard, quota: QuotaSummary): string[] {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const attempted = loadStringSet(QUOTA_RESET_REFRESH_STORAGE_KEY);
+  const due: string[] = [];
+  const windows: Array<["five_hour" | "weekly", QuotaWindow]> = [
+    ["five_hour", quota.five_hour],
+    ["weekly", quota.weekly],
+  ];
+  for (const [windowKey, window] of windows) {
+    const id = quotaWindowRefreshId(profile.folder_name, windowKey, window);
+    if (!id || attempted.has(id)) {
+      continue;
+    }
+    if (window.reset_at_timestamp != null && window.reset_at_timestamp <= nowSeconds) {
+      due.push(id);
+    }
+  }
+  return due;
+}
+
+async function refreshProfilesAfterQuotaReset(): Promise<void> {
+  const profiles = state.snapshot?.profiles ?? [];
+  if (!profiles.length) {
+    return;
+  }
+  const attempted = loadStringSet(QUOTA_RESET_REFRESH_STORAGE_KEY);
+  const dueProfiles = profiles.filter((profile) => quotaResetRefreshDue(profile, profile.quota).length > 0);
+  if (!dueProfiles.length) {
+    return;
+  }
+
+  for (const profile of dueProfiles) {
+    const dueIds = quotaResetRefreshDue(profile, profile.quota);
+    for (const id of dueIds) {
+      attempted.add(id);
+    }
+    try {
+      await refreshProfile(profile.folder_name);
+    } catch (error) {
+      console.warn("Quota reset refresh failed:", profile.folder_name, error);
+    }
+  }
+  persistStringSet(QUOTA_RESET_REFRESH_STORAGE_KEY, attempted);
+  await refreshAllData(false);
+}
+
+async function runQuotaAlertTick(): Promise<void> {
+  if (quotaAlertTickRunning) {
+    return;
+  }
+  quotaAlertTickRunning = true;
+  try {
+    await maybeSendQuotaAlerts();
+    await refreshProfilesAfterQuotaReset();
+  } finally {
+    quotaAlertTickRunning = false;
+  }
 }
 
 async function refreshUsageStats(showError = false): Promise<void> {
@@ -2292,6 +2525,13 @@ export function bootstrap(): void {
   elements.settingsUsageSaveButton?.addEventListener("click", () => {
     void saveSettingsUsageProfile();
   });
+  elements.settingsQuotaAlertProfileSelect?.addEventListener("change", () => {
+    state.quotaAlertProfile = elements.settingsQuotaAlertProfileSelect?.value || null;
+    rerenderDashboard();
+  });
+  elements.settingsQuotaAlertSaveButton?.addEventListener("click", () => {
+    saveSettingsQuotaAlertProfile();
+  });
   elements.usageProfileFilter?.addEventListener("change", () => {
     state.usageStatsProfile = elements.usageProfileFilter?.value || null;
     void refreshUsageStats(true);
@@ -2502,6 +2742,9 @@ export function bootstrap(): void {
   // swallowed per-profile, so this never surfaces a toast.
   scheduleDailyPlanRefresh();
   scheduleUsageStatsRefresh();
+  window.setInterval(() => {
+    void runQuotaAlertTick();
+  }, 60_000);
 
   void refreshCodexCliSettingsDisplay();
 
@@ -2517,6 +2760,7 @@ export function bootstrap(): void {
     void refreshAllOauthProfilePlansSilent().catch(() => {
       // Best-effort; backend already swallows per-profile errors.
     });
+    void runQuotaAlertTick();
   });
 }
 

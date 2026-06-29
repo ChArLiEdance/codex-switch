@@ -9,6 +9,12 @@ export interface QuotaSummary {
   weekly: QuotaWindow;
 }
 
+export interface QuotaAlertSettings {
+  enabled: boolean;
+  five_hour_enabled: boolean;
+  weekly_enabled: boolean;
+}
+
 export interface ProfileCard {
   folder_name: string;
   display_title: string;

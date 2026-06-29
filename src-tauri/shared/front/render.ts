@@ -94,6 +94,11 @@ export const elements = {
   settingsUsageTimeoutInput: document.getElementById("settings-usage-timeout-input") as HTMLInputElement | null,
   settingsUsageIntervalInput: document.getElementById("settings-usage-interval-input") as HTMLInputElement | null,
   settingsUsageSaveButton: document.getElementById("settings-usage-save-button") as HTMLButtonElement | null,
+  settingsQuotaAlertProfileSelect: document.getElementById("settings-quota-alert-profile-select") as HTMLSelectElement | null,
+  settingsQuotaAlertEnabledToggle: document.getElementById("settings-quota-alert-enabled-toggle") as HTMLInputElement | null,
+  settingsQuotaAlertFiveHourToggle: document.getElementById("settings-quota-alert-five-hour-toggle") as HTMLInputElement | null,
+  settingsQuotaAlertWeeklyToggle: document.getElementById("settings-quota-alert-weekly-toggle") as HTMLInputElement | null,
+  settingsQuotaAlertSaveButton: document.getElementById("settings-quota-alert-save-button") as HTMLButtonElement | null,
   usageProfileFilter: document.getElementById("usage-profile-filter") as HTMLSelectElement | null,
   usageRangeFilter: document.getElementById("usage-range-filter") as HTMLSelectElement | null,
   usageRefreshIntervalFilter: document.getElementById("usage-refresh-interval-filter") as HTMLSelectElement | null,
@@ -749,6 +754,7 @@ export function renderShellOverview(dashboard: DashboardViewModel | null): void 
     renderUsageStats();
     renderSessionManager();
     renderGeneralSettingsControls();
+    renderQuotaAlertSettingsControls([]);
     return;
   }
 
@@ -766,6 +772,7 @@ export function renderShellOverview(dashboard: DashboardViewModel | null): void 
   elements.dashboardMissingCount.textContent = String(Math.max(0, missingCount));
   renderGeneralSettingsControls();
   renderUsageSettingsControls(profiles);
+  renderQuotaAlertSettingsControls(profiles);
   renderUsageStats();
   renderSessionManager();
 }
@@ -893,6 +900,32 @@ function renderUsageSettingsControls(profiles: ProfileCard[]): void {
   }
   if (elements.settingsUsageIntervalInput) {
     elements.settingsUsageIntervalInput.value = String(settings?.auto_query_interval_minutes ?? 5);
+  }
+}
+
+function renderQuotaAlertSettingsControls(profiles: ProfileCard[]): void {
+  const select = elements.settingsQuotaAlertProfileSelect;
+  if (!select) {
+    return;
+  }
+  const selected = state.quotaAlertProfile ?? state.currentProfile ?? profiles[0]?.folder_name ?? "";
+  if (state.quotaAlertProfile !== selected) {
+    state.quotaAlertProfile = selected || null;
+  }
+  select.innerHTML = profiles
+    .map((profile) => (
+      `<option value="${escapeHtml(profile.folder_name)}"${profile.folder_name === selected ? " selected" : ""}>${escapeHtml(profileDisplayTitle(profile))}</option>`
+    ))
+    .join("");
+  const settings = selected ? state.quotaAlertSettingsByProfile[selected] : null;
+  if (elements.settingsQuotaAlertEnabledToggle) {
+    elements.settingsQuotaAlertEnabledToggle.checked = Boolean(settings?.enabled);
+  }
+  if (elements.settingsQuotaAlertFiveHourToggle) {
+    elements.settingsQuotaAlertFiveHourToggle.checked = settings?.five_hour_enabled ?? true;
+  }
+  if (elements.settingsQuotaAlertWeeklyToggle) {
+    elements.settingsQuotaAlertWeeklyToggle.checked = settings?.weekly_enabled ?? true;
   }
 }
 

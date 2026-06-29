@@ -444,6 +444,36 @@
                         <button id="settings-usage-save-button" class="settings-action-button" type="button" data-i18n-key="usageQuerySave">Save usage config</button>
                       </div>
                     </div>
+                    <div class="settings-section-card usage-query-settings-card">
+                      <div class="settings-section-heading">
+                        <strong data-i18n-key="settingsQuotaAlerts">Quota alerts</strong>
+                        <p class="settings-help" data-i18n-key="settingsQuotaAlertsCopy">Notify when 5h or weekly quota falls below 50% and 20%.</p>
+                      </div>
+                      <label class="settings-row settings-row--field">
+                        <strong data-i18n-key="settingsUsageProfileSelect">Account</strong>
+                        <select id="settings-quota-alert-profile-select" class="settings-input"></select>
+                      </label>
+                      <div class="settings-row">
+                        <strong data-i18n-key="settingsQuotaAlertsEnabled">Enable quota alerts</strong>
+                        <label class="settings-switch">
+                          <input id="settings-quota-alert-enabled-toggle" type="checkbox" />
+                          <span aria-hidden="true"></span>
+                        </label>
+                      </div>
+                      <div class="settings-check-list settings-check-list--inline">
+                        <label class="settings-check">
+                          <input id="settings-quota-alert-five-hour-toggle" type="checkbox" checked />
+                          <span data-i18n-key="fiveHourAllowance">5h allowance</span>
+                        </label>
+                        <label class="settings-check">
+                          <input id="settings-quota-alert-weekly-toggle" type="checkbox" checked />
+                          <span data-i18n-key="weeklyAllowance">Weekly allowance</span>
+                        </label>
+                      </div>
+                      <div class="settings-actions-row">
+                        <button id="settings-quota-alert-save-button" class="settings-action-button" type="button" data-i18n-key="settingsQuotaAlertsSave">Save alert config</button>
+                      </div>
+                    </div>
                     <label class="settings-row settings-row--field">
                       <strong data-i18n-key="settingsUpdateUrl">Update URL</strong>
                       <input id="settings-update-url-input" class="settings-input" type="url" value="https://api.github.com/repos/ChArLiEdance/codex-switch/releases/latest" />

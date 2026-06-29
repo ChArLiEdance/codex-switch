@@ -1,5 +1,6 @@
 import type {
   CloseBehavior,
+  QuotaAlertSettings,
   SwitchRestartTargets,
   UsageStatsRangePreset,
   UsageStatsRefreshSeconds,
@@ -13,6 +14,7 @@ const USAGE_STATS_RANGE_STORAGE_KEY = "codex-switch-usage-stats-range";
 const USAGE_STATS_REFRESH_SECONDS_STORAGE_KEY = "codex-switch-usage-stats-refresh-seconds";
 const USAGE_STATS_CUSTOM_START_STORAGE_KEY = "codex-switch-usage-stats-custom-start";
 const USAGE_STATS_CUSTOM_END_STORAGE_KEY = "codex-switch-usage-stats-custom-end";
+const QUOTA_ALERT_SETTINGS_STORAGE_KEY = "codex-switch-quota-alert-settings";
 
 const usageStatsRanges: readonly UsageStatsRangePreset[] = ["today", "1d", "7d", "14d", "30d", "custom"];
 const usageStatsRefreshSeconds: readonly UsageStatsRefreshSeconds[] = [0, 5, 10, 30, 60];
@@ -145,4 +147,59 @@ export function resolveInitialUsageStatsRefreshSeconds(): UsageStatsRefreshSecon
 
 export function persistUsageStatsRefreshSeconds(seconds: UsageStatsRefreshSeconds): void {
   globalThis.localStorage?.setItem(USAGE_STATS_REFRESH_SECONDS_STORAGE_KEY, String(seconds));
+}
+
+export function defaultQuotaAlertSettings(): QuotaAlertSettings {
+  return {
+    enabled: false,
+    five_hour_enabled: true,
+    weekly_enabled: true,
+  };
+}
+
+function normalizeQuotaAlertSettings(value: unknown): QuotaAlertSettings {
+  const fallback = defaultQuotaAlertSettings();
+  if (!value || typeof value !== "object") {
+    return fallback;
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    enabled: typeof record.enabled === "boolean" ? record.enabled : fallback.enabled,
+    five_hour_enabled:
+      typeof record.five_hour_enabled === "boolean" ? record.five_hour_enabled : fallback.five_hour_enabled,
+    weekly_enabled: typeof record.weekly_enabled === "boolean" ? record.weekly_enabled : fallback.weekly_enabled,
+  };
+}
+
+export function resolveInitialQuotaAlertSettingsByProfile(): Record<string, QuotaAlertSettings> {
+  const stored = globalThis.localStorage?.getItem(QUOTA_ALERT_SETTINGS_STORAGE_KEY);
+  if (!stored) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(stored) as unknown;
+    if (!parsed || typeof parsed !== "object") {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>)
+        .filter(([profile]) => profile.length > 0)
+        .map(([profile, settings]) => [profile, normalizeQuotaAlertSettings(settings)]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+export function persistQuotaAlertSettings(
+  profile: string,
+  settings: QuotaAlertSettings,
+  existing: Record<string, QuotaAlertSettings>,
+): Record<string, QuotaAlertSettings> {
+  const next = {
+    ...existing,
+    [profile]: normalizeQuotaAlertSettings(settings),
+  };
+  globalThis.localStorage?.setItem(QUOTA_ALERT_SETTINGS_STORAGE_KEY, JSON.stringify(next));
+  return next;
 }
