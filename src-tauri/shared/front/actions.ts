@@ -62,6 +62,7 @@ import {
   refreshProfile,
   redetectCodexCliPath,
   renameProfile,
+  restartApp,
   saveUsageQuerySettings,
   saveCodexPrompt,
   saveCodexSkill,
@@ -82,6 +83,7 @@ import type {
   TrayStatePayload,
   UsageQuerySettings,
   UsageStatsRangePreset,
+  UpdateDownloadProgress,
 } from "@front-shared/types";
 import {
   applyLocale,
@@ -94,6 +96,10 @@ import {
   renderShellOverview,
   renderShellRoute,
   renderSessionManager,
+  setUpdateInstalling,
+  setUpdateProgress,
+  showUpdateInstallComplete,
+  showUpdateInstallError,
   renderThemeOptions,
   renderUsageStats,
   routeFromLocation,
@@ -148,6 +154,9 @@ let cancelledLoginProfile: string | null = null;
 let usageConfigSourceProfile: string | null = null;
 let traySyncHandle: number | null = null;
 let restartChoiceResolver: ((targets: SwitchRestartTargets | null) => void) | null = null;
+let nativeEventListenersStarted = false;
+let updateInstallRunning = false;
+let updateRestartTimer: number | null = null;
 
 function isRefreshPending(profile: string): boolean {
   return state.refreshActiveProfiles.includes(profile);
@@ -309,8 +318,16 @@ async function handleNativeCloseRequested(): Promise<void> {
 }
 
 function setupNativeEventListeners(): void {
+  if (nativeEventListenersStarted) {
+    return;
+  }
+  nativeEventListenersStarted = true;
+
   void listen("codex-switch://close-requested", () => {
     void handleNativeCloseRequested();
+  }).catch(() => {});
+  void listen<UpdateDownloadProgress>("codex-switch://update-download-progress", (event) => {
+    setUpdateProgress(event.payload);
   }).catch(() => {});
   void listen<string>("codex-switch://tray-route", (event) => {
     if (event.payload === "about") {
@@ -1359,14 +1376,54 @@ async function handleCheckUpdate(silent = false): Promise<void> {
 }
 
 async function handleInstallUpdate(): Promise<void> {
+  if (updateInstallRunning) {
+    return;
+  }
+  updateInstallRunning = true;
+  if (updateRestartTimer !== null) {
+    window.clearTimeout(updateRestartTimer);
+    updateRestartTimer = null;
+  }
   showToast(t(state.locale, "installingUpdate"));
+  setUpdateInstalling(true);
+  setUpdateProgress({
+    phase: "preparing",
+    received_bytes: 0,
+    total_bytes: null,
+    percent: 0,
+    message: t(state.locale, "updateProgressPreparing"),
+  });
 
   try {
     const update = await installUpdate(elements.settingsUpdateUrlInput.value);
+    showUpdateInstallComplete();
     showToast(t(state.locale, "installedUpdate", {
       asset: update.asset_name,
       version: update.version,
     }));
+    updateRestartTimer = window.setTimeout(() => {
+      void handleRestartApp();
+    }, 1800);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t(state.locale, "failedToInstallUpdate");
+    showUpdateInstallError(message);
+    showToast(message, true);
+  } finally {
+    updateInstallRunning = false;
+    setUpdateInstalling(false);
+  }
+}
+
+async function handleRestartApp(): Promise<void> {
+  setUpdateProgress({
+    phase: "restarting",
+    received_bytes: 0,
+    total_bytes: null,
+    percent: 100,
+    message: t(state.locale, "updateRestarting"),
+  });
+  try {
+    await restartApp();
   } catch (error) {
     showToast(error instanceof Error ? error.message : t(state.locale, "failedToInstallUpdate"), true);
   }
@@ -1864,8 +1921,13 @@ export function bootstrap(): void {
     elements.updateDialog.close();
   });
   elements.updateDialogOpenButton.addEventListener("click", () => {
-    elements.updateDialog.close();
     void handleInstallUpdate();
+  });
+  elements.updateDialogRetryButton.addEventListener("click", () => {
+    void handleInstallUpdate();
+  });
+  elements.updateDialogRestartButton.addEventListener("click", () => {
+    void handleRestartApp();
   });
   elements.starButton.addEventListener("click", () => {
     window.location.hash = "guide";

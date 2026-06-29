@@ -909,10 +909,19 @@
         <div class="dialog-copy">
           <h3 data-i18n-key="updateDialogTitle">New version available</h3>
           <p id="update-dialog-copy">Version update is available.</p>
+          <div id="update-dialog-notes" class="update-release-notes" hidden></div>
+          <div id="update-progress-panel" class="update-progress-panel" hidden>
+            <div class="update-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <span id="update-progress-fill"></span>
+            </div>
+            <p id="update-progress-status">Ready to download.</p>
+          </div>
         </div>
 
         <div class="dialog-actions">
           <button id="update-dialog-later-button" class="ghost-button" type="button" data-i18n-key="updateDialogLater">Later</button>
+          <button id="update-dialog-retry-button" class="ghost-button" type="button" data-i18n-key="updateDialogRetry" hidden>Retry</button>
+          <button id="update-dialog-restart-button" class="ghost-button" type="button" data-i18n-key="updateDialogRestart" hidden>Restart app</button>
           <button id="update-dialog-open-button" class="primary-button" type="button" data-i18n-key="updateDialogOpen">Download and install</button>
         </div>
       </div>

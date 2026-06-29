@@ -142,6 +142,14 @@ export interface InstallUpdateResponse {
   path: string;
 }
 
+export interface UpdateDownloadProgress {
+  phase: string;
+  received_bytes: number;
+  total_bytes: number | null;
+  percent: number | null;
+  message: string;
+}
+
 export interface CommandError {
   error_code?: string;
   message?: string;

@@ -243,6 +243,15 @@ pub struct InstallUpdateResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateDownloadProgress {
+    pub phase: String,
+    pub received_bytes: u64,
+    pub total_bytes: Option<u64>,
+    pub percent: Option<u8>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwitchResponse {
     pub ok: bool,
     pub profile: String,

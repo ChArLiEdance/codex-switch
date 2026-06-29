@@ -553,6 +553,13 @@ async function invokeCommand<T>(command: string, args?: Record<string, unknown>)
           notes: null,
           checked_url: "preview",
         }) as Promise<T>;
+      case "install_update":
+        return Promise.resolve({
+          ok: true,
+          version: "1.0.1",
+          asset_name: "codex_switch_1.0.1_preview.dmg",
+          path: "/preview/codex_switch_1.0.1_preview.dmg",
+        }) as Promise<T>;
       case "open_url":
         return mockAction("Opened URL in preview mode", "preview:url") as Promise<T>;
       case "get_codex_cli_status":
@@ -667,6 +674,7 @@ async function invokeCommand<T>(command: string, args?: Record<string, unknown>)
       case "show_main_window":
       case "hide_main_window":
       case "quit_app":
+      case "restart_app":
       case "open_profile_folder":
       case "open_codex":
       case "login_current_profile":
@@ -855,6 +863,10 @@ export function hideMainWindow(): Promise<ActionResponse> {
 
 export function quitApp(): Promise<ActionResponse> {
   return invokeCommand<ActionResponse>("quit_app");
+}
+
+export function restartApp(): Promise<ActionResponse> {
+  return invokeCommand<ActionResponse>("restart_app");
 }
 
 export function listCodexSkills(): Promise<CodexSkillEntry[]> {

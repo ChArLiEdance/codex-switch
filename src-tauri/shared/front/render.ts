@@ -11,6 +11,7 @@ import type {
   QuotaWindow,
   ShellRoute,
   UpdateCheckResponse,
+  UpdateDownloadProgress,
   UsageStatsResponse,
   UsageStatsRangePreset,
   UsageStatsRefreshSeconds,
@@ -45,6 +46,17 @@ function requiredElement<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (!(element instanceof HTMLElement)) {
     throw new Error(`Missing required element: ${id}`);
+  }
+  return element as T;
+}
+
+function requiredChild<T extends HTMLElement>(
+  parent: ParentNode,
+  selector: string,
+): T {
+  const element = parent.querySelector(selector);
+  if (!(element instanceof HTMLElement)) {
+    throw new Error(`Missing required child: ${selector}`);
   }
   return element as T;
 }
@@ -164,7 +176,17 @@ export const elements = {
   closeChoiceCancelButton: requiredElement<HTMLButtonElement>("close-choice-cancel-button"),
   updateDialog: requiredElement<HTMLDialogElement>("update-dialog"),
   updateDialogCopy: requiredElement<HTMLParagraphElement>("update-dialog-copy"),
+  updateDialogNotes: requiredElement<HTMLDivElement>("update-dialog-notes"),
+  updateProgressPanel: requiredElement<HTMLDivElement>("update-progress-panel"),
+  updateProgressTrack: requiredChild<HTMLDivElement>(
+    requiredElement<HTMLDivElement>("update-progress-panel"),
+    ".update-progress-track",
+  ),
+  updateProgressFill: requiredElement<HTMLSpanElement>("update-progress-fill"),
+  updateProgressStatus: requiredElement<HTMLParagraphElement>("update-progress-status"),
   updateDialogLaterButton: requiredElement<HTMLButtonElement>("update-dialog-later-button"),
+  updateDialogRetryButton: requiredElement<HTMLButtonElement>("update-dialog-retry-button"),
+  updateDialogRestartButton: requiredElement<HTMLButtonElement>("update-dialog-restart-button"),
   updateDialogOpenButton: requiredElement<HTMLButtonElement>("update-dialog-open-button"),
   starButton: requiredElement<HTMLButtonElement>("star-button"),
   xiaohongshuButton: requiredElement<HTMLButtonElement>("xiaohongshu-button"),
@@ -544,10 +566,112 @@ export function showUpdateDialog(update: UpdateCheckResponse): void {
     current: update.current_version,
     latest: update.latest_version ?? "--",
   });
+  elements.updateDialogNotes.hidden = !update.notes;
+  elements.updateDialogNotes.textContent = update.notes ?? "";
+  setUpdateProgress({
+    phase: "ready",
+    received_bytes: 0,
+    total_bytes: null,
+    percent: 0,
+    message: t(state.locale, "updateProgressReady"),
+  });
+  elements.updateProgressPanel.hidden = true;
+  elements.updateDialogOpenButton.hidden = false;
+  elements.updateDialogOpenButton.disabled = false;
+  elements.updateDialogRetryButton.hidden = true;
+  elements.updateDialogRetryButton.disabled = false;
+  elements.updateDialogRestartButton.hidden = true;
+  elements.updateDialogRestartButton.disabled = false;
+  elements.updateDialogLaterButton.disabled = false;
 
   if (!elements.updateDialog.open) {
     elements.updateDialog.showModal();
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`;
+}
+
+function progressMessage(progress: UpdateDownloadProgress): string {
+  const percent = progress.percent ?? 0;
+  if (progress.phase === "downloading") {
+    const base = t(state.locale, "updateProgressDownloading", { percent: String(percent) });
+    if (progress.total_bytes && progress.total_bytes > 0) {
+      return `${base} · ${formatBytes(progress.received_bytes)} / ${formatBytes(progress.total_bytes)}`;
+    }
+    if (progress.received_bytes > 0) {
+      return `${base} · ${formatBytes(progress.received_bytes)}`;
+    }
+    return base;
+  }
+  if (progress.phase === "opening") {
+    return t(state.locale, "updateProgressOpening");
+  }
+  if (progress.phase === "opened") {
+    return t(state.locale, "updateProgressOpened");
+  }
+  if (progress.phase === "failed") {
+    return progress.message || t(state.locale, "updateProgressFailed");
+  }
+  if (progress.phase === "restarting") {
+    return t(state.locale, "updateRestarting");
+  }
+  return progress.message || t(state.locale, "updateProgressReady");
+}
+
+export function setUpdateProgress(progress: UpdateDownloadProgress): void {
+  const percent = Math.max(0, Math.min(100, progress.percent ?? 0));
+  elements.updateProgressPanel.hidden = false;
+  elements.updateProgressFill.style.width = `${percent}%`;
+  elements.updateProgressTrack.setAttribute("aria-valuenow", String(percent));
+  elements.updateProgressStatus.textContent = progressMessage(progress);
+}
+
+export function setUpdateInstalling(isInstalling: boolean): void {
+  elements.updateDialogOpenButton.disabled = isInstalling;
+  elements.updateDialogLaterButton.disabled = isInstalling;
+  elements.updateDialogRetryButton.disabled = isInstalling;
+  elements.updateDialogRestartButton.disabled = isInstalling;
+  elements.updateProgressPanel.hidden = false;
+}
+
+export function showUpdateInstallError(message: string): void {
+  setUpdateProgress({
+    phase: "failed",
+    received_bytes: 0,
+    total_bytes: null,
+    percent: null,
+    message,
+  });
+  elements.updateDialogOpenButton.hidden = true;
+  elements.updateDialogRetryButton.hidden = false;
+  elements.updateDialogRestartButton.hidden = true;
+  elements.updateDialogLaterButton.disabled = false;
+}
+
+export function showUpdateInstallComplete(): void {
+  setUpdateProgress({
+    phase: "opened",
+    received_bytes: 0,
+    total_bytes: null,
+    percent: 100,
+    message: t(state.locale, "updateProgressOpened"),
+  });
+  elements.updateDialogOpenButton.hidden = true;
+  elements.updateDialogRetryButton.hidden = true;
+  elements.updateDialogRestartButton.hidden = false;
+  elements.updateDialogLaterButton.disabled = false;
 }
 
 export function renderThemeOptions(): void {

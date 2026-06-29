@@ -332,3 +332,8 @@ pub fn quit_app(app: tauri::AppHandle) -> Result<ActionResponse, CommandError> {
         path: None,
     })
 }
+
+#[tauri::command]
+pub fn restart_app(app: tauri::AppHandle) -> Result<ActionResponse, CommandError> {
+    app.restart();
+}

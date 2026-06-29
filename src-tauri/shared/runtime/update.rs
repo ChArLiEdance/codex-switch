@@ -1,19 +1,22 @@
 use std::cmp::Ordering;
 use std::fs;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::Duration;
 
 use semver::Version;
 use serde_json::Value;
+use tauri::Emitter;
 use tauri_plugin_opener::OpenerExt;
 
 use crate::errors::{AppError, AppResult};
-use crate::models::{InstallUpdateResponse, UpdateCheckResponse};
+use crate::models::{InstallUpdateResponse, UpdateCheckResponse, UpdateDownloadProgress};
 use crate::shared::paths::{RELEASES_URL, UPDATE_CHECK_URL};
 
 const UPDATE_USER_AGENT: &str = "Codex-Switch-Updater";
 const DOWNLOAD_TIMEOUT_SECONDS: u64 = 180;
+pub const UPDATE_DOWNLOAD_PROGRESS_EVENT: &str = "codex-switch://update-download-progress";
 
 #[derive(Debug, Clone)]
 struct ReleaseAsset {
@@ -57,8 +60,46 @@ pub fn download_and_open_update(
         ));
     }
 
+    emit_update_progress(
+        app,
+        "preparing",
+        0,
+        None,
+        Some(0),
+        "Preparing update download.",
+    );
     let asset = select_update_asset(&payload)?;
-    let path = download_update_asset(&latest_version, &asset)?;
+    emit_update_progress(
+        app,
+        "downloading",
+        0,
+        None,
+        Some(0),
+        &format!("Downloading {}.", asset.name),
+    );
+    let path = download_update_asset(&latest_version, &asset, |received, total| {
+        let percent = total.filter(|value| *value > 0).map(|value| {
+            ((received as f64 / value as f64) * 100.0)
+                .round()
+                .clamp(0.0, 100.0) as u8
+        });
+        emit_update_progress(
+            app,
+            "downloading",
+            received,
+            total,
+            percent,
+            "Downloading update asset.",
+        );
+    })?;
+    emit_update_progress(
+        app,
+        "opening",
+        0,
+        None,
+        Some(100),
+        "Opening update installer.",
+    );
     app.opener()
         .open_path(path.to_string_lossy().into_owned(), None::<&str>)
         .map_err(|error| {
@@ -67,6 +108,7 @@ pub fn download_and_open_update(
                 format!("Downloaded update but failed to open installer: {error}"),
             )
         })?;
+    emit_update_progress(app, "opened", 0, None, Some(100), "Installer opened.");
 
     Ok(InstallUpdateResponse {
         ok: true,
@@ -74,6 +116,26 @@ pub fn download_and_open_update(
         asset_name: asset.name,
         path: path.to_string_lossy().into_owned(),
     })
+}
+
+fn emit_update_progress(
+    app: &tauri::AppHandle,
+    phase: &str,
+    received_bytes: u64,
+    total_bytes: Option<u64>,
+    percent: Option<u8>,
+    message: &str,
+) {
+    let _ = app.emit(
+        UPDATE_DOWNLOAD_PROGRESS_EVENT,
+        UpdateDownloadProgress {
+            phase: phase.to_string(),
+            received_bytes,
+            total_bytes,
+            percent,
+            message: message.to_string(),
+        },
+    );
 }
 
 fn normalize_update_url(update_url: &str) -> AppResult<String> {
@@ -199,7 +261,11 @@ fn candidate_asset_score(name: &str) -> Option<u8> {
     }
 }
 
-fn download_update_asset(version: &str, asset: &ReleaseAsset) -> AppResult<PathBuf> {
+fn download_update_asset(
+    version: &str,
+    asset: &ReleaseAsset,
+    mut on_progress: impl FnMut(u64, Option<u64>),
+) -> AppResult<PathBuf> {
     let file_name = safe_asset_file_name(&asset.name)?;
     let url = asset.download_url.trim();
     if !(url.starts_with("https://") || url.starts_with("http://")) {
@@ -220,7 +286,15 @@ fn download_update_asset(version: &str, asset: &ReleaseAsset) -> AppResult<PathB
     })?;
 
     let path = cache_dir.join(file_name);
-    let bytes = reqwest::blocking::Client::builder()
+    let partial_path = path.with_extension(format!(
+        "{}download",
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .map(|extension| format!("{extension}."))
+            .unwrap_or_default()
+    ));
+    let _ = fs::remove_file(&partial_path);
+    let mut response = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(DOWNLOAD_TIMEOUT_SECONDS))
         .user_agent(UPDATE_USER_AGENT)
         .build()
@@ -244,19 +318,56 @@ fn download_update_asset(version: &str, asset: &ReleaseAsset) -> AppResult<PathB
                 "UPDATE_DOWNLOAD_FAILED",
                 format!("Update asset download failed: {error}"),
             )
-        })?
-        .bytes()
-        .map_err(|error| {
-            AppError::new(
-                "UPDATE_DOWNLOAD_FAILED",
-                format!("Failed to read update asset bytes: {error}"),
-            )
         })?;
-
-    fs::write(&path, &bytes).map_err(|error| {
+    let total = response.content_length();
+    let mut file = fs::File::create(&partial_path).map_err(|error| {
         AppError::new(
             "UPDATE_ASSET_WRITE_FAILED",
-            format!("Failed to write update asset: {error}"),
+            format!("Failed to create update asset: {error}"),
+        )
+    })?;
+
+    let mut received = 0_u64;
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = response.read(&mut buffer).map_err(|error| {
+            AppError::new(
+                "UPDATE_DOWNLOAD_FAILED",
+                format!("Failed while downloading update asset: {error}"),
+            )
+        })?;
+        if read == 0 {
+            break;
+        }
+        file.write_all(&buffer[..read]).map_err(|error| {
+            AppError::new(
+                "UPDATE_ASSET_WRITE_FAILED",
+                format!("Failed to write update asset: {error}"),
+            )
+        })?;
+        received = received.saturating_add(read as u64);
+        on_progress(received, total);
+    }
+    file.flush().map_err(|error| {
+        AppError::new(
+            "UPDATE_ASSET_WRITE_FAILED",
+            format!("Failed to flush update asset: {error}"),
+        )
+    })?;
+
+    if path.exists() {
+        fs::remove_file(&path).map_err(|error| {
+            AppError::new(
+                "UPDATE_ASSET_WRITE_FAILED",
+                format!("Failed to replace previous update asset: {error}"),
+            )
+        })?;
+    }
+
+    fs::rename(&partial_path, &path).map_err(|error| {
+        AppError::new(
+            "UPDATE_ASSET_WRITE_FAILED",
+            format!("Failed to finalize update asset: {error}"),
         )
     })?;
 
