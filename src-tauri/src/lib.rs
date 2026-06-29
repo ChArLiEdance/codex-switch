@@ -75,6 +75,7 @@ pub fn run() {
             commands::actions::hide_main_window,
             commands::actions::quit_app,
             commands::actions::restart_app,
+            commands::switch::check_switch_health,
             commands::switch::switch_profile,
             commands::tools::list_codex_skills,
             commands::tools::save_codex_skill,

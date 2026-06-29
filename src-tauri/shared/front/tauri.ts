@@ -18,6 +18,7 @@ import type {
   QuotaSummary,
   SwitchRestartTargets,
   SwitchResponse,
+  SwitchHealthResponse,
   TrayStatePayload,
   UpdateCheckResponse,
   UsageQuerySettings,
@@ -452,6 +453,23 @@ async function invokeCommand<T>(command: string, args?: Record<string, unknown>)
           warnings: [],
         } as T;
       }
+      case "check_switch_health": {
+        const profile = (args?.payload as { profile?: string } | undefined)?.profile ?? previewCurrentCard.folder_name;
+        const target = previewSnapshot.profiles.find((entry) => entry.folder_name === profile);
+        return {
+          profile,
+          cli_available: true,
+          cli_path: "/preview/codex",
+          codex_desktop_running: true,
+          vscode_running: false,
+          target_auth_present: Boolean(target?.auth_present),
+          current_matches_target: profile === previewCurrentCard.folder_name,
+          requires_relogin: !target?.auth_present,
+          current_account_label: previewCurrentCard.account_label,
+          target_account_label: target?.account_label ?? null,
+          warnings: profile === previewCurrentCard.folder_name ? ["ALREADY_CURRENT_ACCOUNT"] : [],
+        } as T;
+      }
       case "rename_profile": {
         const payload = args?.payload as { profile?: string; new_folder_name?: string } | undefined;
         if (payload?.profile && payload.new_folder_name) {
@@ -763,6 +781,12 @@ export function switchProfile(
 ): Promise<SwitchResponse> {
   return invokeCommand<SwitchResponse>("switch_profile", {
     payload: { profile, restart_targets: restartTargets ?? null },
+  });
+}
+
+export function checkSwitchHealth(profile: string): Promise<SwitchHealthResponse> {
+  return invokeCommand<SwitchHealthResponse>("check_switch_health", {
+    payload: { profile },
   });
 }
 

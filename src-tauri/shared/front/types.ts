@@ -72,6 +72,20 @@ export interface SwitchResponse {
   warnings: string[];
 }
 
+export interface SwitchHealthResponse {
+  profile: string;
+  cli_available: boolean;
+  cli_path: string | null;
+  codex_desktop_running: boolean;
+  vscode_running: boolean;
+  target_auth_present: boolean;
+  current_matches_target: boolean;
+  requires_relogin: boolean;
+  current_account_label: string | null;
+  target_account_label: string | null;
+  warnings: string[];
+}
+
 export interface SwitchRestartTargets {
   cli: boolean;
   vscode: boolean;

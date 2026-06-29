@@ -445,6 +445,14 @@ pub fn is_codex_app_running() -> bool {
         .unwrap_or(false)
 }
 
+pub fn is_vscode_running() -> bool {
+    Command::new("pgrep")
+        .args(["-x", "Code"])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
 fn activate_running_app() -> AppResult<()> {
     let script = format!("tell application \"{APP_NAME}\" to activate");
     let status = Command::new("osascript")

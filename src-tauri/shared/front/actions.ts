@@ -30,6 +30,7 @@ import {
 import {
   addProfile,
   cancelCodexLogin,
+  checkSwitchHealth,
   checkUpdate,
   clearCodexCliPath,
   clearProfileAccount,
@@ -80,6 +81,7 @@ import type {
   CodexCliRedetectResult,
   CodexCliStatus,
   ProfileCard,
+  SwitchHealthResponse,
   SwitchRestartTargets,
   TrayProfileEntry,
   TrayStatePayload,
@@ -157,6 +159,7 @@ let usageConfigSourceProfile: string | null = null;
 let profileBackupMode: "export" | "import" = "export";
 let traySyncHandle: number | null = null;
 let restartChoiceResolver: ((targets: SwitchRestartTargets | null) => void) | null = null;
+let switchHealthResolver: ((confirmed: boolean) => void) | null = null;
 let nativeEventListenersStarted = false;
 let updateInstallRunning = false;
 let updateRestartTimer: number | null = null;
@@ -281,6 +284,121 @@ async function ensureSwitchRestartTargetsConfirmed(): Promise<SwitchRestartTarge
   }
   setSwitchRestartTargets(targets);
   return targets;
+}
+
+type HealthStatus = "ok" | "warn" | "neutral";
+
+function healthStatusLabel(status: HealthStatus): string {
+  if (status === "ok") {
+    return t(state.locale, "switchHealthOk");
+  }
+  if (status === "warn") {
+    return t(state.locale, "switchHealthWarning");
+  }
+  return t(state.locale, "switchHealthInfo");
+}
+
+function renderSwitchHealthRows(health: SwitchHealthResponse): void {
+  const rows: Array<{
+    label: string;
+    value: string;
+    detail?: string | null;
+    status: HealthStatus;
+  }> = [
+    {
+      label: t(state.locale, "switchHealthCli"),
+      value: health.cli_available ? t(state.locale, "switchHealthOk") : t(state.locale, "switchHealthMissing"),
+      detail: health.cli_path,
+      status: health.cli_available ? "ok" : "warn",
+    },
+    {
+      label: t(state.locale, "switchHealthCodexDesktop"),
+      value: health.codex_desktop_running
+        ? t(state.locale, "switchHealthRunning")
+        : t(state.locale, "switchHealthNotRunning"),
+      status: health.codex_desktop_running ? "ok" : "neutral",
+    },
+    {
+      label: t(state.locale, "switchHealthVscode"),
+      value: health.vscode_running
+        ? t(state.locale, "switchHealthRunning")
+        : t(state.locale, "switchHealthNotRunning"),
+      status: health.vscode_running ? "ok" : "neutral",
+    },
+    {
+      label: t(state.locale, "switchHealthTargetAuth"),
+      value: health.target_auth_present ? t(state.locale, "switchHealthOk") : t(state.locale, "switchHealthMissing"),
+      detail: health.target_account_label
+        ? t(state.locale, "switchHealthTargetAccount", { value: health.target_account_label })
+        : null,
+      status: health.target_auth_present ? "ok" : "warn",
+    },
+    {
+      label: t(state.locale, "switchHealthCurrentMatch"),
+      value: health.current_matches_target ? t(state.locale, "switchHealthYes") : t(state.locale, "switchHealthNo"),
+      detail: health.current_account_label
+        ? t(state.locale, "switchHealthCurrentAccount", { value: health.current_account_label })
+        : null,
+      status: health.current_matches_target ? "ok" : "neutral",
+    },
+    {
+      label: t(state.locale, "switchHealthRelogin"),
+      value: health.requires_relogin ? t(state.locale, "switchHealthYes") : t(state.locale, "switchHealthNo"),
+      status: health.requires_relogin ? "warn" : "ok",
+    },
+  ];
+
+  elements.switchHealthList.replaceChildren(
+    ...rows.map((row) => {
+      const item = document.createElement("div");
+      item.className = `health-check-item health-check-item--${row.status}`;
+
+      const copy = document.createElement("div");
+      copy.className = "health-check-copy";
+      const label = document.createElement("span");
+      label.className = "health-check-label";
+      label.textContent = row.label;
+      const detail = document.createElement("span");
+      detail.className = "health-check-detail";
+      detail.textContent = row.detail ?? row.value;
+      copy.append(label, detail);
+
+      const badge = document.createElement("span");
+      badge.className = "health-check-badge";
+      badge.textContent = row.value;
+      badge.title = healthStatusLabel(row.status);
+
+      item.append(copy, badge);
+      return item;
+    }),
+  );
+}
+
+function closeSwitchHealthDialog(confirmed: boolean): void {
+  const resolver = switchHealthResolver;
+  switchHealthResolver = null;
+  if (elements.switchHealthDialog.open) {
+    elements.switchHealthDialog.close();
+  }
+  resolver?.(confirmed);
+}
+
+function openSwitchHealthDialog(profile: string, health: SwitchHealthResponse): Promise<boolean> {
+  if (switchHealthResolver) {
+    return Promise.resolve(false);
+  }
+
+  clearDialogError(elements.switchHealthDialogError);
+  elements.switchHealthDialogTitle.textContent = t(state.locale, "switchHealthTitle");
+  elements.switchHealthDialogCopy.textContent = t(state.locale, "switchHealthCopy", { profile });
+  elements.switchHealthCancelButton.textContent = t(state.locale, "cancel");
+  elements.switchHealthConfirmButton.textContent = t(state.locale, "switchHealthContinue");
+  renderSwitchHealthRows(health);
+  elements.switchHealthDialog.showModal();
+
+  return new Promise((resolve) => {
+    switchHealthResolver = resolve;
+  });
 }
 
 function setCloseBehavior(behavior: CloseBehavior): void {
@@ -1163,6 +1281,20 @@ async function handleSwitchProfile(profile: string): Promise<void> {
   }
   const restartTargets = await ensureSwitchRestartTargetsConfirmed();
   if (!restartTargets) {
+    return;
+  }
+  let health: SwitchHealthResponse;
+  try {
+    health = await checkSwitchHealth(profile);
+  } catch (error) {
+    showToast(
+      error instanceof Error ? error.message : t(state.locale, "switchHealthFailed"),
+      true,
+    );
+    return;
+  }
+  const confirmed = await openSwitchHealthDialog(profile, health);
+  if (!confirmed) {
     return;
   }
   try {
@@ -2118,6 +2250,21 @@ export function bootstrap(): void {
   elements.restartChoiceDialog.addEventListener("close", () => {
     if (restartChoiceResolver) {
       closeRestartChoiceDialog(null);
+    }
+  });
+  elements.switchHealthCancelButton.addEventListener("click", () => {
+    closeSwitchHealthDialog(false);
+  });
+  elements.switchHealthConfirmButton.addEventListener("click", () => {
+    closeSwitchHealthDialog(true);
+  });
+  elements.switchHealthDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeSwitchHealthDialog(false);
+  });
+  elements.switchHealthDialog.addEventListener("close", () => {
+    if (switchHealthResolver) {
+      closeSwitchHealthDialog(false);
     }
   });
   elements.closeChoiceCancelButton.addEventListener("click", () => {

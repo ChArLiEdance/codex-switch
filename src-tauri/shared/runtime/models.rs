@@ -281,6 +281,21 @@ pub struct SwitchResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwitchHealthResponse {
+    pub profile: String,
+    pub cli_available: bool,
+    pub cli_path: Option<String>,
+    pub codex_desktop_running: bool,
+    pub vscode_running: bool,
+    pub target_auth_present: bool,
+    pub current_matches_target: bool,
+    pub requires_relogin: bool,
+    pub current_account_label: Option<String>,
+    pub target_account_label: Option<String>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActionResponse {
     pub ok: bool,
     pub message: String,

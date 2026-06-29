@@ -17,5 +17,6 @@ pub mod runtime_isolation;
 pub mod session_files;
 pub mod session_usage;
 pub mod switch_core;
+pub mod switch_health;
 pub mod tray;
 pub mod update;

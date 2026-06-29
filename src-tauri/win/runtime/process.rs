@@ -247,6 +247,20 @@ pub fn is_codex_app_running() -> bool {
     stdout.contains(&APP_PROCESS_NAME.to_ascii_lowercase())
 }
 
+pub fn is_vscode_running() -> bool {
+    let mut command = Command::new("tasklist");
+    command.args(["/FI", "IMAGENAME eq Code.exe", "/FO", "CSV", "/NH"]);
+
+    let output = match hide_console_window(&mut command).output() {
+        Ok(value) => value,
+        Err(_) => return false,
+    };
+
+    String::from_utf8_lossy(&output.stdout)
+        .to_ascii_lowercase()
+        .contains("code.exe")
+}
+
 pub fn open_or_activate_codex_app(_codex_home: Option<&Path>) -> AppResult<String> {
     let target = resolve_windows_app_target();
 
