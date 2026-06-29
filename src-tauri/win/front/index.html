@@ -448,6 +448,16 @@
                       <strong data-i18n-key="settingsUpdateUrl">Update URL</strong>
                       <input id="settings-update-url-input" class="settings-input" type="url" value="https://api.github.com/repos/ChArLiEdance/codex-switch/releases/latest" />
                     </label>
+                    <div class="settings-section-card settings-section-card--flat">
+                      <div class="settings-section-heading">
+                        <strong data-i18n-key="settingsProfileBackupTitle">Encrypted profile backup</strong>
+                        <p class="settings-help" data-i18n-key="settingsProfileBackupCopy">Export or import encrypted Codex account profiles for moving to another machine.</p>
+                      </div>
+                      <div class="settings-actions-row">
+                        <button id="settings-export-backup-button" class="settings-action-button" type="button" data-i18n-key="settingsExportBackup">Export backup</button>
+                        <button id="settings-import-backup-button" class="settings-action-button" type="button" data-i18n-key="settingsImportBackup">Import backup</button>
+                      </div>
+                    </div>
                     <div class="settings-row">
                       <strong id="settings-codex-cli-label">Codex CLI path</strong>
                       <div class="settings-cli-inline">
@@ -855,6 +865,32 @@
           <button id="cancel-codex-cli-button" class="ghost-button" type="button">Cancel</button>
           <button id="clear-codex-cli-button" class="ghost-button" type="button" hidden>Clear override</button>
           <button id="submit-codex-cli-button" class="primary-button" type="submit">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="profile-backup-dialog" class="dialog">
+      <form id="profile-backup-form" class="dialog-form" method="dialog">
+        <div class="dialog-copy">
+          <h3 id="profile-backup-dialog-title">Encrypted profile backup</h3>
+          <p id="profile-backup-dialog-copy">Export or import encrypted account profile data.</p>
+        </div>
+        <label class="field">
+          <span id="profile-backup-path-label">Backup file path</span>
+          <input id="profile-backup-path-input" name="path" type="text" autocomplete="off" required />
+        </label>
+        <label class="field">
+          <span id="profile-backup-password-label">Password</span>
+          <input id="profile-backup-password-input" name="password" type="password" autocomplete="off" required />
+        </label>
+        <label id="profile-backup-overwrite-row" class="dialog-check-row">
+          <input id="profile-backup-overwrite-input" type="checkbox" />
+          <span id="profile-backup-overwrite-label">Overwrite existing profiles</span>
+        </label>
+        <p id="profile-backup-dialog-error" class="dialog-error" hidden></p>
+        <div class="dialog-actions">
+          <button id="cancel-profile-backup-button" class="ghost-button" type="button">Cancel</button>
+          <button id="submit-profile-backup-button" class="primary-button" type="submit">Continue</button>
         </div>
       </form>
     </dialog>

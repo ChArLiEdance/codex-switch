@@ -8,6 +8,7 @@ pub mod login_runtime;
 pub mod metadata;
 pub mod paths;
 pub mod process_lock;
+pub mod profile_backup;
 pub mod profiles;
 pub mod profiles_index;
 pub mod quota_cache;

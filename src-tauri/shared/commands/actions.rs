@@ -1,7 +1,8 @@
 use crate::errors::CommandError;
 use crate::models::{
     ActionResponse, AddProfilePayload, CodexCliRedetectResult, CodexCliStatus,
-    InstallUpdatePayload, InstallUpdateResponse, OpenUrlPayload, ProfilePayload,
+    ExportProfilesBackupPayload, ImportProfilesBackupPayload, InstallUpdatePayload,
+    InstallUpdateResponse, OpenUrlPayload, ProfilePayload, ProfilesBackupResponse,
     RenameProfilePayload, SetCodexCliPathPayload, TrayStatePayload, UpdateCheckPayload,
     UpdateCheckResponse, UpdateProfileBaseUrlPayload,
 };
@@ -208,6 +209,44 @@ pub async fn install_update(
         CommandError::new(
             "UPDATE_INSTALL_TASK_FAILED",
             format!("Update install task failed: {error}"),
+        )
+    })?
+        .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn export_profiles_backup(
+    payload: ExportProfilesBackupPayload,
+) -> Result<ProfilesBackupResponse, CommandError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::shared::profile_backup::export_profiles_backup(&payload.path, &payload.password)
+    })
+    .await
+    .map_err(|error| {
+        CommandError::new(
+            "BACKUP_EXPORT_TASK_FAILED",
+            format!("Backup export task failed: {error}"),
+        )
+    })?
+    .map_err(CommandError::from)
+}
+
+#[tauri::command]
+pub async fn import_profiles_backup(
+    payload: ImportProfilesBackupPayload,
+) -> Result<ProfilesBackupResponse, CommandError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::shared::profile_backup::import_profiles_backup(
+            &payload.path,
+            &payload.password,
+            payload.overwrite,
+        )
+    })
+    .await
+    .map_err(|error| {
+        CommandError::new(
+            "BACKUP_IMPORT_TASK_FAILED",
+            format!("Backup import task failed: {error}"),
         )
     })?
     .map_err(CommandError::from)

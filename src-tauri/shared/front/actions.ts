@@ -34,6 +34,7 @@ import {
   clearCodexCliPath,
   clearProfileAccount,
   deleteProfile,
+  exportProfilesBackup,
   getCodexSessionMessages,
   getCodexCliStatus,
   getCurrentLiveQuota,
@@ -45,6 +46,7 @@ import {
   deleteCodexSkill,
   enableCodexPrompt,
   importCodexPromptFromAgents,
+  importProfilesBackup,
   installUpdate,
   loginCurrentProfile,
   listCodexPrompts,
@@ -152,6 +154,7 @@ let deleteSourceProfile: string | null = null;
 let pendingLoginRetry: (() => Promise<void>) | null = null;
 let cancelledLoginProfile: string | null = null;
 let usageConfigSourceProfile: string | null = null;
+let profileBackupMode: "export" | "import" = "export";
 let traySyncHandle: number | null = null;
 let restartChoiceResolver: ((targets: SwitchRestartTargets | null) => void) | null = null;
 let nativeEventListenersStarted = false;
@@ -875,6 +878,83 @@ function openTextDialog(options: {
   options.dialog.showModal();
   options.input.focus();
   options.input.select();
+}
+
+function backupDefaultPath(): string {
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
+  return `codex-switch-profiles-${stamp}.csbak`;
+}
+
+function openProfileBackupDialog(mode: "export" | "import"): void {
+  profileBackupMode = mode;
+  clearDialogError(elements.profileBackupDialogError);
+  elements.profileBackupForm.reset();
+  elements.profileBackupDialogTitle.textContent = t(
+    state.locale,
+    mode === "export" ? "backupDialogExportTitle" : "backupDialogImportTitle",
+  );
+  elements.profileBackupDialogCopy.textContent = t(
+    state.locale,
+    mode === "export" ? "backupDialogExportCopy" : "backupDialogImportCopy",
+  );
+  elements.profileBackupPathLabel.textContent = t(state.locale, "backupPathLabel");
+  elements.profileBackupPasswordLabel.textContent = t(state.locale, "backupPasswordLabel");
+  elements.profileBackupOverwriteLabel.textContent = t(state.locale, "backupOverwriteLabel");
+  elements.submitProfileBackupButton.textContent = t(
+    state.locale,
+    mode === "export" ? "backupExportSubmit" : "backupImportSubmit",
+  );
+  elements.profileBackupOverwriteRow.hidden = mode === "export";
+  elements.profileBackupPathInput.value = mode === "export" ? backupDefaultPath() : "";
+  elements.profileBackupPasswordInput.value = "";
+  elements.profileBackupOverwriteInput.checked = false;
+  elements.profileBackupDialog.showModal();
+  elements.profileBackupPathInput.focus();
+  elements.profileBackupPathInput.select();
+}
+
+function closeProfileBackupDialog(): void {
+  elements.profileBackupDialog.close();
+}
+
+async function handleSubmitProfileBackup(event: SubmitEvent): Promise<void> {
+  event.preventDefault();
+  clearDialogError(elements.profileBackupDialogError);
+  const path = elements.profileBackupPathInput.value.trim();
+  const password = elements.profileBackupPasswordInput.value;
+  if (!path) {
+    showDialogError(elements.profileBackupDialogError, t(state.locale, "backupPathRequired"));
+    return;
+  }
+  if (!password.trim()) {
+    showDialogError(elements.profileBackupDialogError, t(state.locale, "backupPasswordRequired"));
+    return;
+  }
+
+  try {
+    await runBlockingAction(async () => {
+      const response =
+        profileBackupMode === "export"
+          ? await exportProfilesBackup(path, password)
+          : await importProfilesBackup(path, password, elements.profileBackupOverwriteInput.checked);
+      closeProfileBackupDialog();
+      showToast(
+        t(state.locale, profileBackupMode === "export" ? "backupExported" : "backupImported", {
+          count: String(response.profiles.length),
+        }),
+      );
+      if (profileBackupMode === "import") {
+        await refreshAllData();
+      }
+    });
+  } catch (error) {
+    showDialogError(
+      elements.profileBackupDialogError,
+      error instanceof Error
+        ? error.message
+        : t(state.locale, profileBackupMode === "export" ? "backupExportFailed" : "backupImportFailed"),
+    );
+  }
 }
 
 async function runBlockingAction<T>(run: () => Promise<T>): Promise<T> {
@@ -1917,6 +1997,12 @@ export function bootstrap(): void {
   elements.settingsCheckUpdateButton.addEventListener("click", () => {
     void handleCheckUpdate();
   });
+  elements.settingsExportBackupButton.addEventListener("click", () => {
+    openProfileBackupDialog("export");
+  });
+  elements.settingsImportBackupButton.addEventListener("click", () => {
+    openProfileBackupDialog("import");
+  });
   elements.updateDialogLaterButton.addEventListener("click", () => {
     elements.updateDialog.close();
   });
@@ -1983,6 +2069,12 @@ export function bootstrap(): void {
   });
   elements.codexCliForm.addEventListener("submit", (event) => {
     void handleSubmitCodexCliPath(event as SubmitEvent);
+  });
+  elements.cancelProfileBackupButton.addEventListener("click", () => {
+    closeProfileBackupDialog();
+  });
+  elements.profileBackupForm.addEventListener("submit", (event) => {
+    void handleSubmitProfileBackup(event as SubmitEvent);
   });
   elements.settingsCodexCliDetectButton.addEventListener("click", () => {
     void handleDetectCodexCli();

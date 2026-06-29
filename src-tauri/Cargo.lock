@@ -471,6 +471,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "reqwest 0.12.28",
+ "ring",
  "semver",
  "serde",
  "serde_json",

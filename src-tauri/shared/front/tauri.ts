@@ -13,6 +13,7 @@ import type {
   CurrentQuotaResponse,
   InstallUpdateResponse,
   ProfileCard,
+  ProfilesBackupResponse,
   ProfilesSnapshotResponse,
   QuotaSummary,
   SwitchRestartTargets,
@@ -560,6 +561,23 @@ async function invokeCommand<T>(command: string, args?: Record<string, unknown>)
           asset_name: "codex_switch_1.0.1_preview.dmg",
           path: "/preview/codex_switch_1.0.1_preview.dmg",
         }) as Promise<T>;
+      case "export_profiles_backup": {
+        const path = (args?.payload as { path?: string } | undefined)?.path || "/preview/codex-switch-backup.csbak";
+        return Promise.resolve({
+          ok: true,
+          path,
+          profiles: previewSnapshot.profiles.map((profile) => profile.folder_name),
+          imported_current_profile: null,
+        }) as Promise<T>;
+      }
+      case "import_profiles_backup": {
+        return Promise.resolve({
+          ok: true,
+          path: (args?.payload as { path?: string } | undefined)?.path || "/preview/codex-switch-backup.csbak",
+          profiles: previewSnapshot.profiles.map((profile) => profile.folder_name),
+          imported_current_profile: previewCurrentCard.folder_name,
+        }) as Promise<T>;
+      }
       case "open_url":
         return mockAction("Opened URL in preview mode", "preview:url") as Promise<T>;
       case "get_codex_cli_status":
@@ -820,6 +838,22 @@ export function checkUpdate(updateUrl: string): Promise<UpdateCheckResponse> {
 export function installUpdate(updateUrl: string): Promise<InstallUpdateResponse> {
   return invokeCommand<InstallUpdateResponse>("install_update", {
     payload: { update_url: updateUrl },
+  });
+}
+
+export function exportProfilesBackup(path: string, password: string): Promise<ProfilesBackupResponse> {
+  return invokeCommand<ProfilesBackupResponse>("export_profiles_backup", {
+    payload: { path, password },
+  });
+}
+
+export function importProfilesBackup(
+  path: string,
+  password: string,
+  overwrite: boolean,
+): Promise<ProfilesBackupResponse> {
+  return invokeCommand<ProfilesBackupResponse>("import_profiles_backup", {
+    payload: { path, password, overwrite },
   });
 }
 

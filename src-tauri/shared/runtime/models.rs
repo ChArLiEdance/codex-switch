@@ -219,6 +219,27 @@ pub struct InstallUpdatePayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportProfilesBackupPayload {
+    pub path: String,
+    pub password: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ImportProfilesBackupPayload {
+    pub path: String,
+    pub password: String,
+    pub overwrite: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProfilesBackupResponse {
+    pub ok: bool,
+    pub path: String,
+    pub profiles: Vec<String>,
+    pub imported_current_profile: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenUrlPayload {
     pub url: String,
 }

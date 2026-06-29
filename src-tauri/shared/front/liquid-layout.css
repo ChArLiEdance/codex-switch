@@ -4645,6 +4645,22 @@ html[data-theme="jade-night"] .session-action-button--danger {
   font-weight: 680 !important;
 }
 
+.dialog-check-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 14px;
+  color: var(--text-strong);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.dialog-check-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: #1683ff;
+}
+
 .advanced-options {
   margin-top: 15px !important;
   padding: 10px 12px !important;

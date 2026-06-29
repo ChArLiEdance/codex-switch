@@ -142,6 +142,13 @@ export interface InstallUpdateResponse {
   path: string;
 }
 
+export interface ProfilesBackupResponse {
+  ok: boolean;
+  path: string;
+  profiles: string[];
+  imported_current_profile: string | null;
+}
+
 export interface UpdateDownloadProgress {
   phase: string;
   received_bytes: number;
