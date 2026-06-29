@@ -5316,25 +5316,127 @@ html[data-theme="jade-night"] .profile-card.mac-account-card.mac-account-card--e
 html[data-theme="jade-night"] .tool-sidebar,
 html[data-theme="jade-night"] .tool-editor {
   background:
-    linear-gradient(135deg, rgba(35, 41, 52, 0.88), rgba(24, 28, 37, 0.74)),
-    rgba(24, 27, 35, 0.68);
-  box-shadow: var(--cc-hairline-surface) !important;
+    radial-gradient(circle at 8% 0%, rgba(59, 130, 246, 0.08), transparent 18rem),
+    linear-gradient(135deg, rgba(31, 37, 49, 0.9), rgba(20, 24, 33, 0.78)),
+    rgba(18, 21, 29, 0.72);
+  box-shadow:
+    0 22px 42px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 0 0 1px rgba(148, 163, 184, 0.16) !important;
 }
 
 html[data-theme="jade-night"] .tool-sidebar-head,
 html[data-theme="jade-night"] .tool-editor-head {
-  border-bottom-color: rgba(67, 75, 91, 0.68);
+  border-bottom-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="jade-night"] .tool-sidebar-head strong,
+html[data-theme="jade-night"] .tool-editor-head h3,
+html[data-theme="jade-night"] .tool-list-copy strong,
+html[data-theme="jade-night"] .tool-form-grid label,
+html[data-theme="jade-night"] .tool-editor-content {
+  color: #f5f7fb !important;
+}
+
+html[data-theme="jade-night"] .tool-sidebar-head .session-count-pill,
+html[data-theme="jade-night"] .tool-list-copy small,
+html[data-theme="jade-night"] .tool-list-copy em,
+html[data-theme="jade-night"] .tool-empty,
+html[data-theme="jade-night"] .tool-editor-head .page-kicker {
+  color: #aeb7c7 !important;
+}
+
+html[data-theme="jade-night"] .tool-sidebar-head .session-count-pill {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+  background: rgba(15, 18, 26, 0.62) !important;
+}
+
+html[data-theme="jade-night"] .tool-list-item {
+  color: #eef2f8 !important;
+  border-color: rgba(255, 255, 255, 0);
 }
 
 html[data-theme="jade-night"] .tool-list-item:hover,
 html[data-theme="jade-night"] .tool-list-item.is-active {
-  border-color: rgba(66, 133, 244, 0.74);
-  background: rgba(34, 44, 62, 0.82);
+  border-color: rgba(66, 133, 244, 0.72);
+  background: linear-gradient(135deg, rgba(66, 133, 244, 0.2), rgba(22, 131, 255, 0.1));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 10px 22px rgba(0, 0, 0, 0.14);
+}
+
+html[data-theme="jade-night"] .tool-list-icon {
+  color: #24d6a8;
+}
+
+html[data-theme="jade-night"] .tool-list-icon .cc-icon {
+  filter: brightness(0) saturate(100%) invert(61%) sepia(92%) saturate(389%) hue-rotate(113deg) brightness(94%) contrast(94%) !important;
+  opacity: 0.95 !important;
+}
+
+html[data-theme="jade-night"] .tool-enabled-badge {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+
+html[data-theme="jade-night"] .tool-editor-actions .ghost-button,
+html[data-theme="jade-night"] .tool-toolbar .session-icon-button {
+  border-color: rgba(148, 163, 184, 0.16) !important;
+  background: rgba(15, 18, 26, 0.54) !important;
+  color: #eef2f8 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 10px 20px rgba(0, 0, 0, 0.14) !important;
+}
+
+html[data-theme="jade-night"] .tool-editor-actions .ghost-button:hover:not(:disabled),
+html[data-theme="jade-night"] .tool-toolbar .session-icon-button:hover:not(:disabled) {
+  border-color: rgba(147, 197, 253, 0.34) !important;
+  background: rgba(30, 41, 59, 0.76) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="jade-night"] .tool-editor-actions .ghost-button:disabled,
+html[data-theme="jade-night"] .tool-toolbar .session-icon-button:disabled {
+  opacity: 0.46 !important;
+}
+
+html[data-theme="jade-night"] .tool-editor-actions .danger-button {
+  border-color: rgba(248, 113, 113, 0.26) !important;
+  background: rgba(127, 29, 29, 0.16) !important;
+  color: #fca5a5 !important;
+}
+
+html[data-theme="jade-night"] .tool-editor-actions .danger-button:hover:not(:disabled) {
+  border-color: rgba(248, 113, 113, 0.44) !important;
+  background: rgba(153, 27, 27, 0.28) !important;
+  color: #fecaca !important;
+}
+
+html[data-theme="jade-night"] .tool-editor-actions .primary-button {
+  border-color: rgba(59, 130, 246, 0.42) !important;
+  background: linear-gradient(135deg, #1683ff, #0b63d8) !important;
+  color: #ffffff !important;
+  box-shadow:
+    0 10px 26px rgba(22, 131, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+}
+
+html[data-theme="jade-night"] .tool-form-grid .settings-input,
+html[data-theme="jade-night"] .tool-editor-content textarea {
+  border-color: rgba(148, 163, 184, 0.2) !important;
+  background: rgba(13, 18, 28, 0.62) !important;
+  color: #f8fafc !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+html[data-theme="jade-night"] .tool-form-grid .settings-input::placeholder,
+html[data-theme="jade-night"] .tool-editor-content textarea::placeholder {
+  color: #8c97aa !important;
 }
 
 html[data-theme="jade-night"] .tool-editor-content textarea {
-  border-color: rgba(71, 79, 96, 0.82);
-  background: rgba(14, 18, 27, 0.56);
+  caret-color: #93c5fd;
 }
 
 @media (max-width: 860px) {
