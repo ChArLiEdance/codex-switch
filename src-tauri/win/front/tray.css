@@ -56,6 +56,8 @@ body {
   align-items: center;
   padding-right: 42px;
   min-width: 0;
+  cursor: move;
+  -webkit-app-region: drag;
 }
 
 .tray-app-mark {
@@ -211,6 +213,8 @@ body {
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  -webkit-app-region: no-drag;
+  cursor: pointer;
 }
 
 .tray-settings-button:hover {

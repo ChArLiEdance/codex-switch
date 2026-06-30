@@ -1,14 +1,30 @@
 use std::path::{Path, PathBuf};
 
 use crate::errors::AppResult;
-use crate::models::{CurrentQuotaResponse, ProfileIndexEntry, ProfilesIndex};
+use crate::models::{
+    CurrentQuotaResponse, ProfileIndexEntry, ProfilesIndex, ProfilesSnapshotResponse,
+};
 
 use super::paths::get_codex_home;
 use super::session_usage::{
     load_latest_local_quota_snapshot, normalize_quota_summary, LocalQuotaSnapshot,
 };
 
-pub use crate::shared::profiles_index::{load_profiles_index, load_profiles_snapshot};
+pub use crate::shared::profiles_index::load_profiles_index;
+
+fn sync_live_root_state_if_present(codex_home: &Path) -> AppResult<()> {
+    let auth_path = codex_home.join("auth.json");
+    if auth_path.is_file() && !crate::shared::metadata::auth_is_empty_placeholder(&auth_path) {
+        super::bootstrap::sync_root_state_to_current_profile(Some(codex_home))?;
+    }
+    Ok(())
+}
+
+pub fn load_profiles_snapshot(codex_home: Option<&Path>) -> AppResult<ProfilesSnapshotResponse> {
+    let codex_home = codex_home.map(PathBuf::from).unwrap_or_else(get_codex_home);
+    sync_live_root_state_if_present(&codex_home)?;
+    crate::shared::profiles_index::load_profiles_snapshot(Some(&codex_home))
+}
 
 fn select_current_quota(
     entry: &ProfileIndexEntry,
@@ -26,6 +42,7 @@ fn select_current_quota(
 
 pub fn load_current_live_quota(codex_home: Option<&Path>) -> AppResult<CurrentQuotaResponse> {
     let codex_home = codex_home.map(PathBuf::from).unwrap_or_else(get_codex_home);
+    sync_live_root_state_if_present(&codex_home)?;
     let index: ProfilesIndex = load_profiles_index(Some(&codex_home))?;
     let Some(current_profile) = index.current_profile.clone() else {
         return Ok(CurrentQuotaResponse {

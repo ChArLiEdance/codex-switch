@@ -174,7 +174,7 @@ function render(state: TrayStatePayload): void {
   root.innerHTML = `
     <section class="tray-status-panel">
       ${settingsButton(label.settings)}
-      <div class="tray-status-head">
+      <div class="tray-status-head" data-tauri-drag-region>
         <div class="tray-app-mark" aria-hidden="true">
           <img src="/ccswitch-icons/codex-switch-app-icon.png" alt="" draggable="false" />
         </div>

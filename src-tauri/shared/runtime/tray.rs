@@ -8,9 +8,9 @@ use std::sync::{Mutex, OnceLock};
 use tauri::menu::{MenuBuilder, SubmenuBuilder};
 #[cfg(not(target_os = "macos"))]
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{App, AppHandle, Emitter, Manager};
 #[cfg(not(target_os = "macos"))]
 use tauri::{WebviewUrl, WebviewWindowBuilder, WindowEvent};
-use tauri::{App, AppHandle, Emitter, Manager};
 
 #[cfg(not(target_os = "macos"))]
 const TRAY_ID: &str = "codex-switch-main";
@@ -269,19 +269,39 @@ fn build_menu(
 }
 
 #[cfg(not(target_os = "macos"))]
-fn toggle_windows_tray_popover(app: &AppHandle, tray_x: f64, tray_y: f64) -> tauri::Result<()> {
-    let x = (tray_x - TRAY_POPOVER_WIDTH + 24.0).max(8.0);
-    let y = if tray_y > TRAY_POPOVER_HEIGHT + 48.0 {
-        tray_y - TRAY_POPOVER_HEIGHT - 10.0
-    } else {
-        tray_y + 28.0
+fn windows_tray_popover_position(app: &AppHandle) -> tauri::Result<tauri::PhysicalPosition<i32>> {
+    const MARGIN: i32 = 18;
+    let monitor = app.primary_monitor()?.or_else(|| {
+        app.available_monitors()
+            .ok()
+            .and_then(|mut monitors| monitors.pop())
+    });
+
+    let Some(monitor) = monitor else {
+        return Ok(tauri::PhysicalPosition::new(MARGIN, MARGIN));
     };
+
+    let position = monitor.position();
+    let size = monitor.size();
+    let width = TRAY_POPOVER_WIDTH.round() as i32;
+    let height = TRAY_POPOVER_HEIGHT.round() as i32;
+    let min_x = position.x + MARGIN;
+    let min_y = position.y + MARGIN;
+    let x = position.x + size.width as i32 - width - MARGIN;
+    let y = position.y + size.height as i32 - height - MARGIN;
+
+    Ok(tauri::PhysicalPosition::new(x.max(min_x), y.max(min_y)))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn toggle_windows_tray_popover(app: &AppHandle, _tray_x: f64, _tray_y: f64) -> tauri::Result<()> {
+    let position = windows_tray_popover_position(app)?;
 
     if let Some(window) = app.get_webview_window(TRAY_POPOVER_LABEL) {
         if window.is_visible().unwrap_or(false) {
             window.hide()?;
         } else {
-            window.set_position(tauri::PhysicalPosition::new(x as i32, y as i32))?;
+            window.set_position(position)?;
             window.show()?;
             window.set_focus()?;
             let _ = window.emit("codex-switch://tray-state-updated", current_state());
@@ -289,23 +309,20 @@ fn toggle_windows_tray_popover(app: &AppHandle, tray_x: f64, tray_y: f64) -> tau
         return Ok(());
     }
 
-    let window = WebviewWindowBuilder::new(
-        app,
-        TRAY_POPOVER_LABEL,
-        WebviewUrl::App("tray.html".into()),
-    )
-    .title("Codex Switch")
-    .inner_size(TRAY_POPOVER_WIDTH, TRAY_POPOVER_HEIGHT)
-    .min_inner_size(TRAY_POPOVER_WIDTH, TRAY_POPOVER_HEIGHT)
-    .position(x, y)
-    .resizable(false)
-    .decorations(false)
-    .transparent(true)
-    .shadow(true)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .focused(true)
-    .build()?;
+    let window =
+        WebviewWindowBuilder::new(app, TRAY_POPOVER_LABEL, WebviewUrl::App("tray.html".into()))
+            .title("Codex Switch")
+            .inner_size(TRAY_POPOVER_WIDTH, TRAY_POPOVER_HEIGHT)
+            .min_inner_size(TRAY_POPOVER_WIDTH, TRAY_POPOVER_HEIGHT)
+            .position(position.x as f64, position.y as f64)
+            .resizable(false)
+            .decorations(false)
+            .transparent(true)
+            .shadow(true)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .focused(true)
+            .build()?;
 
     let hide_window = window.clone();
     window.on_window_event(move |event| {
