@@ -81,6 +81,14 @@ fn labels(locale: &str) -> TrayLabels {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
+fn tray_position_xy(position: tauri::Position) -> (f64, f64) {
+    match position {
+        tauri::Position::Physical(point) => (point.x as f64, point.y as f64),
+        tauri::Position::Logical(point) => (point.x, point.y),
+    }
+}
+
 pub fn install(app: &mut App) -> tauri::Result<()> {
     let _ = TRAY_RESTART_TARGETS.set(Mutex::new(SwitchRestartTargets::default()));
     let _ = LAST_TRAY_STATE.set(Mutex::new(TrayStatePayload::default()));
@@ -119,11 +127,8 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
                     ..
                 } = event
                 {
-                    let _ = toggle_windows_tray_popover(
-                        tray.app_handle(),
-                        rect.position.x,
-                        rect.position.y,
-                    );
+                    let (tray_x, tray_y) = tray_position_xy(rect.position);
+                    let _ = toggle_windows_tray_popover(tray.app_handle(), tray_x, tray_y);
                 }
             });
 
