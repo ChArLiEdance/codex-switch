@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.3 - 2026-06-30
+
+- Disabled the switch health-check dialog before account switching. Switching now proceeds after the restart-target choice without running the extra health-check prompt.
+
 ## 1.1.2 - 2026-06-30
 
 - **Critical** — fixed account cross-contamination ("串号") during profile switch. Switching, and the launch-time `sync_root_state_to_current_profile`, used to copy the live `~/.codex` state back into whatever profile the `.current_profile` marker named, with no check that the account actually sitting in `~/.codex/auth.json` is the one that profile holds. If the live account had drifted away from the marker — a manual `codex login` outside the app, the official Codex app re-authing, or hand-edits to `~/.codex` — the next switch (or merely relaunching the app, since bootstrap runs the same write-back) silently overwrote an unrelated profile's stored credentials with the wrong account. Write-back is now gated by an identity check (`resolve_backup_target`): the live account is identified by its `tokens.account_id` and/or id_token `email` — matched on *either*, so a legacy email-only card still matches the same account after a later refresh adds an id — and only saved into the profile that genuinely owns it. A live account that drifted to a *different* managed profile is rerouted to its real owner and the marker is healed; a live account that belongs to no profile is refused rather than blind-copied. apikey / placeholder cards with no resolvable identity keep their previous behavior, so non-OAuth setups are unaffected. macOS + Windows symmetric.
