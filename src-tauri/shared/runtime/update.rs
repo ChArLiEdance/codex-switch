@@ -1,14 +1,13 @@
 use std::cmp::Ordering;
 use std::fs;
 use std::io::{Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
 use semver::Version;
 use serde_json::Value;
 use tauri::Emitter;
-use tauri_plugin_opener::OpenerExt;
 
 use crate::errors::{AppError, AppResult};
 use crate::models::{InstallUpdateResponse, UpdateCheckResponse, UpdateDownloadProgress};
@@ -94,21 +93,22 @@ pub fn download_and_open_update(
     })?;
     emit_update_progress(
         app,
-        "opening",
+        "installing",
         0,
         None,
         Some(100),
-        "Opening update installer.",
+        "Starting automatic update installation.",
     );
-    app.opener()
-        .open_path(path.to_string_lossy().into_owned(), None::<&str>)
-        .map_err(|error| {
-            AppError::new(
-                "UPDATE_INSTALLER_OPEN_FAILED",
-                format!("Downloaded update but failed to open installer: {error}"),
-            )
-        })?;
-    emit_update_progress(app, "opened", 0, None, Some(100), "Installer opened.");
+    install_downloaded_update(&path)?;
+    emit_update_progress(
+        app,
+        "opened",
+        0,
+        None,
+        Some(100),
+        "Update installer started.",
+    );
+    quit_for_update(app);
 
     Ok(InstallUpdateResponse {
         ok: true,
@@ -116,6 +116,14 @@ pub fn download_and_open_update(
         asset_name: asset.name,
         path: path.to_string_lossy().into_owned(),
     })
+}
+
+fn quit_for_update(app: &tauri::AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(700));
+        app.exit(0);
+    });
 }
 
 fn emit_update_progress(
@@ -259,6 +267,210 @@ fn candidate_asset_score(name: &str) -> Option<u8> {
         let _ = lower;
         None
     }
+}
+
+#[cfg(target_os = "macos")]
+fn install_downloaded_update(path: &Path) -> AppResult<()> {
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if extension == "pkg" {
+        return Command::new("open")
+            .arg(path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| {
+                AppError::new(
+                    "UPDATE_INSTALLER_OPEN_FAILED",
+                    format!("Downloaded update but failed to open package installer: {error}"),
+                )
+            });
+    }
+    if extension != "dmg" {
+        return Err(AppError::new(
+            "UPDATE_ASSET_UNSUPPORTED",
+            "macOS automatic installation requires a DMG or PKG update asset.",
+        ));
+    }
+
+    let destination = current_app_bundle_path().unwrap_or_else(|| {
+        PathBuf::from("/Applications").join(format!("{}.app", env!("CARGO_PKG_NAME")))
+    });
+    let script_path = write_macos_update_script(path, &destination)?;
+    Command::new("sh")
+        .arg(&script_path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| {
+            AppError::new(
+                "UPDATE_INSTALLER_OPEN_FAILED",
+                format!("Downloaded update but failed to start automatic installer: {error}"),
+            )
+        })
+}
+
+#[cfg(target_os = "macos")]
+fn current_app_bundle_path() -> Option<PathBuf> {
+    let mut path = std::env::current_exe().ok()?;
+    loop {
+        if path.extension().and_then(|value| value.to_str()) == Some("app") {
+            return Some(path);
+        }
+        if !path.pop() {
+            return None;
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn write_macos_update_script(dmg_path: &Path, destination: &Path) -> AppResult<PathBuf> {
+    let script_path =
+        std::env::temp_dir().join(format!("codex-switch-install-{}.sh", std::process::id()));
+    let install_command = format!(
+        "CODEX_SWITCH_UPDATE_ELEVATED=1 /bin/sh {}",
+        shell_quote(&script_path.to_string_lossy())
+    );
+    let apple_script = format!(
+        "do shell script {} with administrator privileges",
+        apple_string_literal(&install_command)
+    );
+    let script = format!(
+        r#"#!/bin/sh
+set -eu
+
+sleep 1
+UPDATE_DMG={dmg}
+UPDATE_APP_DEST={destination}
+
+run_install() {{
+  mount_dir="$(/usr/bin/mktemp -d /tmp/codex-switch-update.XXXXXX)"
+  cleanup() {{
+    /usr/bin/hdiutil detach "$mount_dir" -quiet >/dev/null 2>&1 || true
+    /bin/rmdir "$mount_dir" >/dev/null 2>&1 || true
+  }}
+  trap cleanup EXIT
+
+  /usr/bin/hdiutil attach "$UPDATE_DMG" -nobrowse -quiet -mountpoint "$mount_dir"
+  source_app="$(/usr/bin/find "$mount_dir" -maxdepth 2 -name '*.app' -type d -print -quit)"
+  if [ -z "$source_app" ]; then
+    echo "No .app bundle found in update DMG." >&2
+    return 2
+  fi
+
+  parent_dir="$(/usr/bin/dirname "$UPDATE_APP_DEST")"
+  /bin/mkdir -p "$parent_dir"
+  /bin/rm -rf "$UPDATE_APP_DEST"
+  /usr/bin/ditto "$source_app" "$UPDATE_APP_DEST"
+  /usr/bin/xattr -dr com.apple.quarantine "$UPDATE_APP_DEST" >/dev/null 2>&1 || true
+  /usr/bin/open "$UPDATE_APP_DEST"
+}}
+
+if run_install; then
+  exit 0
+fi
+
+if [ "${{CODEX_SWITCH_UPDATE_ELEVATED:-0}}" = "1" ]; then
+  exit 1
+fi
+
+export CODEX_SWITCH_UPDATE_ELEVATED=1
+exec /usr/bin/osascript -e {apple_script}
+"#,
+        dmg = shell_quote(&dmg_path.to_string_lossy()),
+        destination = shell_quote(&destination.to_string_lossy()),
+        apple_script = shell_quote(&apple_script),
+    );
+    fs::write(&script_path, script).map_err(|error| {
+        AppError::new(
+            "UPDATE_SCRIPT_WRITE_FAILED",
+            format!("Failed to write macOS update script: {error}"),
+        )
+    })?;
+    Command::new("chmod")
+        .arg("700")
+        .arg(&script_path)
+        .status()
+        .map_err(|error| {
+            AppError::new(
+                "UPDATE_SCRIPT_WRITE_FAILED",
+                format!("Failed to mark macOS update script executable: {error}"),
+            )
+        })?;
+    Ok(script_path)
+}
+
+#[cfg(windows)]
+fn install_downloaded_update(path: &Path) -> AppResult<()> {
+    use std::os::windows::process::CommandExt;
+
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if extension != "exe" {
+        return Err(AppError::new(
+            "UPDATE_ASSET_UNSUPPORTED",
+            "Windows automatic installation requires an EXE update asset.",
+        ));
+    }
+
+    let current_exe = std::env::current_exe()
+        .ok()
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let script = concat!(
+        "$ErrorActionPreference='SilentlyContinue'; ",
+        "Start-Sleep -Seconds 1; ",
+        "$p = Start-Process -FilePath $env:CODEX_SWITCH_UPDATE_EXE -ArgumentList '/S' -PassThru; ",
+        "if ($p) { $p.WaitForExit() }; ",
+        "if ($env:CODEX_SWITCH_CURRENT_EXE -and (Test-Path $env:CODEX_SWITCH_CURRENT_EXE)) { ",
+        "Start-Process -FilePath $env:CODEX_SWITCH_CURRENT_EXE ",
+        "}"
+    );
+
+    Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            script,
+        ])
+        .env("CODEX_SWITCH_UPDATE_EXE", path)
+        .env("CODEX_SWITCH_CURRENT_EXE", current_exe)
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| {
+            AppError::new(
+                "UPDATE_INSTALLER_OPEN_FAILED",
+                format!("Downloaded update but failed to start Windows installer: {error}"),
+            )
+        })
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
+fn install_downloaded_update(_path: &Path) -> AppResult<()> {
+    Err(AppError::new(
+        "UPDATE_ASSET_UNSUPPORTED",
+        "Automatic installation is not supported on this platform.",
+    ))
+}
+
+#[cfg(target_os = "macos")]
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+#[cfg(target_os = "macos")]
+fn apple_string_literal(value: &str) -> String {
+    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 fn download_update_asset(
@@ -559,5 +771,18 @@ mod tests {
             Ordering::Equal
         );
         assert_eq!(compare_versions("v1.4.9", "1.5.0").unwrap(), Ordering::Less);
+    }
+
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    #[test]
+    fn macos_updates_prefer_dmg_for_automatic_install() {
+        assert_eq!(
+            super::candidate_asset_score("codex_switch_1.2.3_aarch64.dmg"),
+            Some(0)
+        );
+        assert_eq!(
+            super::candidate_asset_score("codex_switch_1.2.3_aarch64.pkg"),
+            Some(1)
+        );
     }
 }

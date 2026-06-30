@@ -1765,9 +1765,6 @@ async function handleInstallUpdate(): Promise<void> {
       asset: update.asset_name,
       version: update.version,
     }));
-    updateRestartTimer = window.setTimeout(() => {
-      void handleRestartApp();
-    }, 1800);
   } catch (error) {
     const message = error instanceof Error ? error.message : t(state.locale, "failedToInstallUpdate");
     showUpdateInstallError(message);

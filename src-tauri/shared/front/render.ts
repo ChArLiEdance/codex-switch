@@ -643,7 +643,7 @@ function progressMessage(progress: UpdateDownloadProgress): string {
     }
     return base;
   }
-  if (progress.phase === "opening") {
+  if (progress.phase === "opening" || progress.phase === "installing") {
     return t(state.locale, "updateProgressOpening");
   }
   if (progress.phase === "opened") {
@@ -698,7 +698,7 @@ export function showUpdateInstallComplete(): void {
   });
   elements.updateDialogOpenButton.hidden = true;
   elements.updateDialogRetryButton.hidden = true;
-  elements.updateDialogRestartButton.hidden = false;
+  elements.updateDialogRestartButton.hidden = true;
   elements.updateDialogLaterButton.disabled = false;
 }
 
