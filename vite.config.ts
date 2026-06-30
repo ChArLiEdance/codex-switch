@@ -7,6 +7,13 @@ const uiTarget = process.env.CODEX_UI_TARGET ?? (process.platform === "darwin" ?
 const root = uiTarget === "macos" ? "src-tauri/mac/front" : "src-tauri/win/front";
 const previewMocks = process.env.CODEX_PREVIEW_MOCKS === "1";
 const outDir = process.env.CODEX_PREVIEW_OUT_DIR ?? "../../../dist/web";
+const windowsBuildInput =
+  uiTarget === "windows"
+    ? {
+        main: fileURLToPath(new URL("./src-tauri/win/front/index.html", import.meta.url)),
+        tray: fileURLToPath(new URL("./src-tauri/win/front/tray.html", import.meta.url)),
+      }
+    : undefined;
 
 const packageJson = JSON.parse(
   readFileSync(fileURLToPath(new URL("./package.json", import.meta.url)), "utf8"),
@@ -46,5 +53,10 @@ export default defineConfig({
   build: {
     outDir,
     emptyOutDir: true,
+    rollupOptions: windowsBuildInput
+      ? {
+          input: windowsBuildInput,
+        }
+      : undefined,
   },
 });

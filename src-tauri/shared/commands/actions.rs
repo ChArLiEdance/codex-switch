@@ -333,6 +333,44 @@ pub fn sync_tray_state(
 }
 
 #[tauri::command]
+pub fn get_tray_state() -> Result<TrayStatePayload, CommandError> {
+    Ok(crate::shared::tray::current_state())
+}
+
+#[tauri::command]
+pub fn open_tray_route(
+    app: tauri::AppHandle,
+    route: String,
+) -> Result<ActionResponse, CommandError> {
+    crate::shared::tray::open_route(&app, &route).map_err(|error| {
+        CommandError::new(
+            "OPEN_TRAY_ROUTE_FAILED",
+            format!("Failed to open tray route: {error}"),
+        )
+    })?;
+    Ok(ActionResponse {
+        ok: true,
+        message: "Opened tray route.".to_string(),
+        path: None,
+    })
+}
+
+#[tauri::command]
+pub fn hide_tray_popover(app: tauri::AppHandle) -> Result<ActionResponse, CommandError> {
+    crate::shared::tray::hide_windows_tray_popover(&app).map_err(|error| {
+        CommandError::new(
+            "HIDE_TRAY_POPOVER_FAILED",
+            format!("Failed to hide tray popover: {error}"),
+        )
+    })?;
+    Ok(ActionResponse {
+        ok: true,
+        message: "Hidden tray popover.".to_string(),
+        path: None,
+    })
+}
+
+#[tauri::command]
 pub fn show_main_window(app: tauri::AppHandle) -> Result<ActionResponse, CommandError> {
     crate::shared::tray::show_main_window(&app).map_err(|error| {
         CommandError::new(

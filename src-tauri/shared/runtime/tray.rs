@@ -1,5 +1,3 @@
-#[cfg(not(target_os = "macos"))]
-use crate::models::QuotaWindow;
 use crate::models::{SwitchRestartTargets, TrayStatePayload};
 #[cfg(target_os = "macos")]
 use std::ffi::{CStr, CString};
@@ -9,11 +7,19 @@ use std::sync::{Mutex, OnceLock};
 #[cfg(not(target_os = "macos"))]
 use tauri::menu::{MenuBuilder, SubmenuBuilder};
 #[cfg(not(target_os = "macos"))]
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+#[cfg(not(target_os = "macos"))]
+use tauri::{WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri::{App, AppHandle, Emitter, Manager};
 
 #[cfg(not(target_os = "macos"))]
 const TRAY_ID: &str = "codex-switch-main";
+#[cfg(not(target_os = "macos"))]
+const TRAY_POPOVER_LABEL: &str = "tray-popover";
+#[cfg(not(target_os = "macos"))]
+const TRAY_POPOVER_WIDTH: f64 = 430.0;
+#[cfg(not(target_os = "macos"))]
+const TRAY_POPOVER_HEIGHT: f64 = 254.0;
 #[cfg(target_os = "macos")]
 const MACOS_TRAY_TEMPLATE_PNG: &[u8] = include_bytes!("../../icons/tray-template.png");
 const ID_SHOW: &str = "tray_show_main";
@@ -22,14 +28,9 @@ const ID_ABOUT: &str = "tray_about";
 const ID_QUIT: &str = "tray_quit";
 #[cfg(not(target_os = "macos"))]
 const ID_CURRENT: &str = "tray_current";
-#[cfg(not(target_os = "macos"))]
-const ID_FIVE_HOUR: &str = "tray_quota_five_hour";
-#[cfg(not(target_os = "macos"))]
-const ID_WEEKLY: &str = "tray_quota_weekly";
-#[cfg(not(target_os = "macos"))]
-const ID_REFRESH: &str = "tray_quota_refresh";
 const ID_SWITCH_PREFIX: &str = "tray_switch_profile::";
 static TRAY_RESTART_TARGETS: OnceLock<Mutex<SwitchRestartTargets>> = OnceLock::new();
+static LAST_TRAY_STATE: OnceLock<Mutex<TrayStatePayload>> = OnceLock::new();
 #[cfg(target_os = "macos")]
 static TRAY_APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
@@ -53,12 +54,6 @@ struct TrayLabels {
     about: &'static str,
     quit: &'static str,
     no_account: &'static str,
-    five_hour: &'static str,
-    weekly: &'static str,
-    refresh: &'static str,
-    used: &'static str,
-    left: &'static str,
-    resets: &'static str,
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -72,12 +67,6 @@ fn labels(locale: &str) -> TrayLabels {
             about: "关于",
             quit: "退出",
             no_account: "暂无当前账号",
-            five_hour: "5h",
-            weekly: "7d",
-            refresh: "下次刷新",
-            used: "已用",
-            left: "剩余",
-            resets: "重置",
         }
     } else {
         TrayLabels {
@@ -88,18 +77,13 @@ fn labels(locale: &str) -> TrayLabels {
             about: "About",
             quit: "Quit",
             no_account: "No active account",
-            five_hour: "5h",
-            weekly: "7d",
-            refresh: "Next refresh",
-            used: "Used",
-            left: "Left",
-            resets: "Resets",
         }
     }
 }
 
 pub fn install(app: &mut App) -> tauri::Result<()> {
     let _ = TRAY_RESTART_TARGETS.set(Mutex::new(SwitchRestartTargets::default()));
+    let _ = LAST_TRAY_STATE.set(Mutex::new(TrayStatePayload::default()));
     let payload = TrayStatePayload {
         locale: "en".to_string(),
         ..TrayStatePayload::default()
@@ -125,8 +109,23 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
         let mut builder = TrayIconBuilder::with_id(TRAY_ID)
             .menu(&menu)
             .tooltip("Codex Switch")
-            .show_menu_on_left_click(true)
-            .on_menu_event(|app, event| handle_menu_event(app, event.id().as_ref()));
+            .show_menu_on_left_click(false)
+            .on_menu_event(|app, event| handle_menu_event(app, event.id().as_ref()))
+            .on_tray_icon_event(|tray, event| {
+                if let TrayIconEvent::Click {
+                    rect,
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } = event
+                {
+                    let _ = toggle_windows_tray_popover(
+                        tray.app_handle(),
+                        rect.position.x,
+                        rect.position.y,
+                    );
+                }
+            });
 
         if let Some(icon) = app.default_window_icon().cloned() {
             builder = builder.icon(icon);
@@ -140,6 +139,12 @@ pub fn install(app: &mut App) -> tauri::Result<()> {
 pub fn sync_state(app: &AppHandle, payload: TrayStatePayload) -> tauri::Result<()> {
     #[cfg(target_os = "macos")]
     let _ = app;
+
+    if let Some(state) = LAST_TRAY_STATE.get() {
+        if let Ok(mut guard) = state.lock() {
+            *guard = payload.clone();
+        }
+    }
 
     if let Some(targets) = TRAY_RESTART_TARGETS.get() {
         if let Ok(mut guard) = targets.lock() {
@@ -171,8 +176,34 @@ pub fn sync_state(app: &AppHandle, payload: TrayStatePayload) -> tauri::Result<(
                 .unwrap_or("Codex Switch");
             tray.set_tooltip(Some(format!("Codex Switch - {title}")))?;
         }
+        if let Some(window) = app.get_webview_window(TRAY_POPOVER_LABEL) {
+            let _ = window.emit("codex-switch://tray-state-updated", payload);
+        }
         Ok(())
     }
+}
+
+pub fn current_state() -> TrayStatePayload {
+    LAST_TRAY_STATE
+        .get()
+        .and_then(|state| state.lock().ok().map(|guard| guard.clone()))
+        .unwrap_or_default()
+}
+
+pub fn open_route(app: &AppHandle, route: &str) -> tauri::Result<()> {
+    hide_windows_tray_popover(app)?;
+    show_main_window(app)?;
+    let _ = app.emit("codex-switch://tray-route", route);
+    Ok(())
+}
+
+pub fn hide_windows_tray_popover(app: &AppHandle) -> tauri::Result<()> {
+    #[cfg(not(target_os = "macos"))]
+    if let Some(window) = app.get_webview_window(TRAY_POPOVER_LABEL) {
+        window.hide()?;
+    }
+    let _ = app;
+    Ok(())
 }
 
 pub fn show_main_window(app: &AppHandle) -> tauri::Result<()> {
@@ -203,23 +234,6 @@ fn build_menu(
         .as_deref()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or(label.no_account);
-    let quota = payload.current_quota.as_ref();
-    let five_hour = quota
-        .map(|summary| quota_line(label.five_hour, &summary.five_hour, &label))
-        .unwrap_or_else(|| format!("{}: --", label.five_hour));
-    let weekly = quota
-        .map(|summary| quota_line(label.weekly, &summary.weekly, &label))
-        .unwrap_or_else(|| format!("{}: --", label.weekly));
-    let refresh = quota
-        .and_then(|summary| {
-            summary
-                .five_hour
-                .refresh_at
-                .clone()
-                .or_else(|| summary.weekly.refresh_at.clone())
-        })
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| "--".to_string());
 
     let mut switch_menu = SubmenuBuilder::with_id(app, "tray_switch_menu", label.switch_accounts);
     for profile in &payload.profiles {
@@ -228,21 +242,9 @@ fn build_menu(
         } else {
             profile.nickname.as_str()
         };
-        let five = profile
-            .quota
-            .five_hour
-            .remaining_percent
-            .map(|value| format!("{value}%"))
-            .unwrap_or_else(|| "--".to_string());
-        let weekly = profile
-            .quota
-            .weekly
-            .remaining_percent
-            .map(|value| format!("{value}%"))
-            .unwrap_or_else(|| "--".to_string());
         switch_menu = switch_menu.text(
             format!("{ID_SWITCH_PREFIX}{}", profile.folder_name),
-            format!("{profile_label}  5h {five} / 7d {weekly}"),
+            profile_label,
         );
     }
     let switch_menu = switch_menu.build()?;
@@ -251,9 +253,6 @@ fn build_menu(
         .text(ID_SHOW, label.show)
         .separator()
         .text(ID_CURRENT, format!("{}: {current}", label.current))
-        .text(ID_FIVE_HOUR, five_hour)
-        .text(ID_WEEKLY, weekly)
-        .text(ID_REFRESH, format!("{}: {refresh}", label.refresh))
         .separator()
         .item(&switch_menu)
         .separator()
@@ -262,6 +261,55 @@ fn build_menu(
         .separator()
         .text(ID_QUIT, label.quit)
         .build()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn toggle_windows_tray_popover(app: &AppHandle, tray_x: f64, tray_y: f64) -> tauri::Result<()> {
+    let x = (tray_x - TRAY_POPOVER_WIDTH + 24.0).max(8.0);
+    let y = if tray_y > TRAY_POPOVER_HEIGHT + 48.0 {
+        tray_y - TRAY_POPOVER_HEIGHT - 10.0
+    } else {
+        tray_y + 28.0
+    };
+
+    if let Some(window) = app.get_webview_window(TRAY_POPOVER_LABEL) {
+        if window.is_visible().unwrap_or(false) {
+            window.hide()?;
+        } else {
+            window.set_position(tauri::PhysicalPosition::new(x as i32, y as i32))?;
+            window.show()?;
+            window.set_focus()?;
+            let _ = window.emit("codex-switch://tray-state-updated", current_state());
+        }
+        return Ok(());
+    }
+
+    let window = WebviewWindowBuilder::new(
+        app,
+        TRAY_POPOVER_LABEL,
+        WebviewUrl::App("tray.html".into()),
+    )
+    .title("Codex Switch")
+    .inner_size(TRAY_POPOVER_WIDTH, TRAY_POPOVER_HEIGHT)
+    .min_inner_size(TRAY_POPOVER_WIDTH, TRAY_POPOVER_HEIGHT)
+    .position(x, y)
+    .resizable(false)
+    .decorations(false)
+    .transparent(true)
+    .shadow(true)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .focused(true)
+    .build()?;
+
+    let hide_window = window.clone();
+    window.on_window_event(move |event| {
+        if matches!(event, WindowEvent::Focused(false)) {
+            let _ = hide_window.hide();
+        }
+    });
+
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]
@@ -287,38 +335,6 @@ extern "C" fn native_tray_callback(event: *const c_char, payload: *const c_char)
     }
 
     handle_menu_event(app, &event);
-}
-
-#[cfg(not(target_os = "macos"))]
-fn quota_line(label: &str, window: &QuotaWindow, labels: &TrayLabels) -> String {
-    let Some(percent) = window.remaining_percent.map(|value| value.min(100)) else {
-        return format!("{label}  ▱▱▱▱▱▱▱▱▱▱  --");
-    };
-    let used = 100u8.saturating_sub(percent);
-    let bar = quota_bar(percent);
-    let reset = window
-        .refresh_at
-        .as_deref()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or("--");
-    format!(
-        "{label}  {bar}  {} {used}%  {} {percent}%  {} {reset}",
-        labels.used, labels.left, labels.resets
-    )
-}
-
-#[cfg(not(target_os = "macos"))]
-fn quota_bar(percent: u8) -> String {
-    let filled = ((usize::from(percent) + 5) / 10).clamp(0, 10);
-    let empty = 10usize.saturating_sub(filled);
-    let block = if percent > 60 {
-        "🟩"
-    } else if percent >= 20 {
-        "🟧"
-    } else {
-        "🟥"
-    };
-    format!("{}{}", block.repeat(filled), "▱".repeat(empty))
 }
 
 fn handle_menu_event(app: &AppHandle, id: &str) {

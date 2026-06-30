@@ -17,7 +17,7 @@
 
 **Codex Switch** 是一个用于管理多个 OpenAI Codex 本地登录 Profile 的桌面应用。它可以查看当前账号、切换已保存的本地账号、刷新额度信息，并让每个账号的 Codex 本地状态相互隔离。
 
-`1.1.1` 版本加入第一版可用的 **技能** 和 **提示词** 管理流程，并继续保留账号切换、登录、额度、设置、使用统计、会话记录和状态栏菜单等基础能力。
+`1.1.2` 版本优化 macOS 和 Windows 状态栏体验，加入更简洁的 Windows 额度弹窗，并继续保留可用的 **技能** 和 **提示词** 管理流程、账号切换、登录、额度、设置、使用统计和会话记录等基础能力。
 
 > 本项目不是 OpenAI 官方项目。它只管理本机已经通过官方流程授权的 Codex 登录状态，不收集密码，不绕过 MFA，不抓取浏览器 Cookie，也不提供共享账号能力。
 
@@ -34,11 +34,11 @@
 
 ## 安装方式
 
-请从 [GitHub Releases](https://github.com/ChArLiEdance/codex-switch/releases) 下载安装包。当前 `1.1.1` 版本提供 macOS Apple Silicon 和 Windows x64 安装包。
+请从 [GitHub Releases](https://github.com/ChArLiEdance/codex-switch/releases) 下载安装包。当前 `1.1.2` 版本提供 macOS Apple Silicon 和 Windows x64 安装包。
 
 ### macOS
 
-1. 下载 [`codex_switch_1.1.1_aarch64.dmg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.1/codex_switch_1.1.1_aarch64.dmg)。
+1. 下载 [`codex_switch_1.1.2_aarch64.dmg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.2/codex_switch_1.1.2_aarch64.dmg)。
 2. 打开 `.dmg`。
 3. 将 `codex_switch.app` 拖入 `Applications`。
 4. 启动 Codex Switch。
@@ -46,11 +46,11 @@
 也可以在终端直接下载：
 
 ```bash
-curl -L -o ~/Downloads/codex_switch_1.1.1_aarch64.dmg \
-  https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.1/codex_switch_1.1.1_aarch64.dmg
+curl -L -o ~/Downloads/codex_switch_1.1.2_aarch64.dmg \
+  https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.2/codex_switch_1.1.2_aarch64.dmg
 ```
 
-如果你更想使用安装器，可以下载 [`codex_switch_1.1.1_aarch64.pkg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.1/codex_switch_1.1.1_aarch64.pkg)，然后双击打开安装。
+如果你更想使用安装器，可以下载 [`codex_switch_1.1.2_aarch64.pkg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.2/codex_switch_1.1.2_aarch64.pkg)，然后双击打开安装。
 
 当前版本不提供 macOS x64 安装包。
 
@@ -58,7 +58,7 @@ curl -L -o ~/Downloads/codex_switch_1.1.1_aarch64.dmg \
 
 ### Windows
 
-1. 下载 [`codex_switch_1.1.1_x64-setup.exe`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.1/codex_switch_1.1.1_x64-setup.exe)。
+1. 下载 [`codex_switch_1.1.2_x64-setup.exe`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.2/codex_switch_1.1.2_x64-setup.exe)。
 2. 运行安装程序。
 3. 从开始菜单或桌面快捷方式打开 Codex Switch。
 
@@ -66,8 +66,8 @@ curl -L -o ~/Downloads/codex_switch_1.1.1_aarch64.dmg \
 
 ```powershell
 Invoke-WebRequest `
-  -Uri "https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.1/codex_switch_1.1.1_x64-setup.exe" `
-  -OutFile "$env:USERPROFILE\Downloads\codex_switch_1.1.1_x64-setup.exe"
+  -Uri "https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.2/codex_switch_1.1.2_x64-setup.exe" `
+  -OutFile "$env:USERPROFILE\Downloads\codex_switch_1.1.2_x64-setup.exe"
 ```
 
 Windows 版本使用 Tauri NSIS 安装器。
@@ -163,15 +163,15 @@ npm run tauri:build:windows
 
 安装包应该作为 GitHub Release assets 上传，不应该提交到源码仓库，也不应该放进 `package.json`。
 
-`1.1.1` 版本当前发布产物：
+`1.1.2` 版本当前发布产物：
 
 ```text
-codex_switch_1.1.1_aarch64.dmg
-codex_switch_1.1.1_aarch64.pkg
-codex_switch_1.1.1_x64-setup.exe
+codex_switch_1.1.2_aarch64.dmg
+codex_switch_1.1.2_aarch64.pkg
+codex_switch_1.1.2_x64-setup.exe
 ```
 
-仓库已经配置 GitHub Actions，可以根据版本 tag 构建发布产物。`1.1.1` 的公开 Release 不包含 macOS x64。
+仓库已经配置 GitHub Actions，可以根据版本 tag 构建发布产物。`1.1.2` 的公开 Release 不包含 macOS x64。
 
 ## 隐私与安全
 
