@@ -99,5 +99,16 @@ export function applyCurrentQuota(response: CurrentQuotaResponse): void {
 
   if (response.profile === currentProfile) {
     state.currentQuota = response.quota;
+    if (state.snapshot) {
+      state.snapshot = {
+        ...state.snapshot,
+        current_quota_card: response.quota,
+        profiles: state.snapshot.profiles.map((profile) => (
+          profile.folder_name === response.profile
+            ? { ...profile, quota: response.quota ?? profile.quota }
+            : profile
+        )),
+      };
+    }
   }
 }

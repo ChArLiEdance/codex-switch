@@ -33,7 +33,8 @@
     "tauri:build:macos-release": "npm run version:sync && npm run macos:artifacts:prepare:release && tauri build --bundles app,dmg && npm run macos:pkg && npm run macos:artifacts:finalize:release"
   },
   "dependencies": {
-    "@tauri-apps/api": "2.10.1"
+    "@tauri-apps/api": "2.10.1",
+    "@tauri-apps/plugin-notification": "^2.3.3"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.10.1",

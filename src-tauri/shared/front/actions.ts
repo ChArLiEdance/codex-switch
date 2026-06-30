@@ -1,4 +1,9 @@
 import { listen } from "@tauri-apps/api/event";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification as sendNativeNotification,
+} from "@tauri-apps/plugin-notification";
 import { persistLocale, resolveInitialLocale, t, type Locale } from "@front-shared/i18n";
 import { state } from "@front-shared/state";
 import {
@@ -503,13 +508,19 @@ function saveSettingsQuotaAlertProfile(): void {
   if (!profile) {
     return;
   }
-  state.quotaAlertSettingsByProfile = persistQuotaAlertSettings(
-    profile,
-    quotaAlertSettingsFromInputs(),
-    state.quotaAlertSettingsByProfile,
-  );
+  const settings = quotaAlertSettingsFromInputs();
+  state.quotaAlertSettingsByProfile = persistQuotaAlertSettings(profile, settings, state.quotaAlertSettingsByProfile);
   rerenderDashboard();
   showToast(t(state.locale, "settingsQuotaAlertsSaved"));
+  if (settings.enabled) {
+    void ensureQuotaNotificationPermission().then((granted) => {
+      if (!granted) {
+        showToast(t(state.locale, "quotaAlertPermissionDenied"), true);
+        return;
+      }
+      void runQuotaAlertTick();
+    });
+  }
 }
 
 function loadStringSet(key: string): Set<string> {
@@ -548,6 +559,19 @@ function quotaWindowRefreshId(profile: string, windowKey: "five_hour" | "weekly"
 }
 
 async function sendQuotaNotification(title: string, body: string): Promise<void> {
+  try {
+    let permissionGranted = await isPermissionGranted();
+    if (!permissionGranted) {
+      permissionGranted = (await requestPermission()) === "granted";
+    }
+    if (permissionGranted) {
+      sendNativeNotification({ title, body });
+      return;
+    }
+  } catch {
+    // Fall back below. Browser previews and older WebViews may not expose the native plugin.
+  }
+
   const notificationCtor = globalThis.Notification;
   if (!notificationCtor) {
     showToast(`${title} ${body}`);
@@ -566,6 +590,31 @@ async function sendQuotaNotification(title: string, body: string): Promise<void>
     // WebView notification support can vary by platform; toast is the safe fallback.
   }
   showToast(`${title} ${body}`);
+}
+
+async function ensureQuotaNotificationPermission(): Promise<boolean> {
+  try {
+    if (await isPermissionGranted()) {
+      return true;
+    }
+    return (await requestPermission()) === "granted";
+  } catch {
+    const notificationCtor = globalThis.Notification;
+    if (!notificationCtor) {
+      return false;
+    }
+    try {
+      if (notificationCtor.permission === "granted") {
+        return true;
+      }
+      if (notificationCtor.permission === "default") {
+        return (await notificationCtor.requestPermission()) === "granted";
+      }
+    } catch {
+      return false;
+    }
+    return false;
+  }
 }
 
 function quotaAlertMessage(profile: ProfileCard, label: string, remaining: number, threshold: number): string {
@@ -1298,6 +1347,7 @@ async function refreshCurrentQuota(showError = false): Promise<void> {
   try {
     applyCurrentQuota(await getCurrentLiveQuota());
     rerenderDashboard();
+    void runQuotaAlertTick();
   } catch (error) {
     if (showError) {
       showToast(error instanceof Error ? error.message : "Failed to refresh quota.", true);
@@ -1316,6 +1366,7 @@ async function refreshActiveQuotaSilently(): Promise<void> {
   try {
     applyCurrentQuota(await refreshActiveProfileQuotaSilent());
     rerenderDashboard();
+    void runQuotaAlertTick();
   } catch {
     // Intentional: silent ticker, never surface errors to the user.
   }

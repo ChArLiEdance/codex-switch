@@ -31,6 +31,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             platform::setup_runtime()?;
