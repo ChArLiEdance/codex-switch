@@ -9,6 +9,11 @@ const tauriConfigPath = resolve(repoRoot, 'src-tauri', 'tauri.conf.json')
 const cargoTomlPath = resolve(repoRoot, 'src-tauri', 'Cargo.toml')
 const defaultVersionLogPath = resolve(repoRoot, 'src-tauri', 'target', 'release', 'version.md')
 const tauriVersionSource = '../package.json'
+const releaseInfoPaths = [
+  resolve(repoRoot, 'README.md'),
+  resolve(repoRoot, 'README.zh-CN.md'),
+  resolve(repoRoot, 'website', 'index.html'),
+]
 
 /// Front-end HTML files where the Settings → Version element lives.
 /// Each file must contain a `<span id="settings-version-value">…</span>`
@@ -171,6 +176,30 @@ const syncPackageLockVersion = (version) => {
   }
 }
 
+const syncReleaseInfoVersion = (content, version) => (
+  content
+    .replace(/`1\.\d+\.\d+`/g, `\`${version}\``)
+    .replace(/下载 1\.\d+\.\d+/g, `下载 ${version}`)
+    .replace(/下载当前版本 1\.\d+\.\d+/g, `下载当前版本 ${version}`)
+    .replace(/release assets for `1\.\d+\.\d+`/g, `release assets for \`${version}\``)
+    .replace(/`1\.\d+\.\d+` 版本当前发布产物/g, `\`${version}\` 版本当前发布产物`)
+    .replace(/releases\/download\/v1\.\d+\.\d+\//g, `releases/download/v${version}/`)
+    .replace(/codex_switch_1\.\d+\.\d+_/g, `codex_switch_${version}_`)
+)
+
+const syncReleaseInfoVersions = (version) => {
+  for (const filePath of releaseInfoPaths) {
+    if (!existsSync(filePath)) {
+      continue
+    }
+    const content = readFileSync(filePath, 'utf8')
+    const nextContent = syncReleaseInfoVersion(content, version)
+    if (nextContent !== content) {
+      writeFileSync(filePath, nextContent)
+    }
+  }
+}
+
 const checkHardcodedVersions = () => {
   const findings = []
   for (const relPath of versionHardcodeForbiddenPaths) {
@@ -262,6 +291,7 @@ if (!semverPattern.test(version)) {
 }
 
 syncPackageLockVersion(version)
+syncReleaseInfoVersions(version)
 
 const tauriConfig = readJson(tauriConfigPath)
 

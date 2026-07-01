@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.5 - 2026-07-01
+
+- Added the signed Tauri updater integration. Release builds now publish updater artifacts, signatures, and `latest.json`, allowing future supported updates to download, verify, install, and relaunch from inside the app.
+- Added the Codex Switch website under `website/`, plus a GitHub Pages workflow to publish it from `main`.
+- Added a website design-system document and linked the website from the README files.
+- Updated README release links to `1.1.5` and wired README download links into `version-sync.mjs` so future version bumps keep install links current.
+
+## 1.1.4 - 2026-06-30
+
+- Fixed Windows tray popover placement and drag behavior.
+- Improved Windows Codex path detection and reduced false "login expired" states for the active account.
+- Kept macOS and Windows tray quota surfaces synchronized with the dashboard refresh path.
+
 ## 1.1.3 - 2026-06-30
 
 - Disabled the switch health-check dialog before account switching. Switching now proceeds after the restart-target choice without running the extra health-check prompt.

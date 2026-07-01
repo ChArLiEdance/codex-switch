@@ -2,6 +2,7 @@
 
 <p align="center">
   <a href="README.md">English</a> |
+  <a href="https://charliedance.github.io/codex-switch/">官网</a> |
   <a href="CHANGELOG.md">Changelog</a> |
   <a href="https://github.com/ChArLiEdance/codex-switch/releases">Releases</a>
 </p>
@@ -17,7 +18,7 @@
 
 **Codex Switch** 是一个用于管理多个 OpenAI Codex 本地登录 Profile 的桌面应用。它可以查看当前账号、切换已保存的本地账号、刷新额度信息，并让每个账号的 Codex 本地状态相互隔离。
 
-`1.1.3` 版本关闭切换账号前的健康检查弹窗，让账号切换流程更直接，并继续保留优化后的 macOS 和 Windows 状态栏体验、可用的 **技能** 和 **提示词** 管理流程、账号切换、登录、额度、设置、使用统计和会话记录等基础能力。
+`1.1.5` 版本加入 Tauri 签名自动更新链路，后续版本可以在软件内下载、验签、安装并重启，不再依赖手动拖动安装。同时继续保留优化后的 macOS 和 Windows 状态栏体验、可用的 **技能** 和 **提示词** 管理流程、账号切换、登录、额度、设置、使用统计和会话记录等基础能力。
 
 > 本项目不是 OpenAI 官方项目。它只管理本机已经通过官方流程授权的 Codex 登录状态，不收集密码，不绕过 MFA，不抓取浏览器 Cookie，也不提供共享账号能力。
 
@@ -29,16 +30,18 @@
 - **使用统计**：读取本地 Codex 会话用量，汇总 token 消耗，并展示用量趋势。
 - **会话记录**：浏览本地 Codex 会话，查看历史对话并恢复会话。
 - **技能和提示词**：管理本地 Codex 技能和可复用提示词，并支持中英文界面标签。
-- **设置页面**：切换语言、选择白色/黑色/跟随系统主题，配置更新地址和 Codex CLI 路径。
+- **状态栏体验**：macOS 和 Windows 状态栏界面展示当前账号、额度状态和快捷操作。
+- **签名自动更新**：检查 GitHub 最新 Release，验证 Tauri updater 签名，安装支持的更新并重启软件。
+- **设置页面**：切换语言、选择白色/黑色/跟随系统主题，配置更新地址、重启目标、额度提醒和 Codex CLI 路径。
 - **本地隐私优先**：使用本机 Codex/OAuth 状态，不把密码或浏览器 Cookie 写入仓库。
 
 ## 安装方式
 
-请从 [GitHub Releases](https://github.com/ChArLiEdance/codex-switch/releases) 下载安装包。当前 `1.1.3` 版本提供 macOS Apple Silicon 和 Windows x64 安装包。
+请从 [GitHub Releases](https://github.com/ChArLiEdance/codex-switch/releases) 下载安装包。当前 `1.1.5` 版本提供 macOS Apple Silicon 和 Windows x64 安装包。
 
 ### macOS
 
-1. 下载 [`codex_switch_1.1.3_aarch64.dmg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.3/codex_switch_1.1.3_aarch64.dmg)。
+1. 下载 [`codex_switch_1.1.5_aarch64.dmg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.5/codex_switch_1.1.5_aarch64.dmg)。
 2. 打开 `.dmg`。
 3. 将 `codex_switch.app` 拖入 `Applications`。
 4. 启动 Codex Switch。
@@ -46,11 +49,11 @@
 也可以在终端直接下载：
 
 ```bash
-curl -L -o ~/Downloads/codex_switch_1.1.3_aarch64.dmg \
-  https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.3/codex_switch_1.1.3_aarch64.dmg
+curl -L -o ~/Downloads/codex_switch_1.1.5_aarch64.dmg \
+  https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.5/codex_switch_1.1.5_aarch64.dmg
 ```
 
-如果你更想使用安装器，可以下载 [`codex_switch_1.1.3_aarch64.pkg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.3/codex_switch_1.1.3_aarch64.pkg)，然后双击打开安装。
+如果你更想使用安装器，可以下载 [`codex_switch_1.1.5_aarch64.pkg`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.5/codex_switch_1.1.5_aarch64.pkg)，然后双击打开安装。
 
 当前版本不提供 macOS x64 安装包。
 
@@ -58,7 +61,7 @@ curl -L -o ~/Downloads/codex_switch_1.1.3_aarch64.dmg \
 
 ### Windows
 
-1. 下载 [`codex_switch_1.1.3_x64-setup.exe`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.3/codex_switch_1.1.3_x64-setup.exe)。
+1. 下载 [`codex_switch_1.1.5_x64-setup.exe`](https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.5/codex_switch_1.1.5_x64-setup.exe)。
 2. 运行安装程序。
 3. 从开始菜单或桌面快捷方式打开 Codex Switch。
 
@@ -66,8 +69,8 @@ curl -L -o ~/Downloads/codex_switch_1.1.3_aarch64.dmg \
 
 ```powershell
 Invoke-WebRequest `
-  -Uri "https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.3/codex_switch_1.1.3_x64-setup.exe" `
-  -OutFile "$env:USERPROFILE\Downloads\codex_switch_1.1.3_x64-setup.exe"
+  -Uri "https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.5/codex_switch_1.1.5_x64-setup.exe" `
+  -OutFile "$env:USERPROFILE\Downloads\codex_switch_1.1.5_x64-setup.exe"
 ```
 
 Windows 版本使用 Tauri NSIS 安装器。
@@ -99,6 +102,7 @@ codex-switch/
   .github/workflows/      GitHub Actions 构建和发布流程
   macOS-backup/           旧版 shell 账号切换脚本备份
   scripts/                版本同步、macOS 产物整理和安装包辅助脚本
+  website/                GitHub Pages 发布的产品官网
   src-tauri/
     capabilities/         Tauri 权限能力配置
     icons/                macOS 和 Windows 应用图标
@@ -163,15 +167,19 @@ npm run tauri:build:windows
 
 安装包应该作为 GitHub Release assets 上传，不应该提交到源码仓库，也不应该放进 `package.json`。
 
-`1.1.3` 版本当前发布产物：
+`1.1.5` 版本当前发布产物：
 
 ```text
-codex_switch_1.1.3_aarch64.dmg
-codex_switch_1.1.3_aarch64.pkg
-codex_switch_1.1.3_x64-setup.exe
+codex_switch_1.1.5_aarch64.dmg
+codex_switch_1.1.5_aarch64.pkg
+codex_switch_1.1.5_x64-setup.exe
+latest.json
+codex_switch.app.tar.gz
+codex_switch.app.tar.gz.sig
+codex_switch_1.1.5_x64-setup.exe.sig
 ```
 
-仓库已经配置 GitHub Actions，可以根据版本 tag 构建发布产物。`1.1.3` 的公开 Release 不包含 macOS x64。
+仓库已经配置 GitHub Actions，可以根据版本 tag 构建发布产物并生成签名自动更新 manifest。`1.1.5` 的公开 Release 不包含 macOS x64。
 
 ## 隐私与安全
 

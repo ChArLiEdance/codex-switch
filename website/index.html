@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta
+      name="description"
+      content="Codex Switch is a local desktop app for managing multiple Codex login profiles, quota, usage statistics, sessions, skills, and prompts."
+    >
+    <title>Codex Switch</title>
+    <link rel="icon" href="./assets/codex-switch-icon.png">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Codex Switch home">
+        <img class="brand-icon" src="./assets/codex-switch-icon.png" alt="">
+        <span>Codex Switch</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#features">功能</a>
+        <a href="#downloads">下载</a>
+        <a href="#system">设计系统</a>
+        <a href="https://github.com/ChArLiEdance/codex-switch">GitHub</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero section-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Local Codex Account Control</p>
+          <h1>把多个 Codex 账号，整理成一个清晰的桌面控制台。</h1>
+          <p class="hero-text">
+            管理本机已授权的 Codex Profile，查看当前账号额度，切换账号，统计本地会话用量，并通过签名更新保持版本同步。
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#downloads">下载 1.1.5</a>
+            <a class="button button-secondary" href="https://github.com/ChArLiEdance/codex-switch">查看源码</a>
+          </div>
+          <div class="status-row" aria-label="Repository status">
+            <img alt="GitHub stars" src="https://img.shields.io/github/stars/ChArLiEdance/codex-switch?style=flat&amp;logo=github">
+            <img alt="License" src="https://img.shields.io/badge/dynamic/json?color=111827&amp;label=license&amp;query=$.license.spdx_id&amp;url=https%3A%2F%2Fapi.github.com%2Frepos%2FChArLiEdance%2Fcodex-switch">
+            <img alt="Downloads" src="https://img.shields.io/github/downloads/ChArLiEdance/codex-switch/total?cacheSeconds=60">
+          </div>
+        </div>
+
+        <div class="product-panel" aria-label="Codex Switch preview">
+          <div class="window-dots" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="mock-toolbar">
+            <div>
+              <strong>hester</strong>
+              <span>Pro</span>
+            </div>
+            <button type="button">已登录</button>
+          </div>
+          <div class="quota-card">
+            <div class="quota-row">
+              <span>5h</span>
+              <div class="meter"><i style="width: 89%"></i></div>
+              <strong>89%</strong>
+            </div>
+            <div class="quota-row warning">
+              <span>7d</span>
+              <div class="meter"><i style="width: 19%"></i></div>
+              <strong>19%</strong>
+            </div>
+          </div>
+          <div class="mock-list">
+            <div><span>Usage trend</span><strong>38.4M tokens</strong></div>
+            <div><span>Sessions</span><strong>156</strong></div>
+            <div><span>Signed updater</span><strong>Ready</strong></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="section">
+        <div class="section-heading">
+          <p class="eyebrow">Features</p>
+          <h2>围绕本地 Codex 工作流设计。</h2>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <span class="feature-mark">01</span>
+            <h3>账号切换</h3>
+            <p>保存本机已授权 Profile，支持登录、切换、重命名、删除、拖拽排序和当前账号状态展示。</p>
+          </article>
+          <article>
+            <span class="feature-mark">02</span>
+            <h3>额度与提醒</h3>
+            <p>展示 5 小时额度和周额度，支持刷新、展开详情、状态栏快速查看和低额度提醒。</p>
+          </article>
+          <article>
+            <span class="feature-mark">03</span>
+            <h3>使用统计</h3>
+            <p>读取本地 Codex 会话记录，统计 token 消耗、趋势图、成本估算和指定日期范围。</p>
+          </article>
+          <article>
+            <span class="feature-mark">04</span>
+            <h3>会话记录</h3>
+            <p>浏览本地历史会话，查看消息内容，复制 resume 命令，快速恢复上下文。</p>
+          </article>
+          <article>
+            <span class="feature-mark">05</span>
+            <h3>技能与提示词</h3>
+            <p>管理 Codex Skills 和可复用提示词，界面支持中英文切换。该功能仍在持续完善。</p>
+          </article>
+          <article>
+            <span class="feature-mark">06</span>
+            <h3>签名自动更新</h3>
+            <p>发布包包含 Tauri updater 签名和 manifest，软件内可检查、下载、验证、安装并重启。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="downloads" class="section download-section">
+        <div class="section-heading">
+          <p class="eyebrow">Download</p>
+          <h2>下载当前版本 1.1.5。</h2>
+        </div>
+        <div class="download-grid">
+          <article class="download-card">
+            <h3>macOS Apple Silicon</h3>
+            <p>适用于 Apple Silicon Mac。不提供 macOS x64 版本。</p>
+            <div class="button-row">
+              <a class="button button-primary" href="https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.5/codex_switch_1.1.5_aarch64.dmg">下载 DMG</a>
+              <a class="button button-secondary" href="https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.5/codex_switch_1.1.5_aarch64.pkg">下载 PKG</a>
+            </div>
+            <code>curl -L -o ~/Downloads/codex_switch_1.1.5_aarch64.dmg https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.5/codex_switch_1.1.5_aarch64.dmg</code>
+          </article>
+          <article class="download-card">
+            <h3>Windows x64</h3>
+            <p>适用于 Windows x64，使用 Tauri NSIS 安装器。</p>
+            <div class="button-row">
+              <a class="button button-primary" href="https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.5/codex_switch_1.1.5_x64-setup.exe">下载 EXE</a>
+            </div>
+            <code>Invoke-WebRequest -Uri "https://github.com/ChArLiEdance/codex-switch/releases/download/v1.1.5/codex_switch_1.1.5_x64-setup.exe" -OutFile "$env:USERPROFILE\Downloads\codex_switch_1.1.5_x64-setup.exe"</code>
+          </article>
+        </div>
+      </section>
+
+      <section id="system" class="section design-section">
+        <div class="section-heading">
+          <p class="eyebrow">Design System</p>
+          <h2>网站和软件共享一套视觉约束。</h2>
+        </div>
+        <div class="system-grid">
+          <div>
+            <h3>原则</h3>
+            <p>白色优先、信息密度适中、边缘使用 hairline shadow、避免蓝紫渐变和装饰性大色块。</p>
+          </div>
+          <div>
+            <h3>组件</h3>
+            <p>卡片 18px 圆角，按钮 12px 圆角，正文 16px，标题不使用负字距，交互状态清晰但克制。</p>
+          </div>
+          <div>
+            <h3>关联</h3>
+            <p>官网直接指向 GitHub、Release、安装包和 README，后续发布时通过版本同步脚本保持链接一致。</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>Codex Switch</span>
+      <a href="https://github.com/ChArLiEdance/codex-switch">GitHub Repository</a>
+    </footer>
+  </body>
+</html>
