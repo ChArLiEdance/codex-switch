@@ -27,6 +27,17 @@
       "capabilities": ["default"]
     }
   },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERDNzVFNDZEQUQ3NzQ4ODkKUldTSlNIZXRiZVIxM0FaZ1hNWVFpRit5V01NWk4zeWNydXI3dnZUYml2aEdld2l6Yzk4OU54eGgK",
+      "endpoints": [
+        "https://github.com/ChArLiEdance/codex-switch/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  },
   "bundle": {
     "active": false,
     "icon": [

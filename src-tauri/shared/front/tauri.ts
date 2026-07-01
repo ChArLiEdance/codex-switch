@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { check as checkSignedUpdate, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 
 import type {
   ActionResponse,
@@ -21,6 +22,7 @@ import type {
   SwitchHealthResponse,
   TrayStatePayload,
   UpdateCheckResponse,
+  UpdateDownloadProgress,
   UsageQuerySettings,
   UsageStatsPayload,
   UsageStatsResponse,
@@ -35,10 +37,13 @@ type RuntimeWindow = typeof globalThis & {
   __TAURI__?: unknown;
 };
 
+type UpdateProgressCallback = (progress: UpdateDownloadProgress) => void;
+
 const hasTauriRuntime = Boolean(
   (globalThis as RuntimeWindow).__TAURI_INTERNALS__ || (globalThis as RuntimeWindow).__TAURI__,
 );
 const usePreviewMocks = __CODEX_PREVIEW_MOCKS__ || !hasTauriRuntime;
+const DEFAULT_LEGACY_UPDATE_URL = "https://api.github.com/repos/ChArLiEdance/codex-switch/releases/latest";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -854,15 +859,103 @@ export function openUrl(url: string): Promise<ActionResponse> {
 }
 
 export function checkUpdate(updateUrl: string): Promise<UpdateCheckResponse> {
+  if (!usePreviewMocks && usesDefaultUpdateUrl(updateUrl)) {
+    return checkSignedUpdate({ timeout: 12_000 })
+      .then((update) => {
+        if (!update) {
+          throw new Error("SIGNED_UPDATER_NO_UPDATE");
+        }
+        return {
+          ok: true,
+          current_version: update.currentVersion,
+          latest_version: update.version,
+          has_update: true,
+          release_url: null,
+          notes: update.body ?? null,
+          checked_url: "tauri-updater",
+        };
+      })
+      .catch(() =>
+        invokeCommand<UpdateCheckResponse>("check_update", {
+          payload: { update_url: updateUrl },
+        }),
+      );
+  }
   return invokeCommand<UpdateCheckResponse>("check_update", {
     payload: { update_url: updateUrl },
   });
 }
 
-export function installUpdate(updateUrl: string): Promise<InstallUpdateResponse> {
+export async function installUpdate(
+  updateUrl: string,
+  onProgress?: UpdateProgressCallback,
+): Promise<InstallUpdateResponse> {
+  if (!usePreviewMocks && usesDefaultUpdateUrl(updateUrl)) {
+    let update: Update | null = null;
+    try {
+      update = await checkSignedUpdate({ timeout: 12_000 });
+    } catch {
+      // Fall back to the legacy GitHub release installer for releases that do
+      // not publish a signed Tauri updater manifest yet.
+    }
+    if (update) {
+      await installSignedUpdate(update, onProgress);
+      return {
+        ok: true,
+        version: update.version,
+        asset_name: "Tauri signed updater",
+        path: "tauri-updater",
+      };
+    }
+  }
   return invokeCommand<InstallUpdateResponse>("install_update", {
     payload: { update_url: updateUrl },
   });
+}
+
+function usesDefaultUpdateUrl(updateUrl: string): boolean {
+  const trimmed = updateUrl.trim();
+  return trimmed.length === 0 || trimmed === DEFAULT_LEGACY_UPDATE_URL;
+}
+
+async function installSignedUpdate(update: Update, onProgress?: UpdateProgressCallback): Promise<void> {
+  let totalBytes: number | null = null;
+  let receivedBytes = 0;
+  await update.downloadAndInstall((event: DownloadEvent) => {
+    if (event.event === "Started") {
+      totalBytes = event.data.contentLength ?? null;
+      receivedBytes = 0;
+      onProgress?.({
+        phase: "downloading",
+        received_bytes: 0,
+        total_bytes: totalBytes,
+        percent: 0,
+        message: "Downloading signed update.",
+      });
+      return;
+    }
+    if (event.event === "Progress") {
+      receivedBytes += event.data.chunkLength;
+      const percent = totalBytes && totalBytes > 0
+        ? Math.round(Math.min(100, (receivedBytes / totalBytes) * 100))
+        : null;
+      onProgress?.({
+        phase: "downloading",
+        received_bytes: receivedBytes,
+        total_bytes: totalBytes,
+        percent,
+        message: "Downloading signed update.",
+      });
+      return;
+    }
+    onProgress?.({
+      phase: "installing",
+      received_bytes: receivedBytes,
+      total_bytes: totalBytes,
+      percent: 100,
+      message: "Installing signed update.",
+    });
+  }, { timeout: 180_000 });
 }
 
 export function exportProfilesBackup(path: string, password: string): Promise<ProfilesBackupResponse> {

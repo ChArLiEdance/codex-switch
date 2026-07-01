@@ -13,6 +13,7 @@
     "core:window:allow-close",
     "notification:default",
     "opener:default",
-    "opener:allow-open-path"
+    "opener:allow-open-path",
+    "updater:default"
   ]
 }

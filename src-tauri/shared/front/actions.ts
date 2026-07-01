@@ -1759,12 +1759,15 @@ async function handleInstallUpdate(): Promise<void> {
   });
 
   try {
-    const update = await installUpdate(elements.settingsUpdateUrlInput.value);
+    const update = await installUpdate(elements.settingsUpdateUrlInput.value, setUpdateProgress);
     showUpdateInstallComplete();
     showToast(t(state.locale, "installedUpdate", {
       asset: update.asset_name,
       version: update.version,
     }));
+    if (update.path === "tauri-updater") {
+      await handleRestartApp();
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : t(state.locale, "failedToInstallUpdate");
     showUpdateInstallError(message);

@@ -79,12 +79,18 @@ jobs:
             artifacts: |
               dist/*.dmg
               dist/*.pkg
+              dist/*.tar.gz
+              dist/*.tar.gz.sig
+              dist/*.sig
+              src-tauri/target/release/bundle/macos/*.tar.gz
+              src-tauri/target/release/bundle/macos/*.tar.gz.sig
           - label: windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             tauri_script: tauri:build:windows
             artifacts: |
               src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.exe
+              src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/*.sig
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -138,6 +144,8 @@ jobs:
         shell: bash
         env:
           APPLE_SIGNING_IDENTITY_RAW: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           # macOS: sign the bundle so Gatekeeper doesn't reject downloads as
           # "damaged". A completely unsigned .app (the old --no-sign) is
@@ -195,6 +203,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -204,11 +216,75 @@ jobs:
         run: |
           find artifacts -type f -maxdepth 4 | sort
 
+      - name: Generate Tauri updater manifest
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const root = 'artifacts';
+          const tag = process.env.GITHUB_REF_NAME;
+          const version = tag.replace(/^v/, '');
+          const baseUrl = `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/${tag}`;
+
+          function walk(dir) {
+            return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+              const full = path.join(dir, entry.name);
+              return entry.isDirectory() ? walk(full) : [full];
+            });
+          }
+
+          function findOne(pattern, label) {
+            const matches = walk(root).filter((file) => pattern.test(path.basename(file))).sort();
+            if (matches.length === 0) {
+              throw new Error(`Missing updater artifact: ${label}`);
+            }
+            return matches[0];
+          }
+
+          function sigFor(file) {
+            const sig = `${file}.sig`;
+            if (!fs.existsSync(sig)) {
+              throw new Error(`Missing updater signature for ${file}`);
+            }
+            return fs.readFileSync(sig, 'utf8').trim();
+          }
+
+          function assetUrl(file) {
+            return `${baseUrl}/${encodeURIComponent(path.basename(file))}`;
+          }
+
+          const macUpdater = findOne(/\.app\.tar\.gz$/, 'macOS Apple Silicon updater tarball');
+          const windowsUpdater = findOne(/-setup\.exe$|_setup\.exe$|setup\.exe$/i, 'Windows NSIS updater installer');
+
+          const manifest = {
+            version,
+            notes: `Codex Switch ${version}`,
+            pub_date: new Date().toISOString(),
+            platforms: {
+              'darwin-aarch64': {
+                signature: sigFor(macUpdater),
+                url: assetUrl(macUpdater),
+              },
+              'windows-x86_64': {
+                signature: sigFor(windowsUpdater),
+                url: assetUrl(windowsUpdater),
+              },
+            },
+          };
+
+          fs.writeFileSync(path.join(root, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+          NODE
+
+          cat artifacts/latest.json
+
       - name: Create draft release with artifacts
         uses: softprops/action-gh-release@v2
         with:
           draft: true
           generate_release_notes: true
           files: |
+            artifacts/latest.json
             artifacts/codex-switch-macos-arm64/**/*
             artifacts/codex-switch-windows-x86_64/**/*
